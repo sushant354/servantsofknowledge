@@ -1,0 +1,86 @@
+# Example of a full infrastructure stack
+#
+# Note, this file is not suitable for a production deployment. It is only an
+# example of all the infrastructure components needed in a real production
+# deployment.
+#
+# Usage::
+#
+#   $ docker-compose up -f docker-compose.full.yml -d
+#
+# Following services are included:
+# - Frontend: Nginx (exposed ports: 80 and 443)
+# - Backend: UWSGI (not exposed)
+# - Worker: Celery (not exposed)
+# - Celery monitoring: Flower (exposed port: 5555)
+# - Cache: Redis (exposed port: 6379)
+# - DB: PostgresSQL (exposed port: 5432)
+# - Message queue: RabbitMQ (exposed ports: 5672, 15672)
+# - Search platform: Elasticsearch (exposed ports: 9200, 9300)
+#
+version: "2.3"
+services:
+  # UI React application
+  frontend:
+    extends:
+      file: docker-services.yml
+      service: frontend
+    volumes:
+      - static_data:/opt/invenio_app_ils/var/instance
+    links:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+  # Invenio backend application
+  backend:
+    extends:
+      file: docker-services.yml
+      service: app
+    command: ["uwsgi /opt/invenio/var/instance/uwsgi.ini"]
+    image: ILS:latest
+    volumes:
+      - static_data:/opt/invenio_app_ils/var/instance
+    links:
+      - cache
+      - es
+      - mq
+      - db
+  # Worker
+  worker:
+    extends:
+      file: docker-services.yml
+      service: app
+    command: ["celery -A invenio_app.celery worker --loglevel=INFO"]
+    image: ILS:latest
+    links:
+      - cache
+      - es
+      - mq
+      - db
+  # Monitoring
+  flower:
+    extends:
+      file: docker-services.yml
+      service: flower
+    links:
+      - mq
+  # Base services
+  cache:
+    extends:
+      file: docker-services.yml
+      service: cache
+  db:
+    extends:
+      file: docker-services.yml
+      service: db
+  mq:
+    extends:
+      file: docker-services.yml
+      service: mq
+  es:
+    extends:
+      file: docker-services.yml
+      service: es
+volumes:
+  static_data:

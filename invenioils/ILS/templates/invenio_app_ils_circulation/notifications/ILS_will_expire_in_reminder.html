@@ -1,0 +1,21 @@
+
+{% block title %}
+Library: due loan reminder for "{{ document.title|safe }}"
+{% endblock %}
+
+{% block body_plain %}
+Dear {{ patron.name }},
+
+Your loan on "{{ document.full_title }}" <{{ spa_routes.HOST }}{{ spa_routes.PATHS['literature']|format(pid=document.pid) }}> is due in {{ expiring_in_days }} days.
+
+Do not forget to bring back the borrowed item on time or to extend it online in your profile page.
+{% endblock %}
+
+{% block body_html %}
+Dear {{ patron.name }}, <br/><br/>
+
+Your loan on <a href="{{ spa_routes.HOST }}{{ spa_routes.PATHS['literature']|format(pid=document.pid) }}">"{{ document.full_title }}"</a> <b>is due in {{ expiring_in_days }} days </b>. <br/><br/>
+
+Do not forget to bring back the borrowed item on time or to extend it online in your profile page.<br/>
+{% endblock %}
+

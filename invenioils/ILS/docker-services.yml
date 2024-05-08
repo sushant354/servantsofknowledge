@@ -1,0 +1,76 @@
+version: "2.3"
+services:
+  app:
+    build:
+      context: ./
+      dockerfile: ./docker/backend/Dockerfile
+      args:
+        - ENVIRONMENT=DEV
+    image: ILS
+    ports:
+      - "5000"
+    environment:
+      - "INVENIO_ACCOUNTS_SESSION_REDIS_URL=redis://cache:6379/1"
+      - "INVENIO_BROKER_URL=amqp://guest:guest@mq:5672/"
+      - "INVENIO_CACHE_REDIS_URL=redis://cache:6379/0"
+      - "INVENIO_CACHE_TYPE=redis"
+      - "INVENIO_CELERY_BROKER_URL=amqp://guest:guest@mq:5672/"
+      - "INVENIO_CELERY_RESULT_BACKEND=redis://cache:6379/2"
+      - "INVENIO_SEARCH_ELASTIC_HOSTS=['es:9200']"
+      - "INVENIO_SECRET_KEY=CHANGE_ME"
+      - "INVENIO_SQLALCHEMY_DATABASE_URI=postgresql+psycopg2://ILS:ILS@db/ILS"
+      - "INVENIO_RATELIMIT_STORAGE_URL=redis://cache:6379/3"
+      - "INVENIO_SPA_HOST=https://127.0.0.1"
+      - "INVENIO_REST_CSRF_ENABLED=False"
+  frontend:
+    build:
+      context: ./
+      dockerfile: ./docker/frontend/Dockerfile
+    image: ILS-frontend
+    ports:
+      - "80"
+      - "443"
+  cache:
+    image: redis:7
+    read_only: true
+    ports:
+      - "6379:6379"
+  db:
+    image: postgres:12.4
+    environment:
+      - "POSTGRES_USER=ILS"
+      - "POSTGRES_PASSWORD=ILS"
+      - "POSTGRES_DB=ILS"
+    ports:
+      - "5432:5432"
+  mq:
+    image: rabbitmq:3-management
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+  es:
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:7.9.3
+    environment:
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - discovery.type=single-node
+      - cluster.routing.allocation.disk.threshold_enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    mem_limit: 1g
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+  kibana:
+    image: docker.elastic.co/kibana/kibana-oss:7.9.3
+    environment:
+      - "ELASTICSEARCH_URL=http://es:9200"
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports: ["5601:5601"]
+  flower:
+    image: mher/flower:0.9.7
+    command: --broker=amqp://guest:guest@mq:5672/ --broker_api=http://guest:guest@mq:15672/api/
+    ports:
+      - "5555:5555"

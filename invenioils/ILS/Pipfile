@@ -1,0 +1,20 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+check-manifest = ">=0.25"
+
+[packages]
+invenio-app-ils = {extras = ["postgresql", "elasticsearch7", "lorem"], version = "~=1.0.0rc1"}
+setuptools = ">=57.0.0,<58.0.0"
+uwsgi = ">=2.0"
+uwsgitop = ">=0.11"
+uwsgi-tools = ">=1.1.1"
+
+[requires]
+python_version = "3.9"
+
+[pipenv]
+allow_prereleases = false
