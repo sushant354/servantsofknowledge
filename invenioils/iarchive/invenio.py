@@ -25,7 +25,7 @@ from iso639 import languages
 from invenio_pidstore.errors import PIDDoesNotExistError
 from invenio_indexer.api import RecordIndexer
 from flask import url_for
-
+from invenio_app_ils.literature.covers_builder import build_openlibrary_urls, build_placeholder_urls
 def get_languages(langs):
     if isinstance(langs, str):
         return [langs.upper()]
@@ -48,7 +48,15 @@ def create_pid(self):
     return RecordIdProviderV2.create().pid.pid_value
 
 def build_cover_urls(metadata):
-    return metadata['cover_metadata']
+    """Build working ulrs for demo data."""
+    cover_metadata = metadata.get("cover_metadata", {})
+    is_placeholder = cover_metadata.get('is_placeholder', '')
+    if is_placeholder or  'large' not in cover_metadata or 'medium' not in cover_metadata or 'small' not in cover_metadata:
+        urls = build_placeholder_urls()
+    else:    
+        urls = {'is_placeholder': False, 'large': cover_metadata['large'], \
+           'medium': cover_metadata['medium'], 'small': cover_metadata['small']}
+    return urls
 
 def get_library(indexer, name):
     pid,n = re.subn('\s+', '-', name)

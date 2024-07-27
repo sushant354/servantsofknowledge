@@ -1,0 +1,114 @@
+diff --git a/.env b/.env
+index 8f998a2..97efc0f 100644
+--- a/.env
++++ b/.env
+@@ -1,6 +1,6 @@
+ REACT_APP_UI_ILS_VERSION=$npm_package_version
+ REACT_APP_INVENIO_VERSION=1.0.0a85
+-REACT_APP_INVENIO_UI_URL=https://127.0.0.1:5000
+-REACT_APP_INVENIO_REST_ENDPOINTS_BASE_URL=https://127.0.0.1:5000/api
+-REACT_APP_OVERLAY_VERSION=
++REACT_APP_INVENIO_UI_URL=https://invenio.indiankanoon.org
++REACT_APP_INVENIO_REST_ENDPOINTS_BASE_URL=https://invenio.indiankanoon.org/api
++REACT_APP_OVERLAY_VERSION=1.0.0
+ REACT_APP_ENV_NAME=development
+diff --git a/package-lock.json b/package-lock.json
+index 85db034..72cd9b8 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -6540,6 +6540,11 @@
+         "domelementtype": "^2.3.0"
+       }
+     },
++    "dompurify": {
++      "version": "3.1.6",
++      "resolved": "https://registry.npmjs.org/dompurify/-/dompurify-3.1.6.tgz",
++      "integrity": "sha512-cTOAhc36AalkjtBpfG6O8JimdTMWNXjiePT2xQH/ppBGi/4uIpmj8eKyIkMJErXWARyINV/sB38yf8JCLF5pbQ=="
++    },
+     "domutils": {
+       "version": "3.1.0",
+       "resolved": "https://registry.npmjs.org/domutils/-/domutils-3.1.0.tgz",
+diff --git a/package.json b/package.json
+index c8cc6a5..ce45b55 100644
+--- a/package.json
++++ b/package.json
+@@ -157,5 +157,8 @@
+     "snapshotSerializers": [
+       "enzyme-to-json/serializer"
+     ]
++  },
++  "dependencies": {
++    "dompurify": "^3.1.6"
+   }
+ }
+diff --git a/src/lib/modules/Document/DocumentContent.js b/src/lib/modules/Document/DocumentContent.js
+index a4d7b26..17b521d 100644
+--- a/src/lib/modules/Document/DocumentContent.js
++++ b/src/lib/modules/Document/DocumentContent.js
+@@ -4,6 +4,7 @@ import PropTypes from 'prop-types';
+ import React, { Component } from 'react';
+ import { Divider, List } from 'semantic-ui-react';
+ import { MetadataTable } from '../../components/backoffice/MetadataTable';
++import DOMPurify from 'dompurify';
+ 
+ export class DocumentContent extends Component {
+   prepareAlternativeAbstracts = (element, index) => {
+@@ -30,9 +31,16 @@ export class DocumentContent extends Component {
+         ) : (
+           'No table of contents'
+         )}
+-
+         <Divider horizontal>Abstract</Divider>
+-        {abstract ? abstract : 'No abstract'}
++        {abstract ? (
++          <div
++            dangerouslySetInnerHTML={{
++              __html: DOMPurify.sanitize(abstract),
++            }}
++          />
++        ) : (
++          'No abstract'
++        )}
+ 
+         <Divider horizontal>Subject classification</Divider>
+         <DocumentSubjects metadata={metadata} />
+diff --git a/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanel.js b/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanel.js
+index 5cbaef9..ff13611 100644
+--- a/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanel.js
++++ b/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanel.js
+@@ -3,7 +3,6 @@ import {
+   ILSParagraphPlaceholder,
+ } from '@components/ILSPlaceholder';
+ import { Media } from '@components/Media';
+-import { ShowMoreContent } from '@components/ShowMoreContent';
+ import { invenioConfig } from '@config';
+ import DocumentAuthors from '@modules/Document/DocumentAuthors';
+ import LiteratureCover from '@modules/Literature/LiteratureCover';
+@@ -15,6 +14,7 @@ import { Grid } from 'semantic-ui-react';
+ import { DocumentCirculation } from '../DocumentCirculation';
+ import DocumentPanelMobile from './DocumentPanelMobile';
+ import { DocumentTitle } from './DocumentTitle';
++import DOMPurify from 'dompurify';
+ 
+ class DocumentPanel extends Component {
+   render() {
+@@ -75,14 +75,11 @@ class DocumentPanel extends Component {
+                           </div>
+                         )}
+                       </ILSParagraphPlaceholder>
+-                      <ILSParagraphPlaceholder
+-                        linesNumber={15}
+-                        isLoading={isLoading}
+-                      >
+-                        <ShowMoreContent lines={15}>
+-                          {doc.metadata.abstract}
+-                        </ShowMoreContent>
+-                      </ILSParagraphPlaceholder>
++                      <div
++                        dangerouslySetInnerHTML={{
++                          __html: DOMPurify.sanitize(doc.metadata.abstract),
++                        }}
++                      />
+                     </Grid.Column>
+                     <Grid.Column>
+                       <DocumentCirculation
