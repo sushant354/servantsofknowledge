@@ -1,4 +1,6 @@
+import os
 import logging
+
 logformat   = '%(asctime)s: %(name)s: %(levelname)s %(message)s'
 dateformat  = '%Y-%m-%d %H:%M:%S'
 
@@ -29,4 +31,8 @@ def setup_logging(level, filename = None):
         initialize_file_logging(loglevel, filestream)
     else:
         initialize_stream_logging(loglevel)
+
+def mkdir(dirpath):
+    if not os.path.exists(dirpath):
+        os.mkdir(dirpath)
 

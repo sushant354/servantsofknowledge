@@ -52,7 +52,12 @@ def build_cover_urls(metadata):
     cover_metadata = metadata.get("cover_metadata", {})
     is_placeholder = cover_metadata.get('is_placeholder', '')
     if is_placeholder or  'large' not in cover_metadata or 'medium' not in cover_metadata or 'small' not in cover_metadata:
-        urls = build_placeholder_urls()
+        img   = cover_metadata.get("img", {})
+        if img:
+            urls = {'is_placeholder': False, 'large': img, \
+                    'medium': img, 'small': img}
+        else:
+            urls = build_placeholder_urls()
     else:    
         urls = {'is_placeholder': False, 'large': cover_metadata['large'], \
            'medium': cover_metadata['medium'], 'small': cover_metadata['small']}
@@ -112,9 +117,8 @@ def get_internal_location(indexer, location, name):
     indexer.index(internal)
     return internal
 
-def get_urls(pid):
-    filename = 'covers/%s/__ia_thumb.jpg' % pid
-    img = 'https://invenio.indiankanoon.org/%s' % filename
+def get_urls(url_prefix, pid):
+    img = '%s/%s.jpg' % (url_prefix, pid)
 
     return {'is_placeholder': False, 'small': img, 'medium': img, 'large': img}
 
@@ -179,10 +183,15 @@ def get_document(indexer, item):
         subjects  = item.pop('subject')
         if isinstance(subjects, str):
             subjects = [subjects]
-        
-        subjects = [{'value': x, 'scheme': 'BISAC'} for x in subjects]
-        item['subjects'] = subjects
-    item['cover_metadata'] = get_urls(item['pid'])
+       
+        uniq = set()
+        sub  = []
+        for x in subjects:
+            if x not in uniq:
+                uniq.add(x)
+                sub.append({'value': x, 'scheme': 'BISAC'})
+
+        item['subjects'] = sub
 
     document = Document.create(item)
     minter(DOCUMENT_PID_TYPE, 'pid', document)
@@ -210,9 +219,10 @@ def get_item(indexer, obj):
 
     return item
 
-def add_ia_item(indexer, library_name, ia_item):
+
+def add_ia_item(indexer, library_name, location, ia_item):
     library    = get_library(indexer, library_name)
-    internal = get_internal_location(indexer, library, 'GandhiBhavan')
+    internal = get_internal_location(indexer, library, location)
     document = get_document(indexer, ia_item)
 
     docid = document['pid']
