@@ -60,8 +60,10 @@ if __name__ == '__main__':
     logger = logging.getLogger('iarchive')
     for dirname in os.listdir(iadir): 
         dirpath = os.path.join(iadir, dirname)
+        if not os.path.isdir(dirpath):
+            continue
         record, thumbfile = item_to_record(dirpath)
-        if record:
+        if record and 'repub_state' in record and record['repub_state'] == '19':
             filename = '%s.jpg' % dirname
             record['cover_metadata'] = {'img': '%s/%s' % (url_prefix, filename)}
             invenio.add_ia_item(indexer, libname, args.location, record)
