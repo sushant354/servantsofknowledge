@@ -28,6 +28,7 @@ from invenio_pidstore.errors import PIDDoesNotExistError
 from invenio_indexer.api import RecordIndexer
 from flask import url_for
 from invenio_app_ils.literature.covers_builder import build_openlibrary_urls, build_placeholder_urls
+from .collectiondict import collection_names 
 
 logger = logging.getLogger('iarchive')
 
@@ -130,6 +131,18 @@ def get_urls(url_prefix, pid):
 
     return {'is_placeholder': False, 'small': img, 'medium': img, 'large': img}
 
+def get_tags(collection):
+    if isinstance(collection, str):
+        collection = [collection]
+
+    tags = []
+    for x in collection:
+       if x in collection_names:
+           tags.append(collection_names[x])
+       else:
+           tags.append(x.title())
+    return tags
+
 def get_document(indexer, item):
     item['pid'] = item['identifier']
 
@@ -144,7 +157,7 @@ def get_document(indexer, item):
         collection = item.pop('collection')
         if 'JaiGyan' in collection:
             collection.remove('JaiGyan')
-        item['tags'] = collection 
+        item['tags'] = get_tags(collection)
 
     item['document_type'] = Document.DOCUMENT_TYPES[0]
 
@@ -247,9 +260,9 @@ def get_document(indexer, item):
         for x in subjects:
             if x not in uniq:
                 uniq.add(x)
-                sub.append({'value': x, 'scheme': 'BISAC'})
+                sub.append(x)
 
-        item['subjects'] = sub
+        item['subject'] = sub
 
     document = Document.create(item)
     minter(DOCUMENT_PID_TYPE, 'pid', document)
