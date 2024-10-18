@@ -15,7 +15,7 @@ def item_to_record(dirname):
         if record == None and filename.endswith('_meta.xml'):
             filepath = os.path.join(dirname, filename)
             record = xmlops.xml_to_record(filepath)
-        if not thumbfile and re.search('_thumb.jpg$', filename):
+        if not thumbfile and re.search('__ia_thumb.jpg$', filename):
             thumbfile = os.path.join(dirname, filename)
 
     return record, thumbfile
@@ -60,6 +60,9 @@ if __name__ == '__main__':
     logger = logging.getLogger('iarchive')
     for dirname in os.listdir(iadir): 
         dirpath = os.path.join(iadir, dirname)
+        if not os.path.isdir(dirpath):
+            continue
+
         record, thumbfile = item_to_record(dirpath)
         if record:
             filename = '%s.jpg' % dirname

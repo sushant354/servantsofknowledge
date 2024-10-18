@@ -1,5 +1,7 @@
 import re
 import uuid
+from langcodes import Language
+import logging
 
 from invenio_indexer.api import RecordIndexer
 from invenio_db import db
@@ -26,14 +28,20 @@ from invenio_pidstore.errors import PIDDoesNotExistError
 from invenio_indexer.api import RecordIndexer
 from flask import url_for
 from invenio_app_ils.literature.covers_builder import build_openlibrary_urls, build_placeholder_urls
+
+logger = logging.getLogger('iarchive')
+
 def get_languages(langs):
-    if isinstance(langs, str):
-        return [langs.upper()]
-
     ls = []
-    for lang in langs:
-        ls.append(lang.upper())
+    if isinstance(langs, str):
+        if len(langs) == 3:
+            ls = [langs.strip().upper()]
+        return ls
 
+    for lang in langs:
+        lang = lang.strip()
+        if len(lang) == 3:
+            ls.append(lang.upper())
     return ls
 
 def minter(pid_type, pid_field, record):
@@ -125,6 +133,7 @@ def get_urls(url_prefix, pid):
 def get_document(indexer, item):
     item['pid'] = item['identifier']
 
+
     try:
         document = Document.get_record_by_pid(item['pid'])
         return document
@@ -132,7 +141,10 @@ def get_document(indexer, item):
         pass
 
     if 'collection' in item:
-        item['tags'] = item.pop('collection')
+        collection = item.pop('collection')
+        if 'JaiGyan' in collection:
+            collection.remove('JaiGyan')
+        item['tags'] = collection 
 
     item['document_type'] = Document.DOCUMENT_TYPES[0]
 
@@ -140,6 +152,11 @@ def get_document(indexer, item):
         ls = get_languages(item['language'])
         if ls:
             item['languages']  = ls
+    if 'languages' not in item and 'ocr_detected_lang' in item:
+        lang = item['ocr_detected_lang']
+        if len(lang) == 2:
+            item['languages'] = [Language.get(lang).to_alpha3().upper()] 
+
     if 'description' in item:
         item['abstract'] = item.pop('description')
 
@@ -150,33 +167,74 @@ def get_document(indexer, item):
 
         if 'publisher' in item:
             publisher = item.pop('publisher')
-            item['imprint']['publisher'] = publisher
+            if isinstance(publisher, list):
+                publisher = ' '.join(publisher)
+
+            if publisher:
+                item['imprint']['publisher'] = publisher
         if 'date' in item:
             datestr = item.pop('date')
+            if isinstance(datestr, list):
+                datestr = datestr[0]
             item['imprint']['date'] = datestr
             ds = re.findall('\d+', datestr)
-            year =  ds[0]
+            if len(ds) >= 1:
+                year =  ds[0]
 
     if 'notes' in item:
-        item['note'] = item.pop('notes')
+        notes = item.pop('notes')
+        if isinstance(notes, list):
+            notes = ' '.join(notes)
+
+        item['note'] = notes 
 
     if publisher:
         item['created_by'] = {'type': 'string', 'value': publisher}
-    elif 'creator' in item:    
-        item['created_by'] = {'type': 'string', 'value': item['creator']}
-        
+    elif 'creator' in item:   
+        creator =  item['creator']
+        if isinstance(creator, list):
+            creator = ' '.join(creator)
+
+        item['created_by'] = {'type': 'string', 'value': creator}
+    else:
+        logger.error('No publisher in %s', item['pid'])
+        item['created_by'] = {'type': 'string', 'value': 'Not Known'}
+
+    authors = None
     if 'creator' in item:
         authors = item.pop('creator')
         if isinstance(authors, str):
             authors = [authors]
+    elif 'associated-names' in item:
+        authors = item.pop('associated-names') 
+        authors = authors.split(';')
+    elif publisher:
+        authors = publisher
+        if isinstance(authors, str):
+            authors = [authors]
 
-        authors = [{'full_name': author} for author in authors]
+    if authors:
+        
+        fullnames = []
+        for author in authors:
+            author = author.strip()
+            if author:
+                fullnames.append({'full_name': author})
 
-        item['authors'] = authors
+        if fullnames:
+            item['authors'] = fullnames
 
+    if 'authors' not in item:
+        logger.error('No author in %s', item['pid'])
+        item['authors'] = [{'full_name': 'Not Known'}]
 
     if 'year' in item:
         year = item.pop('year')
+        if isinstance(year, list):
+            year = year[0]
+    elif year == None:
+        logger.error('Incorrect year in %s', item['pid'])
+        year = '1000'
     item['publication_year'] = year 
 
     if 'subject' in item:
