@@ -1,9 +1,7 @@
 import re
 import uuid
-from langcodes import Language
 import logging
 
-from invenio_indexer.api import RecordIndexer
 from invenio_db import db
 from invenio_pidstore.models import PersistentIdentifier, PIDStatus
 from invenio_pidstore.providers.recordid_v2 import RecordIdProviderV2
@@ -264,9 +262,16 @@ def get_document(indexer, item):
 
         item['subject'] = sub
 
+
+    doctext = None
+    if 'doctext' in  item:
+        doctext = item.pop('doctext')
+
     document = Document.create(item)
     minter(DOCUMENT_PID_TYPE, 'pid', document)
     db.session.commit()
+    if doctext:
+        document['doctext'] = doctext
     indexer.index(document)
 
     return document

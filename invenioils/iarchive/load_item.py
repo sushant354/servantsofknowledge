@@ -11,12 +11,20 @@ from iarchive import xmlops
 def item_to_record(dirname):
     record     = None
     thumbfile  = False
+    txtfile    = None
+
     for filename in os.listdir(dirname):
         if record == None and filename.endswith('_meta.xml'):
             filepath = os.path.join(dirname, filename)
             record = xmlops.xml_to_record(filepath)
         if not thumbfile and re.search('__ia_thumb.jpg$', filename):
             thumbfile = os.path.join(dirname, filename)
+        if not txtfile and re.search('_djvu.txt$', filename):
+            txtfile = os.path.join(dirname, filename)
+
+    if txtfile:
+        doctext = open(txtfile, 'r', encoding='utf8').read()
+        record['doctext'] = doctext
 
     return record, thumbfile
 
