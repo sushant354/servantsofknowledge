@@ -1,0 +1,178 @@
+diff --git a/src/lib/components/ILSMenu/ILSMenu.js b/src/lib/components/ILSMenu/ILSMenu.js
+index 621dc1d..becca38 100644
+--- a/src/lib/components/ILSMenu/ILSMenu.js
++++ b/src/lib/components/ILSMenu/ILSMenu.js
+@@ -1,4 +1,3 @@
+-import { RedirectToLoginButton } from '@authentication/components/RedirectToLoginButton';
+ import { authenticationService } from '@authentication/services/AuthenticationService';
+ import { Media } from '@components/Media';
+ import { invenioConfig } from '@config';
+@@ -59,16 +58,12 @@ class ILSMenu extends Component {
+   };
+ 
+   renderRightMenuItem = (userMenuText = '') => {
+-    const { isAnonymous } = this.props;
+-    return isAnonymous ? (
+-      <RedirectToLoginButton
+-        renderClass={Menu.Item}
+-        className="ils-menu-login-button"
+-        icon="sign in"
+-        content="Sign in"
+-      />
+-    ) : (
+-      this.renderRightDropDown(userMenuText)
++    return (
++      <Menu.Menu position="right">
++        <Menu.Item>
++          <Link to={FrontSiteRoutes.aboutus}>About us</Link>
++        </Menu.Item>
++      </Menu.Menu>
+     );
+   };
+ 
+diff --git a/src/lib/pages/frontsite/AboutUs/AboutUs.js b/src/lib/pages/frontsite/AboutUs/AboutUs.js
+new file mode 100644
+index 0000000..cd24473
+--- /dev/null
++++ b/src/lib/pages/frontsite/AboutUs/AboutUs.js
+@@ -0,0 +1,8 @@
++import React, { Component } from 'react';
++import { NotFound } from '@components/HttpErrors';
++
++export class AboutUs extends Component {
++  render() {
++    return <NotFound />;
++  }
++}
+diff --git a/src/lib/pages/frontsite/AboutUs/index.js b/src/lib/pages/frontsite/AboutUs/index.js
+new file mode 100644
+index 0000000..ee50823
+--- /dev/null
++++ b/src/lib/pages/frontsite/AboutUs/index.js
+@@ -0,0 +1 @@
++export { AboutUs } from './AboutUs';
+diff --git a/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentDetails.js b/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentDetails.js
+index a4f1746..04772a5 100644
+--- a/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentDetails.js
++++ b/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentDetails.js
+@@ -17,7 +17,6 @@ import React, { Component } from 'react';
+ import Overridable from 'react-overridable';
+ import { Link } from 'react-router-dom';
+ import { Container, Grid, Icon, Label } from 'semantic-ui-react';
+-import { DocumentItems } from './DocumentItems';
+ import { DocumentMetadata } from './DocumentMetadata';
+ import DocumentPanel from './DocumentPanel/DocumentPanel';
+ import { NotFound } from '@components/HttpErrors';
+@@ -93,11 +92,6 @@ const DocumentDetailsLayout = ({
+             </ILSParagraphPlaceholder>
+           </Media>
+         </Container>
+-        <Container className="items-locations spaced">
+-          <ILSParagraphPlaceholder linesNumber={3} isLoading={isLoading}>
+-            <DocumentItems />
+-          </ILSParagraphPlaceholder>
+-        </Container>
+         <Container className="section" fluid>
+           <Container>
+             <ILSParagraphPlaceholder linesNumber={20} isLoading={isLoading}>
+diff --git a/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanel.js b/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanel.js
+index 325ad2b..12ec18a 100644
+--- a/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanel.js
++++ b/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanel.js
+@@ -11,7 +11,6 @@ import PropTypes from 'prop-types';
+ import React, { Component } from 'react';
+ import Overridable from 'react-overridable';
+ import { Grid } from 'semantic-ui-react';
+-import { DocumentCirculation } from '../DocumentCirculation';
+ import DocumentPanelMobile from './DocumentPanelMobile';
+ import { DocumentTitle } from './DocumentTitle';
+ import DOMPurify from 'dompurify';
+@@ -118,13 +117,6 @@ class DocumentPanel extends Component {
+                         ''
+                       )}
+                     </Grid.Column>
+-                    <Grid.Column>
+-                      <DocumentCirculation
+-                        documentDetails={doc}
+-                        loansInfo={loansInfo}
+-                        isLoading={isLoading}
+-                      />
+-                    </Grid.Column>
+                   </Grid.Row>
+                 </Grid>
+               </div>
+diff --git a/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanelMobile.js b/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanelMobile.js
+index a00c158..b7aa3df 100644
+--- a/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanelMobile.js
++++ b/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanelMobile.js
+@@ -11,13 +11,12 @@ import PropTypes from 'prop-types';
+ import React, { Component } from 'react';
+ import Overridable from 'react-overridable';
+ import { Grid } from 'semantic-ui-react';
+-import { DocumentCirculation } from '../DocumentCirculation';
+ import { DocumentTitle } from './DocumentTitle';
+ import DOMPurify from 'dompurify';
+ 
+ class DocumentPanelMobile extends Component {
+   render() {
+-    const { documentDetails: doc, isLoading, loansInfo } = this.props;
++    const { documentDetails: doc, isLoading } = this.props;
+     return (
+       <div
+         className="literature-panel"
+@@ -62,15 +61,6 @@ class DocumentPanelMobile extends Component {
+                 </ILSParagraphPlaceholder>
+               </Grid.Column>
+             </Grid.Row>
+-            <Grid.Row>
+-              <Grid.Column mobile={16}>
+-                <DocumentCirculation
+-                  documentDetails={doc}
+-                  loansInfo={loansInfo}
+-                  isLoading={isLoading}
+-                />
+-              </Grid.Column>
+-            </Grid.Row>
+             <Grid.Row>
+               <Grid.Column mobile={16}>
+                 <div
+@@ -128,7 +118,6 @@ class DocumentPanelMobile extends Component {
+ 
+ DocumentPanelMobile.propTypes = {
+   documentDetails: PropTypes.object.isRequired,
+-  loansInfo: PropTypes.object.isRequired,
+   isLoading: PropTypes.bool,
+ };
+ 
+diff --git a/src/lib/routes/frontsite/Frontsite.js b/src/lib/routes/frontsite/Frontsite.js
+index 3ddcf46..94593e0 100644
+--- a/src/lib/routes/frontsite/Frontsite.js
++++ b/src/lib/routes/frontsite/Frontsite.js
+@@ -12,6 +12,7 @@ import LiteratureSearch from '@pages/frontsite/Literature/LiteratureSearch/Liter
+ import { OpeningHours } from '@pages/frontsite/OpeningHours';
+ import { SelfCheckout } from '@pages/frontsite/SelfCheckout';
+ import { PatronProfile } from '@pages/frontsite/PatronProfile';
++import { AboutUs } from '@pages/frontsite/AboutUs';
+ import { SeriesDetails } from '@pages/frontsite/Series';
+ import { StaticPage } from '@pages/frontsite/StaticPage';
+ import { FrontSiteRoutes } from '@routes/frontsite/frontsiteUrls';
+@@ -69,6 +70,7 @@ export default class FrontSite extends Component {
+               path={FrontSiteRoutes.patronProfile}
+               component={PatronProfile}
+             />
++            <Route exact path={FrontSiteRoutes.aboutus} component={AboutUs} />
+             <Route
+               exact
+               path={FrontSiteRoutes.openingHours}
+diff --git a/src/lib/routes/frontsite/frontsiteUrls.js b/src/lib/routes/frontsite/frontsiteUrls.js
+index e0f916f..d52fb88 100644
+--- a/src/lib/routes/frontsite/frontsiteUrls.js
++++ b/src/lib/routes/frontsite/frontsiteUrls.js
+@@ -11,6 +11,7 @@ const FrontSiteRoutesList = {
+   openingHours: `${FrontSiteBase}opening-hours`,
+   seriesDetails: `${FrontSiteBase}series/:seriesPid`,
+   errors: `${FrontSiteBase}error`,
++  aboutus: `${FrontSiteBase}aboutus`,
+   selfCheckout: `${FrontSiteBase}selfcheckout`,
+ };
+ 
