@@ -64,7 +64,7 @@ if __name__ == '__main__':
             continue
 
         record, thumbfile = item_to_record(dirpath)
-        if record and 'repub_state' in record and record['repub_state'] == '19':
+        if record and ('repub_state' not in record or record['repub_state'] == '19'):
             filename = '%s.jpg' % dirname
             record['cover_metadata'] = {'img': '%s/%s' % (url_prefix, filename)}
             invenio.add_ia_item(indexer, libname, args.location, record)
