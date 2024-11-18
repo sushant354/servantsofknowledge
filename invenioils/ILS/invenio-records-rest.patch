@@ -1,0 +1,12 @@
+diff --git a/invenio_records_rest/views.py b/invenio_records_rest/views.py
+index 9735788..050f148 100644
+--- a/invenio_records_rest/views.py
++++ b/invenio_records_rest/views.py
+@@ -653,6 +653,7 @@ class RecordsListResource(ContentNegotiatedMethodView):
+         search = search.extra(track_total_hits=True)
+ 
+         search, qs_kwargs = self.search_factory(search, self.search_query_parser)
++        search = search.source(excludes = ['doctext']).highlight('doctext', max_analyzer_offset="900000", type="fvh", boundary_scanner="sentence", number_of_fragments= 3)
+         urlkwargs.update(qs_kwargs)
+ 
+         # Execute search

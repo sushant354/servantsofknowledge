@@ -1,0 +1,39 @@
+diff --git a/invenio_app_ils/documents/mappings/os-v2/documents/document-v2.0.0.json b/invenio_app_ils/documents/mappings/os-v2/documents/document-v2.0.0.json
+index d9eb0676..1339b871 100644
+--- a/invenio_app_ils/documents/mappings/os-v2/documents/document-v2.0.0.json
++++ b/invenio_app_ils/documents/mappings/os-v2/documents/document-v2.0.0.json
+@@ -76,6 +76,11 @@
+         "analyzer": "custom_analyzer",
+         "search_analyzer": "custom_analyzer"
+       },
++      "doctext": {
++        "type": "text",
++        "index_options": "offsets",
++        "term_vector": "with_positions_offsets"
++      },
+       "alternative_abstracts": {
+         "type": "text",
+         "analyzer": "custom_analyzer",
+@@ -1063,4 +1068,4 @@
+       }
+     }
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/invenio_app_ils/documents/schemas/documents/document-v2.0.0.json b/invenio_app_ils/documents/schemas/documents/document-v2.0.0.json
+index 4ae022fc..4e8fdd30 100644
+--- a/invenio_app_ils/documents/schemas/documents/document-v2.0.0.json
++++ b/invenio_app_ils/documents/schemas/documents/document-v2.0.0.json
+@@ -19,6 +19,11 @@
+       "title": "Abstract of the document.",
+       "type": "string"
+     },
++    "doctext": {
++      "title": "Document text",
++      "type": "string"
++    },
++
+     "alternative_abstracts": {
+       "items": {
+         "type": "string"

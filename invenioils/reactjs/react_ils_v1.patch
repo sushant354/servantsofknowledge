@@ -1,35 +1,18 @@
 diff --git a/.env b/.env
-index 8f998a2..ac907e1 100644
+index 97efc0f..ac907e1 100644
 --- a/.env
 +++ b/.env
-@@ -1,6 +1,6 @@
- REACT_APP_UI_ILS_VERSION=$npm_package_version
- REACT_APP_INVENIO_VERSION=1.0.0a85
--REACT_APP_INVENIO_UI_URL=https://127.0.0.1:5000
--REACT_APP_INVENIO_REST_ENDPOINTS_BASE_URL=https://127.0.0.1:5000/api
--REACT_APP_OVERLAY_VERSION=
+@@ -3,4 +3,4 @@ REACT_APP_INVENIO_VERSION=1.0.0a85
+ REACT_APP_INVENIO_UI_URL=https://invenio.indiankanoon.org
+ REACT_APP_INVENIO_REST_ENDPOINTS_BASE_URL=https://invenio.indiankanoon.org/api
+ REACT_APP_OVERLAY_VERSION=1.0.0
 -REACT_APP_ENV_NAME=development
-+REACT_APP_INVENIO_UI_URL=https://invenio.indiankanoon.org
-+REACT_APP_INVENIO_REST_ENDPOINTS_BASE_URL=https://invenio.indiankanoon.org/api
-+REACT_APP_OVERLAY_VERSION=1.0.0
 +REACT_APP_ENV_NAME=production
 diff --git a/package-lock.json b/package-lock.json
-index 85db034..01f2c07 100644
+index 72cd9b8..01f2c07 100644
 --- a/package-lock.json
 +++ b/package-lock.json
-@@ -6540,6 +6540,11 @@
-         "domelementtype": "^2.3.0"
-       }
-     },
-+    "dompurify": {
-+      "version": "3.1.6",
-+      "resolved": "https://registry.npmjs.org/dompurify/-/dompurify-3.1.6.tgz",
-+      "integrity": "sha512-cTOAhc36AalkjtBpfG6O8JimdTMWNXjiePT2xQH/ppBGi/4uIpmj8eKyIkMJErXWARyINV/sB38yf8JCLF5pbQ=="
-+    },
-     "domutils": {
-       "version": "3.1.0",
-       "resolved": "https://registry.npmjs.org/domutils/-/domutils-3.1.0.tgz",
-@@ -10165,6 +10170,11 @@
+@@ -10170,6 +10170,11 @@
        "integrity": "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==",
        "dev": true
      },
@@ -42,15 +25,14 @@ index 85db034..01f2c07 100644
        "version": "3.0.1",
        "resolved": "https://registry.npmjs.org/isobject/-/isobject-3.0.1.tgz",
 diff --git a/package.json b/package.json
-index c8cc6a5..d0c767f 100644
+index ce45b55..d0c767f 100644
 --- a/package.json
 +++ b/package.json
-@@ -157,5 +157,9 @@
-     "snapshotSerializers": [
-       "enzyme-to-json/serializer"
+@@ -159,6 +159,7 @@
      ]
-+  },
-+  "dependencies": {
+   },
+   "dependencies": {
+-    "dompurify": "^3.1.6"
 +    "dompurify": "^3.1.6",
 +    "iso-639-language": "^1.0.1"
    }
@@ -175,37 +157,38 @@ index 8fc869a..cdfa473 100644
    MAX_RESULTS_WINDOW: 10000,
    VOCAB_MAX_RESULTS_WINDOW: 500,
    EXPORT_MAX_RESULTS: 4000,
-diff --git a/src/lib/modules/Document/DocumentContent.js b/src/lib/modules/Document/DocumentContent.js
-index a4d7b26..17b521d 100644
---- a/src/lib/modules/Document/DocumentContent.js
-+++ b/src/lib/modules/Document/DocumentContent.js
-@@ -4,6 +4,7 @@ import PropTypes from 'prop-types';
- import React, { Component } from 'react';
- import { Divider, List } from 'semantic-ui-react';
- import { MetadataTable } from '../../components/backoffice/MetadataTable';
+diff --git a/src/lib/modules/Document/DocumentCard/DocumentCard.js b/src/lib/modules/Document/DocumentCard/DocumentCard.js
+index 09603a5..6f5e4dfe 100644
+--- a/src/lib/modules/Document/DocumentCard/DocumentCard.js
++++ b/src/lib/modules/Document/DocumentCard/DocumentCard.js
+@@ -10,6 +10,7 @@ import { invenioConfig } from '@config';
+ import { Link } from 'react-router-dom';
+ import { Truncate } from '@components/Truncate';
+ import { renderSubtitle } from '@modules/Document/utils';
 +import DOMPurify from 'dompurify';
  
- export class DocumentContent extends Component {
-   prepareAlternativeAbstracts = (element, index) => {
-@@ -30,9 +31,16 @@ export class DocumentContent extends Component {
-         ) : (
-           'No table of contents'
-         )}
--
-         <Divider horizontal>Abstract</Divider>
--        {abstract ? abstract : 'No abstract'}
-+        {abstract ? (
-+          <div
-+            dangerouslySetInnerHTML={{
-+              __html: DOMPurify.sanitize(abstract),
-+            }}
-+          />
-+        ) : (
-+          'No abstract'
-+        )}
- 
-         <Divider horizontal>Subject classification</Divider>
-         <DocumentSubjects metadata={metadata} />
+ class DocumentCard extends Component {
+   renderImage = () => {
+@@ -101,6 +102,19 @@ class DocumentCard extends Component {
+                 )}
+               </div>
+             </Card.Meta>
++            <Card.Description>
++              {data.highlight && data.highlight.doctext ? (
++                <div
++                  dangerouslySetInnerHTML={{
++                    __html: DOMPurify.sanitize(
++                      data.highlight.doctext.join(' ... ')
++                    ),
++                  }}
++                />
++              ) : (
++                ''
++              )}
++            </Card.Description>
+           </Card.Content>
+           <Card.Content extra>
+             {_get(metadata, 'circulation.available_items_for_loan_count') >
 diff --git a/src/lib/modules/Document/DocumentLanguages.js b/src/lib/modules/Document/DocumentLanguages.js
 index 9181c46..51f5d47 100644
 --- a/src/lib/modules/Document/DocumentLanguages.js
@@ -235,25 +218,9 @@ index 9181c46..51f5d47 100644
                </List.Item>
              );
 diff --git a/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanel.js b/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanel.js
-index 5cbaef9..325ad2b 100644
+index ff13611..325ad2b 100644
 --- a/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanel.js
 +++ b/src/lib/pages/frontsite/Documents/DocumentDetails/DocumentPanel/DocumentPanel.js
-@@ -3,7 +3,6 @@ import {
-   ILSParagraphPlaceholder,
- } from '@components/ILSPlaceholder';
- import { Media } from '@components/Media';
--import { ShowMoreContent } from '@components/ShowMoreContent';
- import { invenioConfig } from '@config';
- import DocumentAuthors from '@modules/Document/DocumentAuthors';
- import LiteratureCover from '@modules/Literature/LiteratureCover';
-@@ -15,6 +14,7 @@ import { Grid } from 'semantic-ui-react';
- import { DocumentCirculation } from '../DocumentCirculation';
- import DocumentPanelMobile from './DocumentPanelMobile';
- import { DocumentTitle } from './DocumentTitle';
-+import DOMPurify from 'dompurify';
- 
- class DocumentPanel extends Component {
-   render() {
 @@ -51,7 +51,6 @@ class DocumentPanel extends Component {
                            <DocumentTitle metadata={doc.metadata} />
                          </ILSHeaderPlaceholder>
@@ -262,24 +229,15 @@ index 5cbaef9..325ad2b 100644
                        <ILSParagraphPlaceholder
                          linesNumber={2}
                          isLoading={isLoading}
-@@ -75,14 +74,49 @@ class DocumentPanel extends Component {
-                           </div>
+@@ -76,10 +75,48 @@ class DocumentPanel extends Component {
                          )}
                        </ILSParagraphPlaceholder>
--                      <ILSParagraphPlaceholder
--                        linesNumber={15}
--                        isLoading={isLoading}
--                      >
--                        <ShowMoreContent lines={15}>
--                          {doc.metadata.abstract}
--                        </ShowMoreContent>
--                      </ILSParagraphPlaceholder>
-+                      <div
+                       <div
 +                        className="default-margin-bottom"
-+                        dangerouslySetInnerHTML={{
-+                          __html: DOMPurify.sanitize(doc.metadata.abstract),
-+                        }}
-+                      />
+                         dangerouslySetInnerHTML={{
+                           __html: DOMPurify.sanitize(doc.metadata.abstract),
+                         }}
+                       />
 +                      {doc.metadata.subject ? (
 +                        <div className="default-margin-bottom">
 +                          <b>Subjects:</b> {doc.metadata.subject.join(', ')}
