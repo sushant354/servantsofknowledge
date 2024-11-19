@@ -37,3 +37,25 @@ index 4ae022fc..4e8fdd30 100644
      "alternative_abstracts": {
        "items": {
          "type": "string"
+diff --git a/invenio_app_ils/literature/serializers/json.py b/invenio_app_ils/literature/serializers/json.py
+index da405d97..a926fede 100644
+--- a/invenio_app_ils/literature/serializers/json.py
++++ b/invenio_app_ils/literature/serializers/json.py
+@@ -15,6 +15,10 @@ from .custom_fields import field_cover_metadata
+ class LiteratureJSONSerializer(JSONSerializer):
+     """Serialize Literature."""
+ 
++    def add_highlight(self, record_hit, hit):
++        if 'highlight' in record_hit:
++            hit['highlight'] = record_hit['highlight']
++
+     def transform_record(self, pid, record, links_factory=None, **kwargs):
+         """Transform record into an intermediate representation."""
+         literature = super().transform_record(
+@@ -29,4 +33,6 @@ class LiteratureJSONSerializer(JSONSerializer):
+             pid, record_hit, links_factory=links_factory, **kwargs
+         )
+         field_cover_metadata(hit["metadata"])
++        self.add_highlight(record_hit, hit)
++
+         return hit
