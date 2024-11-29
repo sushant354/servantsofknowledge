@@ -27,7 +27,7 @@ from invenio_indexer.api import RecordIndexer
 from flask import url_for
 from invenio_app_ils.literature.covers_builder import build_openlibrary_urls, build_placeholder_urls
 from .collectiondict import collection_names 
-
+from langcodes import Language
 logger = logging.getLogger('iarchive')
 
 def get_languages(langs):
@@ -144,6 +144,8 @@ def get_tags(collection):
 def get_document(indexer, item):
     item['pid'] = item['identifier']
 
+    if 'title' in item and isinstance(item['title'], list):
+        item['title'] = ' - '.join(item['title'])
 
     try:
         document = Document.get_record_by_pid(item['pid'])
@@ -262,6 +264,8 @@ def get_document(indexer, item):
 
         item['subject'] = sub
 
+    if 'keywords' in item:
+        item.pop('keywords')
 
     doctext = None
     if 'doctext' in  item:
@@ -272,7 +276,12 @@ def get_document(indexer, item):
     db.session.commit()
     if doctext:
         document['doctext'] = doctext
-    indexer.index(document)
+
+    try:        
+        indexer.index(document)
+    except Exception as e:
+        logger.error('Error %s', e)
+        return None
 
     return document
 
@@ -291,8 +300,12 @@ def get_item(indexer, obj):
     item = Item.create(obj)
     minter(ITEM_PID_TYPE, "pid", item)
     db.session.commit()
-    indexer.index(item)
-
+    try:
+        indexer.index(item)
+    except Exception as e:
+        logger.error('Error: %s', e)
+        return None
+    
     return item
 
 
@@ -300,6 +313,9 @@ def add_ia_item(indexer, library_name, location, ia_item):
     library    = get_library(indexer, library_name)
     internal = get_internal_location(indexer, library, location)
     document = get_document(indexer, ia_item)
+
+    if not document:
+        return
 
     docid = document['pid']
     created_by = document['created_by']

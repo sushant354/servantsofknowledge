@@ -22,8 +22,8 @@ def item_to_record(dirname):
         if not txtfile and re.search('_djvu.txt$', filename):
             txtfile = os.path.join(dirname, filename)
 
-    if txtfile:
-        doctext = open(txtfile, 'r', encoding='utf8').read()
+    if txtfile and record:
+        doctext = open(txtfile, 'r', encoding='utf8', errors = 'ignore').read()
         record['doctext'] = doctext
 
     return record, thumbfile
