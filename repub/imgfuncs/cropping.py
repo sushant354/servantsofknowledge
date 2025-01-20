@@ -145,8 +145,6 @@ def crop(img, xmax, ymax, maxcontours, drawcontours):
         miny = miny2
         maxy = maxy1
 
-    if minx > 500:
-        minx = 0
     logger = logging.getLogger('crop.contours')
     logger.warning('Bounding box: %s %s', (minx, miny), (maxx, maxy))
     return img[miny:maxy, minx:maxx]

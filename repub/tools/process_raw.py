@@ -30,6 +30,9 @@ def get_arg_parser():
     parser.add_argument('-d', '--drawcontours', action='store_true', \
                         dest='drawcontours', \
                         help='vertical line limits in pixels')
+    parser.add_argument('-p', '--pagenums', nargs='*', default='pagenums', \
+                        dest = 'pagenums', type=int, \
+                        help = 'pagenums that should only be processed')
     return parser
 
 
@@ -96,15 +99,18 @@ if __name__ == '__main__':
     pagedata = scandata['pageData']
 
     for filename in os.listdir(indir):
-        reobj = re.match('(?P<pagenum>\\d{4}).jpg$', filename)
+        reobj = re.match('(?P<pagenum>\\d{4}).(jpg|jp2)$', filename)
         if reobj:
             groupdict = reobj.groupdict('pagenum')
-            pagenum   = int(groupdict['pagenum'])
+            pagenum   = groupdict['pagenum']
 
             infile  = os.path.join(indir, filename)
-            outfile = os.path.join(outdir, filename)
+            if re.search('.jp2$', filename):
+                outfile = os.path.join(outdir, '%s.jpg' % pagenum)
 
+            pagenum   = int(pagenum)
             pageinfo = pagedata['%d' % pagenum]
-            if pageinfo['pageType'] != 'Color Card':# and pagenum == 4:
+            if pageinfo['pageType'] != 'Color Card' and \
+                    (len(args.pagenums) == 0 or pagenum in args.pagenums):
                 logger.error ('FILEAME: %s', filename)
                 process_image(pageinfo, infile, outfile, args)
