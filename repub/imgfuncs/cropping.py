@@ -60,31 +60,33 @@ def get_hvlines(contours, xmax, ymax):
             x, y = point[0]
             if is_horizontal(havg, prevp, point[0], ymax):
                 if not hline:
-                    hline = []
+                    hline = [(int(x), int(y) )]
                     hlines.append(hline)
                     havg = y
-
-                l = len(hline)    
-                havg = (l * havg + y)/(l+1)
-                hline.append((int(x), int(y) ))
+                else:
+                    l = len(hline)    
+                    havg = (l * havg + y)/(l+1)
+                    hline.append((int(x), int(y) ))
             else:
                 logger.debug('HLINE %d %s %s', havg, prevp, point[0])
-                hline = None
-                havg = None
+                hline = [(int(x), int(y) )]
+                hlines.append(hline)
+                havg = y
 
             if  is_vertical(vavg, prevp, point[0], xmax):
                 if not vline:
-                    vline = []
+                    vline = [(int(x), int(y))]
                     vlines.append(vline)
                     vavg = x 
-
-                l = len(vline)    
-                vavg = (l * vavg + x)/(l+1)
-                vline.append((int(x), int(y)))
+                else:
+                    l = len(vline)    
+                    vavg = (l * vavg + x)/(l+1)
+                    vline.append((int(x), int(y)))
             else:
                 logger.debug ('VLINE %d %s %s', vavg, prevp, point[0])
-                vline = None
-                vavg = None
+                vline = [(int(x), int(y))] 
+                vlines.append(vline)
+                vavg = x
             prevp = point[0]
 
 
@@ -119,7 +121,7 @@ def is_vertical(vavg, p1, p2, xmax):
 def crop(img, xmax, ymax, maxcontours, drawcontours):
     contours = find_contour(img)
 
-    contours = contours[:maxcontours]
+    contours = contours[1:maxcontours]
 
     if drawcontours:
         return cv2.drawContours(img, contours, -1, (0, 255, 0), 3) 

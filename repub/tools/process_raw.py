@@ -30,7 +30,7 @@ def get_arg_parser():
     parser.add_argument('-d', '--drawcontours', action='store_true', \
                         dest='drawcontours', \
                         help='vertical line limits in pixels')
-    parser.add_argument('-p', '--pagenums', nargs='*', default='pagenums', \
+    parser.add_argument('-p', '--pagenums', nargs='*', \
                         dest = 'pagenums', type=int, \
                         help = 'pagenums that should only be processed')
     return parser
@@ -107,10 +107,12 @@ if __name__ == '__main__':
             infile  = os.path.join(indir, filename)
             if re.search('.jp2$', filename):
                 outfile = os.path.join(outdir, '%s.jpg' % pagenum)
+            else:
+                outfile = os.path.join(outdir, filename)
 
             pagenum   = int(pagenum)
             pageinfo = pagedata['%d' % pagenum]
             if pageinfo['pageType'] != 'Color Card' and \
-                    (len(args.pagenums) == 0 or pagenum in args.pagenums):
+                    (not args.pagenums or pagenum in args.pagenums):
                 logger.error ('FILEAME: %s', filename)
                 process_image(pageinfo, infile, outfile, args)
