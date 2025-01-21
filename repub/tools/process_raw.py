@@ -2,6 +2,7 @@ import os
 import re
 import argparse
 import logging
+import statistics 
 
 import json
 import cv2
@@ -138,8 +139,8 @@ if __name__ == '__main__':
     pagenums = list(boxes.keys())
     pagenums.sort()
 
-    even = {'minx': 0 , 'miny': 0, 'maxx': 0, 'maxy': 0, 'count': 0}
-    odd  = {'minx': 0 , 'miny': 0, 'maxx': 0, 'maxy': 0, 'count': 0}
+    even = {'minx': [], 'miny': [], 'maxx': [], 'maxy': []}
+    odd  = {'minx': [], 'miny': [], 'maxx': [], 'maxy': []}
 
     for pagenum in pagenums:
         if pagenum % 2 == 0:
@@ -148,17 +149,14 @@ if __name__ == '__main__':
             stats = odd
           
         box = boxes[pagenum]
-        stats['minx']  += box[0]
-        stats['miny']  += box[1]
-        stats['maxx']  += box[2]
-        stats['maxy']  += box[3]
-        stats['count'] += 1
+        stats['minx'].append(box[0])
+        stats['miny'].append(box[1])
+        stats['maxx'].append(box[2])
+        stats['maxy'].append(box[3])
       
     for stats in [even, odd]:
-        stats['minx'] /= stats['count']
-        stats['miny'] /= stats['count']
-        stats['maxx'] /= stats['count']
-        stats['maxy'] /= stats['count']
+        for k in stats:
+            stats[k] = statistics.median(stats[k])
          
     logger.warning ('Even: ', even)
     logger.warning ('Odd: ', odd)
