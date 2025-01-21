@@ -118,13 +118,10 @@ def is_vertical(vavg, p1, p2, xmax):
         return True
     return False
 
-def crop(img, xmax, ymax, maxcontours, drawcontours):
+def get_crop_box(img, xmax, ymax, maxcontours):
     contours = find_contour(img)
 
-    contours = contours[1:maxcontours]
-
-    if drawcontours:
-        return cv2.drawContours(img, contours, -1, (0, 255, 0), 3) 
+    contours = contours[:maxcontours]
 
     hlines, vlines = get_hvlines(contours, xmax, ymax)
 
@@ -149,4 +146,8 @@ def crop(img, xmax, ymax, maxcontours, drawcontours):
 
     logger = logging.getLogger('crop.contours')
     logger.warning('Bounding box: %s %s', (minx, miny), (maxx, maxy))
+
+    return [minx, miny, maxx, maxy]
+
+def crop(img, minx, miny, maxx, maxy):
     return img[miny:maxy, minx:maxx]

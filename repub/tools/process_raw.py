@@ -1,14 +1,11 @@
 import os
 import re
-import sys
-import math
 import argparse
 import logging
 
-import numpy
 import json
 import cv2
-from repub.imgfuncs.cropping import crop 
+from repub.imgfuncs.cropping import crop, get_crop_box, find_contour
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(description='For processing scanned book pages')
@@ -69,14 +66,18 @@ def setup_logging(level, filename = None):
         initialize_stream_logging(loglevel)
 
 
-def process_image(scaninfo, infile, outfile, args):
+def read_image(scaninfo, infile):
     img = cv2.imread(infile)
     if scaninfo['rotateDegree'] == -90:
         img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
     elif scaninfo['rotateDegree'] == 90:
         img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
-    img = crop(img, args.xmax, args.ymax, args.maxcontours, args.drawcontours)
-    cv2.imwrite(outfile, img)
+
+    return img    
+
+def process_image(img, args):
+    box = get_crop_box(img, args.xmax, args.ymax, args.maxcontours)
+    return box
 
 def get_scandata(indir):
     scanfh = open(os.path.join(indir, 'scandata.json'), 'r', encoding = 'utf8')
@@ -84,20 +85,7 @@ def get_scandata(indir):
     scanfh.close()
     return json.loads(s)
 
-if __name__ == '__main__':
-    parser = get_arg_parser()
-    args   = parser.parse_args()
-
-    setup_logging(args.loglevel, filename = args.logfile)
-    logger = logging.getLogger('repub.main')
-
-    indir  = args.indir 
-    outdir = args.outdir
-
-    scandata = get_scandata(indir)
-
-    pagedata = scandata['pageData']
-
+def get_scanned_pages(pagedata, indir, pagenums):
     for filename in os.listdir(indir):
         reobj = re.match('(?P<pagenum>\\d{4}).(jpg|jp2)$', filename)
         if reobj:
@@ -113,6 +101,108 @@ if __name__ == '__main__':
             pagenum   = int(pagenum)
             pageinfo = pagedata['%d' % pagenum]
             if pageinfo['pageType'] != 'Color Card' and \
-                    (not args.pagenums or pagenum in args.pagenums):
+                    (not pagenums or pagenum in pagenums):
                 logger.error ('FILEAME: %s', filename)
-                process_image(pageinfo, infile, outfile, args)
+                img = read_image(pageinfo, infile) 
+                yield (img, outfile, pagenum)
+
+if __name__ == '__main__':
+    parser = get_arg_parser()
+    args   = parser.parse_args()
+
+    setup_logging(args.loglevel, filename = args.logfile)
+    logger = logging.getLogger('repub.main')
+
+    indir  = args.indir 
+    outdir = args.outdir
+
+    scandata = get_scandata(indir)
+
+    pagedata = scandata['pageData']
+
+    boxes = {}
+
+    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, \
+                                                   args.pagenums):
+        if args.drawcontours:
+            contours = find_contour(img)
+            contours = contours[:args.maxcontours]
+
+            img = cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
+
+            cv2.imwrite(outfile, img)
+        else:
+            box = process_image(img,  args)
+            boxes[pagenum] = box
+
+    pagenums = list(boxes.keys())
+    pagenums.sort()
+
+    even = {'minx': 0 , 'miny': 0, 'maxx': 0, 'maxy': 0, 'count': 0}
+    odd  = {'minx': 0 , 'miny': 0, 'maxx': 0, 'maxy': 0, 'count': 0}
+
+    for pagenum in pagenums:
+        if pagenum % 2 == 0:
+            stats = even
+        else:
+            stats = odd
+          
+        box = boxes[pagenum]
+        stats['minx']  += box[0]
+        stats['miny']  += box[1]
+        stats['maxx']  += box[2]
+        stats['maxy']  += box[3]
+        stats['count'] += 1
+      
+    for stats in [even, odd]:
+        stats['minx'] /= stats['count']
+        stats['miny'] /= stats['count']
+        stats['maxx'] /= stats['count']
+        stats['maxy'] /= stats['count']
+         
+    logger.warning ('Even: ', even)
+    logger.warning ('Odd: ', odd)
+
+    preveven = None
+    prevodd  = None
+    for pagenum in pagenums:
+        box = boxes[pagenum]
+        if pagenum % 2 == 0:
+            stats = even
+            prevbox = preveven
+        else:
+            stats = odd
+            prevbox = prevodd
+
+        if prevbox!= None:
+            change = False
+            prev = box.copy()
+            if abs(box[0]-stats['minx']) > 0.1 * stats['minx']:
+                change = True
+                box[0] = prevbox[0]
+
+            if abs(box[1]-stats['miny']) > 0.1 * stats['miny']:
+                change = True
+                box[1] = prevbox[1]
+
+            if abs(box[2]-stats['maxx']) > 0.1 * stats['maxx']:
+                change = True
+                box[2] = prevbox[2]
+
+            if abs(box[3]-stats['maxy']) > 0.1 * stats['maxy']:
+                change = True
+                box[3] = prevbox[3]
+
+            if change:
+                logger.warning('Changing cropping box for page %d from %s to %s', pagenum, prev, box)
+
+        if pagenum % 2 == 0:
+            preveven = box    
+        else:
+            prevodd  = box
+
+    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, \
+                                                    args.pagenums):
+        box = boxes[pagenum]
+        img = crop(img, box[0], box[1], box[2], box[3])
+        cv2.imwrite(outfile, img)
