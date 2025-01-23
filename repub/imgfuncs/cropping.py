@@ -1,11 +1,14 @@
 import cv2
 import logging
 
-def find_contour(img):
+def threshold_gray(img, mingray, maxgray):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    ret, thresh = cv2.threshold(gray, 50, 255, cv2.THRESH_BINARY)
-    #edges = cv2.Canny(thresh, 50, 150, 3)
+    ret, thresh = cv2.threshold(gray, mingray, maxgray, cv2.THRESH_BINARY)
+    return thresh
 
+def find_contour(img):
+    #edges = cv2.Canny(thresh, 50, 150, 3)
+    thresh = threshold_gray(img, 125, 255)
     contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, \
                                            cv2.CHAIN_APPROX_SIMPLE )
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
@@ -53,20 +56,23 @@ def get_hvlines(contours, xmax, ymax):
 
         for point in contour:
             logger.debug ('%s', point)
+            x, y = point[0]
             if prevp is None:
                 prevp = point[0]
+                hline = [(int(x), int(y) )]
+                havg = y
+
+                vline = [(int(x), int(y))]
+                vavg = x 
+
+                hlines.append(hline)
+                vlines.append(vline)
                 continue
 
-            x, y = point[0]
             if is_horizontal(havg, prevp, point[0], ymax):
-                if not hline:
-                    hline = [(int(x), int(y) )]
-                    hlines.append(hline)
-                    havg = y
-                else:
-                    l = len(hline)    
-                    havg = (l * havg + y)/(l+1)
-                    hline.append((int(x), int(y) ))
+                 l = len(hline)    
+                 havg = (l * havg + y)/(l+1)
+                 hline.append((int(x), int(y) ))
             else:
                 logger.debug('HLINE %d %s %s', havg, prevp, point[0])
                 hline = [(int(x), int(y) )]
@@ -74,16 +80,11 @@ def get_hvlines(contours, xmax, ymax):
                 havg = y
 
             if  is_vertical(vavg, prevp, point[0], xmax):
-                if not vline:
-                    vline = [(int(x), int(y))]
-                    vlines.append(vline)
-                    vavg = x 
-                else:
-                    l = len(vline)    
-                    vavg = (l * vavg + x)/(l+1)
-                    vline.append((int(x), int(y)))
+                l = len(vline)    
+                vavg = (l * vavg + x)/(l+1)
+                vline.append((int(x), int(y)))
             else:
-                logger.debug ('VLINE %d %s %s', vavg, prevp, point[0])
+                logger.debug ('VLINE %d %s %s %s', vavg, prevp, point[0], vline)
                 vline = [(int(x), int(y))] 
                 vlines.append(vline)
                 vavg = x

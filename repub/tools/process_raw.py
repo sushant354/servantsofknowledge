@@ -3,10 +3,14 @@ import re
 import argparse
 import logging
 import statistics 
+import sys
+import pytesseract
+import PyPDF2
+import io
 
 import json
 import cv2
-from repub.imgfuncs.cropping import crop, get_crop_box, find_contour
+from repub.imgfuncs.cropping import crop, get_crop_box, find_contour, threshold_gray
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(description='For processing scanned book pages')
@@ -31,6 +35,8 @@ def get_arg_parser():
     parser.add_argument('-p', '--pagenums', nargs='*', \
                         dest = 'pagenums', type=int, \
                         help = 'pagenums that should only be processed')
+    parser.add_argument('-g', '--gray', action='store_true',  dest='gray', \
+                        help='only gray the image and threshold it')
     return parser
 
 
@@ -132,15 +138,21 @@ if __name__ == '__main__':
             img = cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
 
             cv2.imwrite(outfile, img)
+        elif args.gray:
+            gray = threshold_gray(img, 125, 255)
+            cv2.imwrite(outfile, gray)
         else:
             box = process_image(img,  args)
             boxes[pagenum] = box
 
+    if args.drawcontours or args.gray:
+        sys.exit(0)
+
     pagenums = list(boxes.keys())
     pagenums.sort()
 
-    even = {'minx': [], 'miny': [], 'maxx': [], 'maxy': []}
-    odd  = {'minx': [], 'miny': [], 'maxx': [], 'maxy': []}
+    even = [[], [], [], []]
+    odd  = [[], [], [], []]
 
     for pagenum in pagenums:
         if pagenum % 2 == 0:
@@ -149,17 +161,18 @@ if __name__ == '__main__':
             stats = odd
           
         box = boxes[pagenum]
-        stats['minx'].append(box[0])
-        stats['miny'].append(box[1])
-        stats['maxx'].append(box[2])
-        stats['maxy'].append(box[3])
+        for i in range(4):
+            stats[i].append(box[i])
       
+    logger.warning ('Even before stats: %s', even)
+    logger.warning ('Odd before stats: %s', odd)
     for stats in [even, odd]:
-        for k in stats:
-            stats[k] = statistics.median(stats[k])
+        for i in range(4):
+            if stats[i]:
+                stats[i] = statistics.median(stats[i])
          
-    logger.warning ('Even: ', even)
-    logger.warning ('Odd: ', odd)
+    logger.warning ('Even: %s', even)
+    logger.warning ('Odd: %s', odd)
 
     preveven = None
     prevodd  = None
@@ -175,32 +188,45 @@ if __name__ == '__main__':
         if prevbox!= None:
             change = False
             prev = box.copy()
-            if abs(box[0]-stats['minx']) > 0.1 * stats['minx']:
-                change = True
-                box[0] = prevbox[0]
-
-            if abs(box[1]-stats['miny']) > 0.1 * stats['miny']:
-                change = True
-                box[1] = prevbox[1]
-
-            if abs(box[2]-stats['maxx']) > 0.1 * stats['maxx']:
-                change = True
-                box[2] = prevbox[2]
-
-            if abs(box[3]-stats['maxy']) > 0.1 * stats['maxy']:
-                change = True
-                box[3] = prevbox[3]
+            for i in range(4):
+                if abs(box[i]-stats[i]) > 200:# or \
+                    change = True
+                    box[i] = prevbox[i]
 
             if change:
                 logger.warning('Changing cropping box for page %d from %s to %s', pagenum, prev, box)
+        else:
+            change = False
+            prev = box.copy()
+            for i in range(4):
+                if abs(box[i]-stats[i]) > 200:# or \
+                    change = True
+                    box[i] = int(stats[i])
 
+            if change:
+                logger.warning('Changing cropping box for page %d from %s to %s', pagenum, prev, box)
+ 
         if pagenum % 2 == 0:
             preveven = box    
         else:
             prevodd  = box
 
+    outfiles = []
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, \
-                                                    args.pagenums):
+                                                   args.pagenums):
         box = boxes[pagenum]
+        logger.warning('Bounding box for page %d: %s', pagenum, box)
         img = crop(img, box[0], box[1], box[2], box[3])
         cv2.imwrite(outfile, img)
+        outfiles.append((pagenum, outfile))
+
+    outfiles.sort(key = lambda x: x[1])
+    pdf_writer = PyPDF2.PdfWriter()
+    # export the searchable PDF to searchable.pdf
+    for pagenum, outfile in outfiles:
+        page = pytesseract.image_to_pdf_or_hocr(outfile, extension='pdf')
+        pdf = PyPDF2.PdfReader(io.BytesIO(page))
+        pdf_writer.add_page(pdf.pages[0])
+
+    with open("searchable.pdf", "wb") as f:
+        pdf_writer.write(f)    
