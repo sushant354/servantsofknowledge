@@ -7,6 +7,7 @@ import sys
 import pytesseract
 import PyPDF2
 import io
+import shutil
 
 import json
 import cv2
@@ -17,7 +18,9 @@ def get_arg_parser():
     parser.add_argument('-i', '--indir', dest='indir', action='store', \
                   required= True, help='Filepath to Scanned images directory')
     parser.add_argument('-o', '--outdir', dest='outdir', action='store', \
-                  required= True, help='Filepath to processed directory')
+                  required= False, help='Filepath to processed directory')
+    parser.add_argument('-O', '--outpdf', dest='outpdf', action='store', \
+                  required= False, help='Output PDF filepath')
     parser.add_argument('-l', '--loglevel', dest='loglevel', action='store', \
                   default = 'info', help='debug level')
     parser.add_argument('-f', '--logfile', dest='logfile', action='store', \
@@ -113,41 +116,7 @@ def get_scanned_pages(pagedata, indir, pagenums):
                 img = read_image(pageinfo, infile) 
                 yield (img, outfile, pagenum)
 
-if __name__ == '__main__':
-    parser = get_arg_parser()
-    args   = parser.parse_args()
-
-    setup_logging(args.loglevel, filename = args.logfile)
-    logger = logging.getLogger('repub.main')
-
-    indir  = args.indir 
-    outdir = args.outdir
-
-    scandata = get_scandata(indir)
-
-    pagedata = scandata['pageData']
-
-    boxes = {}
-
-    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, \
-                                                   args.pagenums):
-        if args.drawcontours:
-            contours = find_contour(img)
-            contours = contours[:args.maxcontours]
-
-            img = cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
-
-            cv2.imwrite(outfile, img)
-        elif args.gray:
-            gray = threshold_gray(img, 125, 255)
-            cv2.imwrite(outfile, gray)
-        else:
-            box = process_image(img,  args)
-            boxes[pagenum] = box
-
-    if args.drawcontours or args.gray:
-        sys.exit(0)
-
+def fix_wrong_boxes(boxes, maxdiff, maxfirst):
     pagenums = list(boxes.keys())
     pagenums.sort()
 
@@ -189,7 +158,7 @@ if __name__ == '__main__':
             change = False
             prev = box.copy()
             for i in range(4):
-                if abs(box[i]-stats[i]) > 200:# or \
+                if abs(box[i]-stats[i]) > maxdiff:# or \
                     change = True
                     box[i] = prevbox[i]
 
@@ -199,7 +168,7 @@ if __name__ == '__main__':
             change = False
             prev = box.copy()
             for i in range(4):
-                if abs(box[i]-stats[i]) > 200:# or \
+                if abs(box[i]-stats[i]) > maxfirst:# or \
                     change = True
                     box[i] = int(stats[i])
 
@@ -211,6 +180,63 @@ if __name__ == '__main__':
         else:
             prevodd  = box
 
+def save_pdf(outfiles, outpdf):
+    outfiles.sort(key = lambda x: x[1])
+    pdf_writer = PyPDF2.PdfWriter()
+    # export the searchable PDF to searchable.pdf
+    for pagenum, outfile in outfiles:
+        page = pytesseract.image_to_pdf_or_hocr(outfile, extension='pdf')
+        pdf = PyPDF2.PdfReader(io.BytesIO(page))
+        pdf_writer.add_page(pdf.pages[0])
+
+    with open(outpdf, "wb") as f:
+        pdf_writer.write(f)    
+
+if __name__ == '__main__':
+    parser = get_arg_parser()
+    args   = parser.parse_args()
+
+    setup_logging(args.loglevel, filename = args.logfile)
+    logger = logging.getLogger('repub.main')
+
+    if not args.outdir and not args.outpdf:
+        print ('Need either output directory for images or the pdf file for output', file=sys.stderr)
+        parser.print_help()
+        sys.exit(0)
+
+    indir  = args.indir 
+
+    if args.outdir:
+        outdir = args.outdir
+    else:
+        outdir = tempfile.mkdtemp()
+
+    scandata = get_scandata(indir)
+
+    pagedata = scandata['pageData']
+
+    boxes = {}
+
+    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, \
+                                                   args.pagenums):
+        if args.drawcontours:
+            contours = find_contour(img)
+            contours = contours[:args.maxcontours]
+
+            img = cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
+
+            cv2.imwrite(outfile, img)
+        elif args.gray:
+            gray = threshold_gray(img, 125, 255)
+            cv2.imwrite(outfile, gray)
+        else:
+            box = process_image(img,  args)
+            boxes[pagenum] = box
+
+    if args.drawcontours or args.gray:
+        sys.exit(0)
+
+    fix_wrong_boxes(boxes, 200, 250)
     outfiles = []
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, \
                                                    args.pagenums):
@@ -220,13 +246,8 @@ if __name__ == '__main__':
         cv2.imwrite(outfile, img)
         outfiles.append((pagenum, outfile))
 
-    outfiles.sort(key = lambda x: x[1])
-    pdf_writer = PyPDF2.PdfWriter()
-    # export the searchable PDF to searchable.pdf
-    for pagenum, outfile in outfiles:
-        page = pytesseract.image_to_pdf_or_hocr(outfile, extension='pdf')
-        pdf = PyPDF2.PdfReader(io.BytesIO(page))
-        pdf_writer.add_page(pdf.pages[0])
+    if args.outpdf:
+        save_pdf(outfiles, args.outpdf)
 
-    with open("searchable.pdf", "wb") as f:
-        pdf_writer.write(f)    
+    if not args.outdir:
+        shutil.rmtree(outdir)
