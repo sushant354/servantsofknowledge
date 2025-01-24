@@ -23,6 +23,8 @@ def get_arg_parser():
                   required= False, help='Output PDF filepath')
     parser.add_argument('-l', '--loglevel', dest='loglevel', action='store', \
                   default = 'info', help='debug level')
+    parser.add_argument('-L', '--language', dest='langs', action='store', \
+                  default = 'eng', help='language for tesseract')
     parser.add_argument('-f', '--logfile', dest='logfile', action='store', \
                   default = None, help='log file')
 
@@ -180,12 +182,12 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
         else:
             prevodd  = box
 
-def save_pdf(outfiles, outpdf):
+def save_pdf(outfiles, langs, outpdf):
     outfiles.sort(key = lambda x: x[1])
     pdf_writer = PyPDF2.PdfWriter()
     # export the searchable PDF to searchable.pdf
     for pagenum, outfile in outfiles:
-        page = pytesseract.image_to_pdf_or_hocr(outfile, extension='pdf')
+        page = pytesseract.image_to_pdf_or_hocr(outfile, extension='pdf', lang =langs)
         pdf = PyPDF2.PdfReader(io.BytesIO(page))
         pdf_writer.add_page(pdf.pages[0])
 
@@ -247,7 +249,7 @@ if __name__ == '__main__':
         outfiles.append((pagenum, outfile))
 
     if args.outpdf:
-        save_pdf(outfiles, args.outpdf)
+        save_pdf(outfiles, args.langs, args.outpdf)
 
     if not args.outdir:
         shutil.rmtree(outdir)
