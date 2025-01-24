@@ -8,6 +8,8 @@ import pytesseract
 import PyPDF2
 import io
 import shutil
+from pdf2image import convert_from_path
+import tempfile 
 
 import json
 import cv2
@@ -16,7 +18,9 @@ from repub.imgfuncs.cropping import crop, get_crop_box, find_contour, threshold_
 def get_arg_parser():
     parser = argparse.ArgumentParser(description='For processing scanned book pages')
     parser.add_argument('-i', '--indir', dest='indir', action='store', \
-                  required= True, help='Filepath to Scanned images directory')
+                  required= False, help='Filepath to scanned images directory')
+    parser.add_argument('-I', '--inpdf', dest='inpdf', action='store', \
+                  required= False, help='Input PDF File')
     parser.add_argument('-o', '--outdir', dest='outdir', action='store', \
                   required= False, help='Filepath to processed directory')
     parser.add_argument('-O', '--outpdf', dest='outpdf', action='store', \
@@ -41,6 +45,8 @@ def get_arg_parser():
                         dest = 'pagenums', type=int, \
                         help = 'pagenums that should only be processed')
     parser.add_argument('-g', '--gray', action='store_true',  dest='gray', \
+                        help='only gray the image and threshold it')
+    parser.add_argument('-c', '--crop', action='store_true',  dest='crop', \
                         help='only gray the image and threshold it')
     return parser
 
@@ -80,10 +86,12 @@ def setup_logging(level, filename = None):
 
 def read_image(scaninfo, infile):
     img = cv2.imread(infile)
-    if scaninfo['rotateDegree'] == -90:
-        img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
-    elif scaninfo['rotateDegree'] == 90:
-        img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+
+    if scaninfo:
+        if scaninfo['rotateDegree'] == -90:
+            img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        elif scaninfo['rotateDegree'] == 90:
+            img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
 
     return img    
 
@@ -92,7 +100,11 @@ def process_image(img, args):
     return box
 
 def get_scandata(indir):
-    scanfh = open(os.path.join(indir, 'scandata.json'), 'r', encoding = 'utf8')
+    filepath = os.path.join(indir, 'scandata.json')
+    if not os.path.exists(filepath):
+        return None
+
+    scanfh = open(filepath, 'r', encoding = 'utf8')
     s      = scanfh.read()
     scanfh.close()
     return json.loads(s)
@@ -110,9 +122,12 @@ def get_scanned_pages(pagedata, indir, pagenums):
             else:
                 outfile = os.path.join(outdir, filename)
 
+            pageinfo  = None
+            if pagedata:
+                pageinfo = pagedata['%d' % pagenum]
+
             pagenum   = int(pagenum)
-            pageinfo = pagedata['%d' % pagenum]
-            if pageinfo['pageType'] != 'Color Card' and \
+            if (not pageinfo or pageinfo['pageType'] != 'Color Card') and \
                     (not pagenums or pagenum in pagenums):
                 logger.error ('FILEAME: %s', filename)
                 img = read_image(pageinfo, infile) 
@@ -206,7 +221,33 @@ if __name__ == '__main__':
         parser.print_help()
         sys.exit(0)
 
+    if not args.indir and not args.inpdf:
+        print ('Need either input directory for images or the pdf file', \
+               file=sys.stderr)
+        parser.print_help()
+        sys.exit(0)
+
+    if  args.indir and args.inpdf:
+        print ('Either specify input directory or the pdf file. Not both.', \
+               file=sys.stderr)
+        parser.print_help()
+        sys.exit(0)
+
+   
     indir  = args.indir 
+    if args.inpdf:
+        images=convert_from_path(args.inpdf, poppler_path="")
+
+        if not indir:
+            indir = tempfile.mkdtemp()
+
+        pagenum = 1
+        for image in images:
+            filename = ('%d' % pagenum).zfill(4)
+            filepath = os.path.join(indir, filename+'.jpg')
+            image.save(filepath, 'JPEG')
+            pagenum += 1
+
 
     if args.outdir:
         outdir = args.outdir
@@ -215,7 +256,9 @@ if __name__ == '__main__':
 
     scandata = get_scandata(indir)
 
-    pagedata = scandata['pageData']
+    pagedata = None
+    if scandata:
+        pagedata = scandata['pageData']
 
     boxes = {}
 
@@ -231,20 +274,25 @@ if __name__ == '__main__':
         elif args.gray:
             gray = threshold_gray(img, 125, 255)
             cv2.imwrite(outfile, gray)
-        else:
+        elif args.crop:
             box = process_image(img,  args)
             boxes[pagenum] = box
 
     if args.drawcontours or args.gray:
         sys.exit(0)
 
-    fix_wrong_boxes(boxes, 200, 250)
+    if args.crop:
+        fix_wrong_boxes(boxes, 200, 250)
+
     outfiles = []
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, \
                                                    args.pagenums):
-        box = boxes[pagenum]
-        logger.warning('Bounding box for page %d: %s', pagenum, box)
-        img = crop(img, box[0], box[1], box[2], box[3])
+        if args.crop:
+            box = boxes[pagenum]
+            logger.warning('Bounding box for page %d: %s', pagenum, box)
+
+            img = crop(img, box[0], box[1], box[2], box[3])
+
         cv2.imwrite(outfile, img)
         outfiles.append((pagenum, outfile))
 
@@ -253,3 +301,7 @@ if __name__ == '__main__':
 
     if not args.outdir:
         shutil.rmtree(outdir)
+    
+    if not args.indir:
+        shutil.rmtree(indir)
+
