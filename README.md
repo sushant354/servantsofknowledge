@@ -3,12 +3,14 @@ For REPUB project
 First install the dependencies ..
 
 symlink repub in your site packages
-
+```
 ln -s /usr/lib/python3.12/repub <maindirectory>/servantsofknowledge/repub
 
+```
 process_raw.py in tools directory is the main program to transform scanned images to a PDF with text layer
 
 
+```
 python process_raw.py -h
 usage: process_raw.py [-h] [-i INDIR] [-I INPDF] [-o OUTDIR] [-O OUTPDF]
                       [-l LOGLEVEL] [-L LANGS] [-f LOGFILE] [-m MAXCONTOURS]
@@ -41,3 +43,5 @@ options:
                         pagenums that should only be processed
   -g, --gray            only gray the image and threshold it
   -c, --crop            crop the scanned image
+
+```
