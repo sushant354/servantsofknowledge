@@ -1,18 +1,8 @@
 import cv2
 import logging
+import statistics
 
-def threshold_gray(img, mingray, maxgray):
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    ret, thresh = cv2.threshold(gray, mingray, maxgray, cv2.THRESH_BINARY)
-    return thresh
-
-def find_contour(img):
-    #edges = cv2.Canny(thresh, 50, 150, 3)
-    thresh = threshold_gray(img, 125, 255)
-    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, \
-                                           cv2.CHAIN_APPROX_SIMPLE )
-    contours = sorted(contours, key=cv2.contourArea, reverse=True)
-    return contours
+from .utils import threshold_gray, find_contour
 
 def minmax_x (line):
     maxx = 0
@@ -43,7 +33,7 @@ def minmax_y (line):
     return miny, maxy
 
 def get_hvlines(contours, xmax, ymax):
-    logger = logging.getLogger('crop.hvlines')
+    logger = logging.getLogger('repub.crop.hvlines')
     hlines = []
     vlines = []
 
@@ -150,5 +140,73 @@ def get_crop_box(img, xmax, ymax, maxcontours):
 
     return [minx, miny, maxx, maxy]
 
+def fix_wrong_boxes(boxes, maxdiff, maxfirst):
+    logger = logging.getLogger('repub.crop')
+
+    pagenums = list(boxes.keys())
+    pagenums.sort()
+
+    even = [[], [], [], []]
+    odd  = [[], [], [], []]
+
+    for pagenum in pagenums:
+        if pagenum % 2 == 0:
+            stats = even
+        else:
+            stats = odd
+          
+        box = boxes[pagenum]
+        for i in range(4):
+            stats[i].append(box[i])
+      
+    logger.warning ('Even before stats: %s', even)
+    logger.warning ('Odd before stats: %s', odd)
+    for stats in [even, odd]:
+        for i in range(4):
+            if stats[i]:
+                stats[i] = statistics.median(stats[i])
+         
+    logger.warning ('Even: %s', even)
+    logger.warning ('Odd: %s', odd)
+
+    preveven = None
+    prevodd  = None
+    for pagenum in pagenums:
+        box = boxes[pagenum]
+        if pagenum % 2 == 0:
+            stats = even
+            prevbox = preveven
+        else:
+            stats = odd
+            prevbox = prevodd
+
+        if prevbox!= None:
+            change = False
+            prev = box.copy()
+            for i in range(4):
+                if abs(box[i]-stats[i]) > maxdiff:# or \
+                    change = True
+                    box[i] = prevbox[i]
+
+            if change:
+                logger.warning('Changing cropping box for page %d from %s to %s', pagenum, prev, box)
+        else:
+            change = False
+            prev = box.copy()
+            for i in range(4):
+                if abs(box[i]-stats[i]) > maxfirst:# or \
+                    change = True
+                    box[i] = int(stats[i])
+
+            if change:
+                logger.warning('Changing cropping box for page %d from %s to %s', pagenum, prev, box)
+ 
+        if pagenum % 2 == 0:
+            preveven = box    
+        else:
+            prevodd  = box
+
+
 def crop(img, minx, miny, maxx, maxy):
     return img[miny:maxy, minx:maxx]
+

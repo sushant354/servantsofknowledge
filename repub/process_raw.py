@@ -2,18 +2,15 @@ import os
 import re
 import argparse
 import logging
-import statistics 
 import sys
-import pytesseract
-import PyPDF2
-import io
 import shutil
-from pdf2image import convert_from_path
 import tempfile 
 
 import json
 import cv2
-from repub.imgfuncs.cropping import crop, get_crop_box, find_contour, threshold_gray
+from repub.imgfuncs.cropping import crop, get_crop_box, fix_wrong_boxes
+from repub.imgfuncs.utils import find_contour, threshold_gray
+from repub.utils import pdfs
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(description='For processing scanned book pages')
@@ -95,8 +92,6 @@ def read_image(scaninfo, infile):
 
     return img    
 
-def process_image(img, args):
-    box = get_crop_box(img, args.xmax, args.ymax, args.maxcontours)
     return box
 
 def get_scandata(indir):
@@ -133,82 +128,6 @@ def get_scanned_pages(pagedata, indir, pagenums):
                 img = read_image(pageinfo, infile) 
                 yield (img, outfile, pagenum)
 
-def fix_wrong_boxes(boxes, maxdiff, maxfirst):
-    pagenums = list(boxes.keys())
-    pagenums.sort()
-
-    even = [[], [], [], []]
-    odd  = [[], [], [], []]
-
-    for pagenum in pagenums:
-        if pagenum % 2 == 0:
-            stats = even
-        else:
-            stats = odd
-          
-        box = boxes[pagenum]
-        for i in range(4):
-            stats[i].append(box[i])
-      
-    logger.warning ('Even before stats: %s', even)
-    logger.warning ('Odd before stats: %s', odd)
-    for stats in [even, odd]:
-        for i in range(4):
-            if stats[i]:
-                stats[i] = statistics.median(stats[i])
-         
-    logger.warning ('Even: %s', even)
-    logger.warning ('Odd: %s', odd)
-
-    preveven = None
-    prevodd  = None
-    for pagenum in pagenums:
-        box = boxes[pagenum]
-        if pagenum % 2 == 0:
-            stats = even
-            prevbox = preveven
-        else:
-            stats = odd
-            prevbox = prevodd
-
-        if prevbox!= None:
-            change = False
-            prev = box.copy()
-            for i in range(4):
-                if abs(box[i]-stats[i]) > maxdiff:# or \
-                    change = True
-                    box[i] = prevbox[i]
-
-            if change:
-                logger.warning('Changing cropping box for page %d from %s to %s', pagenum, prev, box)
-        else:
-            change = False
-            prev = box.copy()
-            for i in range(4):
-                if abs(box[i]-stats[i]) > maxfirst:# or \
-                    change = True
-                    box[i] = int(stats[i])
-
-            if change:
-                logger.warning('Changing cropping box for page %d from %s to %s', pagenum, prev, box)
- 
-        if pagenum % 2 == 0:
-            preveven = box    
-        else:
-            prevodd  = box
-
-def save_pdf(outfiles, langs, outpdf):
-    outfiles.sort(key = lambda x: x[1])
-    pdf_writer = PyPDF2.PdfWriter()
-    # export the searchable PDF to searchable.pdf
-    for pagenum, outfile in outfiles:
-        page = pytesseract.image_to_pdf_or_hocr(outfile, extension='pdf', lang =langs)
-        pdf = PyPDF2.PdfReader(io.BytesIO(page))
-        pdf_writer.add_page(pdf.pages[0])
-
-    with open(outpdf, "wb") as f:
-        pdf_writer.write(f)   
-
 def draw_contours(pagedata, indir, args):        
     pagenums = args.pagenums
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
@@ -229,7 +148,7 @@ def get_cropping_boxes(pagedata, indir, args):
     boxes = {}
     pagenums = args.pagenums
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
-        box = process_image(img,  args)
+        box = get_crop_box(img, args.xmax, args.ymax, args.maxcontours)
         boxes[pagenum] = box
 
     fix_wrong_boxes(boxes, 200, 250)
@@ -262,18 +181,9 @@ if __name__ == '__main__':
    
     indir  = args.indir 
     if args.inpdf:
-        images=convert_from_path(args.inpdf, poppler_path="")
-
         if not indir:
             indir = tempfile.mkdtemp()
-
-        pagenum = 1
-        for image in images:
-            filename = ('%d' % pagenum).zfill(4)
-            filepath = os.path.join(indir, filename+'.jpg')
-            image.save(filepath, 'JPEG')
-            pagenum += 1
-
+        pdfs.pdf_to_images(args.inpdf, indir)
 
     if args.outdir:
         outdir = args.outdir
@@ -309,7 +219,7 @@ if __name__ == '__main__':
         outfiles.append((pagenum, outfile))
 
     if args.outpdf:
-        save_pdf(outfiles, args.langs, args.outpdf)
+        pdfs.save_pdf(outfiles, args.langs, args.outpdf)
 
     if not args.outdir:
         shutil.rmtree(outdir)
