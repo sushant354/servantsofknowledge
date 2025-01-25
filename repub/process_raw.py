@@ -47,7 +47,7 @@ def get_arg_parser():
     parser.add_argument('-g', '--gray', action='store_true',  dest='gray', \
                         help='only gray the image and threshold it')
     parser.add_argument('-c', '--crop', action='store_true',  dest='crop', \
-                        help='only gray the image and threshold it')
+                        help='crop the scanned image')
     return parser
 
 
@@ -123,10 +123,10 @@ def get_scanned_pages(pagedata, indir, pagenums):
                 outfile = os.path.join(outdir, filename)
 
             pageinfo  = None
+            pagenum   = int(pagenum)
             if pagedata:
                 pageinfo = pagedata['%d' % pagenum]
 
-            pagenum   = int(pagenum)
             if (not pageinfo or pageinfo['pageType'] != 'Color Card') and \
                     (not pagenums or pagenum in pagenums):
                 logger.error ('FILEAME: %s', filename)
@@ -207,7 +207,33 @@ def save_pdf(outfiles, langs, outpdf):
         pdf_writer.add_page(pdf.pages[0])
 
     with open(outpdf, "wb") as f:
-        pdf_writer.write(f)    
+        pdf_writer.write(f)   
+
+def draw_contours(pagedata, indir, args):        
+    pagenums = args.pagenums
+    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
+        contours = find_contour(img)
+        contours = contours[:args.maxcontours]
+
+        img = cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
+
+        cv2.imwrite(outfile, img)
+
+def gray_images(pagedata, indir, args):
+    pagenums = args.pagenums
+    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
+        gray = threshold_gray(img, 125, 255)
+        cv2.imwrite(outfile, gray)
+
+def get_cropping_boxes(pagedata, indir, args):
+    boxes = {}
+    pagenums = args.pagenums
+    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
+        box = process_image(img,  args)
+        boxes[pagenum] = box
+
+    fix_wrong_boxes(boxes, 200, 250)
+    return boxes
 
 if __name__ == '__main__':
     parser = get_arg_parser()
@@ -260,29 +286,15 @@ if __name__ == '__main__':
     if scandata:
         pagedata = scandata['pageData']
 
-    boxes = {}
-
-    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, \
-                                                   args.pagenums):
-        if args.drawcontours:
-            contours = find_contour(img)
-            contours = contours[:args.maxcontours]
-
-            img = cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
-
-            cv2.imwrite(outfile, img)
-        elif args.gray:
-            gray = threshold_gray(img, 125, 255)
-            cv2.imwrite(outfile, gray)
-        elif args.crop:
-            box = process_image(img,  args)
-            boxes[pagenum] = box
-
-    if args.drawcontours or args.gray:
+    if args.drawcontours:
+        draw_contours(pagedata, indir, args)
+        sys.exit(0)
+    elif args.gray:
+        gray_images(pagedata, indir, args)
         sys.exit(0)
 
     if args.crop:
-        fix_wrong_boxes(boxes, 200, 250)
+        boxes = get_cropping_boxes(pagedata, indir, args)
 
     outfiles = []
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, \
