@@ -11,6 +11,7 @@ import cv2
 from repub.imgfuncs.cropping import crop, get_crop_box, fix_wrong_boxes
 from repub.imgfuncs.utils import find_contour, threshold_gray
 from repub.utils import pdfs
+from repub.imgfuncs.deskew import deskew
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(description='For processing scanned book pages')
@@ -92,8 +93,6 @@ def read_image(scaninfo, infile):
 
     return img    
 
-    return box
-
 def get_scandata(indir):
     filepath = os.path.join(indir, 'scandata.json')
     if not os.path.exists(filepath):
@@ -148,6 +147,7 @@ def get_cropping_boxes(pagedata, indir, args):
     boxes = {}
     pagenums = args.pagenums
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
+        img = deskew(img, args.xmax, args.ymax, args.maxcontours)
         box = get_crop_box(img, args.xmax, args.ymax, args.maxcontours)
         boxes[pagenum] = box
 
@@ -213,7 +213,7 @@ if __name__ == '__main__':
             box = boxes[pagenum]
             logger.warning('Bounding box for page %d: %s', pagenum, box)
 
-            img = crop(img, box[0], box[1], box[2], box[3])
+            img = crop(img, box)
 
         cv2.imwrite(outfile, img)
         outfiles.append((pagenum, outfile))
@@ -226,4 +226,3 @@ if __name__ == '__main__':
     
     if not args.indir:
         shutil.rmtree(indir)
-

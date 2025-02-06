@@ -16,7 +16,7 @@ def pdf_to_images(inpdf, indir):
         pagenum += 1
 
 def save_pdf(outfiles, langs, outpdf):
-    outfiles.sort(key = lambda x: x[1])
+    outfiles.sort(key = lambda x: x[0])
     pdf_writer = PyPDF2.PdfWriter()
     # export the searchable PDF to searchable.pdf
     for pagenum, outfile in outfiles:
