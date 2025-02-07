@@ -14,9 +14,9 @@ def deskew(img, xmax, ymax, maxcontours):
     hlines, vlines = get_hvlines(contours, xmax, ymax)
 
     hangle = get_lines_angle(hlines)
-    logger.warning('Hangle: %.2f', hangle)
+    logger.warning('Hangle: %s', hangle)
     vangle = get_lines_angle(vlines)
-    logger.warning('Vangle: %.2f', vangle)
+    logger.warning('Vangle: %s', vangle)
 
     if hangle and abs(hangle) > 0:
         angle_deg = -1 * hangle 
