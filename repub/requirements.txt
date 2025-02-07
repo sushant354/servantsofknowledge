@@ -1,5 +1,5 @@
 opencv-contrib-python
 pdf2image
-pypdf2
+pypdf
 pytesseract
 simplejson
