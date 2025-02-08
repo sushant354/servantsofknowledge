@@ -38,7 +38,7 @@ def get_arg_parser():
                         help='vertical line limits in pixels')
     parser.add_argument('-d', '--drawcontours', action='store_true', \
                         dest='drawcontours', \
-                        help='vertical line limits in pixels')
+                        help='draw contours only on the image')
     parser.add_argument('-p', '--pagenums', nargs='*', \
                         dest = 'pagenums', type=int, \
                         help = 'pagenums that should only be processed')
@@ -46,6 +46,9 @@ def get_arg_parser():
                         help='only gray the image and threshold it')
     parser.add_argument('-c', '--crop', action='store_true',  dest='crop', \
                         help='crop the scanned image')
+    parser.add_argument('-D', '--deskew', action='store_true', \
+                        dest='deskew', \
+                        help='detect the skew and deskew')
     return parser
 
 
@@ -143,6 +146,12 @@ def gray_images(pagedata, indir, args):
         gray = threshold_gray(img, 125, 255)
         cv2.imwrite(outfile, gray)
 
+def deskew_images(pagedata, indir, args):
+    pagenums = args.pagenums
+    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
+        deskewed = deskew(img, args.xmax, args.ymax, args.maxcontours)
+        cv2.imwrite(outfile, deskewed)
+
 def get_cropping_boxes(pagedata, indir, args):
     boxes = {}
     pagenums = args.pagenums
@@ -202,6 +211,9 @@ if __name__ == '__main__':
     elif args.gray:
         gray_images(pagedata, indir, args)
         sys.exit(0)
+    elif args.deskew:
+        deskew_images(pagedata, indir, args)
+        sys.exit(0)
 
     if args.crop:
         boxes = get_cropping_boxes(pagedata, indir, args)
@@ -212,7 +224,7 @@ if __name__ == '__main__':
         if args.crop:
             box = boxes[pagenum]
             logger.warning('Bounding box for page %d: %s', pagenum, box)
-
+            img = deskew(img, args.xmax, args.ymax, args.maxcontours)
             img = crop(img, box)
 
         cv2.imwrite(outfile, img)

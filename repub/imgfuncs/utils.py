@@ -15,7 +15,7 @@ def find_contour(img):
     return contours
 
 def get_hvlines(contours, xmax, ymax):
-    logger = logging.getLogger('repub.imgfuncs.hvlines')
+    logger = logging.getLogger('repub.hvlines')
     hlines = []
     vlines = []
 
@@ -74,10 +74,10 @@ def get_hvlines(contours, xmax, ymax):
     vlines.sort(key = lambda t: abs(t[-1][1] - t[0][1]), reverse = True)
 
     for hline in hlines[:5]:
-        logger.info('HLINES %d %s', abs(hline[-1][0] - hline[0][0]), hline)
+        logger.debug('HLINES %d %s', abs(hline[-1][0] - hline[0][0]), hline)
 
     for vline in vlines[:5]:
-        logger.info('VLINES %d %s', abs(vline[-1][1] - vline[0][1]), vline)
+        logger.debug('VLINES %d %s', abs(vline[-1][1] - vline[0][1]), vline)
 
     return hlines[:2], vlines[:2]
 

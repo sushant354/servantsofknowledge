@@ -19,7 +19,7 @@ def deskew(img, xmax, ymax, maxcontours):
     logger.warning('Vangle: %s', vangle)
 
     if hangle and abs(hangle) > 0:
-        angle_deg = -1 * hangle 
+        angle_deg =  hangle 
         img = rotate(img, angle_deg)
 
     return img
@@ -59,8 +59,11 @@ def get_lines_angle(lines):
 
         angles.append(math.degrees(radian))
     logger.warning('Angles: %s', angles)
-    radian = min(angles)
-    return radian
+    if pos:
+        degrees = min(angles)
+    else:    
+        degrees = max(angles)
+    return degrees
 
 def get_vlines_angle(vlines):
     angles = []
