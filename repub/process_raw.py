@@ -11,7 +11,7 @@ import cv2
 from repub.imgfuncs.cropping import crop, get_crop_box, fix_wrong_boxes
 from repub.imgfuncs.utils import find_contour, threshold_gray
 from repub.utils import pdfs
-from repub.imgfuncs.deskew import deskew
+from repub.imgfuncs.deskew import deskew, rotate
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(description='For processing scanned book pages')
@@ -156,8 +156,9 @@ def get_cropping_boxes(pagedata, indir, args):
     boxes = {}
     pagenums = args.pagenums
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
-        img = deskew(img, args.xmax, args.ymax, args.maxcontours)
+        img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours)
         box = get_crop_box(img, args.xmax, args.ymax, args.maxcontours)
+        box.append(hangle)
         boxes[pagenum] = box
 
     fix_wrong_boxes(boxes, 200, 250)
@@ -224,7 +225,9 @@ if __name__ == '__main__':
         if args.crop:
             box = boxes[pagenum]
             logger.warning('Bounding box for page %d: %s', pagenum, box)
-            img = deskew(img, args.xmax, args.ymax, args.maxcontours)
+            hangle = box[4]
+            if hangle != None:
+                img = rotate(img, hangle)
             img = crop(img, box)
 
         cv2.imwrite(outfile, img)

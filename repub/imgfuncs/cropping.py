@@ -114,6 +114,7 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
 
             if change:
                 logger.warning('Changing cropping box for page %d from %s to %s', pagenum, prev, box)
+                box[4] = None
         else:
             change = False
             prev = box.copy()
@@ -123,8 +124,8 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
                     box[i] = int(stats[i])
 
             if change:
-                logger.warning('Changing cropping box for page %d from %s to %s', pagenum, prev, box)
- 
+                logger.warning('Cropping box replaced for page %d from %s to %s', pagenum, prev, box)
+                box[4] = None
         if pagenum % 2 == 0:
             preveven = box    
         else:

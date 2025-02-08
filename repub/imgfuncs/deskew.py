@@ -18,11 +18,11 @@ def deskew(img, xmax, ymax, maxcontours):
     vangle = get_lines_angle(vlines)
     logger.warning('Vangle: %s', vangle)
 
+    angle_deg = None 
     if hangle and abs(hangle) > 0:
-        angle_deg =  hangle 
+        angle_deg = hangle 
         img = rotate(img, angle_deg)
-
-    return img
+    return img, angle_deg 
 
 def rotate(img, angle_deg):
     height, width = img.shape[:2]
