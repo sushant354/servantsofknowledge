@@ -41,28 +41,17 @@ def get_angle(line):
     logger.warning('Unit vector: %.2f %.2f %.2f', vx, vy, ang)    
     if vy < 0:
         ang = -1 * ang
-    return ang
+    return math.degrees(ang)
 
 def get_lines_angle(lines):
     logger = logging.getLogger('repub.deskew')
     angles = []
-    pos    = None
 
     for line in lines:
-        radian = get_angle(line)
-        if pos == None:
-            pos = radian > 0
-        elif pos and radian < 0:
-            return None
-        elif not pos and radian > 0:
-            return None
-
-        angles.append(math.degrees(radian))
+        deg = get_angle(line)
+        angles.append(deg)
     logger.warning('Angles: %s', angles)
-    if pos:
-        degrees = min(angles)
-    else:    
-        degrees = max(angles)
+    degrees = sum(angles)/len(angles)
     return degrees
 
 def get_vlines_angle(vlines):

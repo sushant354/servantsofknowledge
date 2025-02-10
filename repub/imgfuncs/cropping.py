@@ -70,8 +70,8 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
     pagenums = list(boxes.keys())
     pagenums.sort()
 
-    even = [[], [], [], []]
-    odd  = [[], [], [], []]
+    even = [[], [], [], [], []]
+    odd  = [[], [], [], [], []]
 
     for pagenum in pagenums:
         if pagenum % 2 == 0:
@@ -80,13 +80,11 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
             stats = odd
           
         box = boxes[pagenum]
-        for i in range(4):
+        for i in range(5):
             stats[i].append(box[i])
       
-    logger.warning ('Even before stats: %s', even)
-    logger.warning ('Odd before stats: %s', odd)
     for stats in [even, odd]:
-        for i in range(4):
+        for i in range(5):
             if stats[i]:
                 stats[i] = statistics.median(stats[i])
          
@@ -114,7 +112,7 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
 
             if change:
                 logger.warning('Changing cropping box for page %d from %s to %s', pagenum, prev, box)
-                box[4] = None
+                box[4] = stats[4]
         else:
             change = False
             prev = box.copy()
@@ -125,7 +123,7 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
 
             if change:
                 logger.warning('Cropping box replaced for page %d from %s to %s', pagenum, prev, box)
-                box[4] = None
+                box[4] = stats[4]
         if pagenum % 2 == 0:
             preveven = box    
         else:

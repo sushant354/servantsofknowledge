@@ -149,7 +149,7 @@ def gray_images(pagedata, indir, args):
 def deskew_images(pagedata, indir, args):
     pagenums = args.pagenums
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
-        deskewed = deskew(img, args.xmax, args.ymax, args.maxcontours)
+        deskewed, angle = deskew(img, args.xmax, args.ymax, args.maxcontours)
         cv2.imwrite(outfile, deskewed)
 
 def get_cropping_boxes(pagedata, indir, args):
