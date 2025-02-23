@@ -49,6 +49,9 @@ def get_arg_parser():
     parser.add_argument('-D', '--deskew', action='store_true', \
                         dest='deskew', \
                         help='detect the skew and deskew')
+    parser.add_argument('-r', '--reduce', action='store', dest='factor', \
+                        required= False, type=float, \
+                        help='reduce the image to factor')
     return parser
 
 
@@ -133,6 +136,8 @@ def get_scanned_pages(pagedata, indir, pagenums):
 def draw_contours(pagedata, indir, args):        
     pagenums = args.pagenums
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
+        if args.deskew:
+            img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours)
         contours = find_contour(img)
         contours = contours[:args.maxcontours]
 
@@ -143,6 +148,8 @@ def draw_contours(pagedata, indir, args):
 def gray_images(pagedata, indir, args):
     pagenums = args.pagenums
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
+        if args.deskew:
+            img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours)
         gray = threshold_gray(img, 125, 255)
         cv2.imwrite(outfile, gray)
 
@@ -152,6 +159,13 @@ def deskew_images(pagedata, indir, args):
         deskewed, angle = deskew(img, args.xmax, args.ymax, args.maxcontours)
         cv2.imwrite(outfile, deskewed)
 
+def resize_image(img, factor):
+    (h, w) = img.shape[:2]
+    width  = int(w * factor)
+    height = int(h * factor)
+    dim    = (width, height)
+    return cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+
 def get_cropping_boxes(pagedata, indir, args):
     boxes = {}
     pagenums = args.pagenums
@@ -159,6 +173,7 @@ def get_cropping_boxes(pagedata, indir, args):
         img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours)
         box = get_crop_box(img, args.xmax, args.ymax, args.maxcontours)
         box.append(hangle)
+        #box.append(0.0)
         boxes[pagenum] = box
 
     fix_wrong_boxes(boxes, 200, 250)
@@ -229,6 +244,8 @@ if __name__ == '__main__':
             if hangle != None:
                 img = rotate(img, hangle)
             img = crop(img, box)
+            if args.factor:
+                img = resize_image(img, args.factor)
 
         cv2.imwrite(outfile, img)
         outfiles.append((pagenum, outfile))
