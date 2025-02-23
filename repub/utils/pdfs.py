@@ -16,10 +16,18 @@ def pdf_to_images(inpdf, indir):
         image.save(filepath, 'JPEG')
         pagenum += 1
 
-def save_pdf(outfiles, langs, outpdf):
+def get_metadata(filepath):
+    reader = PdfReader(filepath)    
+    return reader.metadata
+
+def save_pdf(outfiles, metadata, langs, outpdf):
     logger = logging.getLogger('repub.utils.pdfs')
     outfiles.sort(key = lambda x: x[0])
+
     pdf_writer = PdfWriter()
+    if metadata:
+        pdf_writer.add_metadata(metadata)
+
     # export the searchable PDF to searchable.pdf
     for pagenum, outfile in outfiles:
         logger.info('Adding page %d with file %s to PDF', pagenum, outfile)

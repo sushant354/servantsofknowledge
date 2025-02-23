@@ -10,7 +10,7 @@ import json
 import cv2
 from repub.imgfuncs.cropping import crop, get_crop_box, fix_wrong_boxes
 from repub.imgfuncs.utils import find_contour, threshold_gray
-from repub.utils import pdfs
+from repub.utils import pdfs, xml_ops
 from repub.imgfuncs.deskew import deskew, rotate
 
 def get_arg_parser():
@@ -108,6 +108,17 @@ def get_scandata(indir):
     s      = scanfh.read()
     scanfh.close()
     return json.loads(s)
+
+def get_metadata(indir):
+    filepath = os.path.join(indir, 'metadata.xml')
+    if not os.path.exists(filepath):
+        return None
+
+    metadata = xml_ops.parse_xml(filepath)
+    m = {}
+    for k, v in metadata.items():
+        m['/%s' % k.title()] = v
+    return m    
 
 def get_scanned_pages(pagedata, indir, pagenums):
     for filename in os.listdir(indir):
@@ -208,6 +219,8 @@ if __name__ == '__main__':
     if args.inpdf:
         if not indir:
             indir = tempfile.mkdtemp()
+        metadata = pdfs.get_metadata(args.inpdf)
+        print (metadata)
         pdfs.pdf_to_images(args.inpdf, indir)
 
     if args.outdir:
@@ -215,6 +228,7 @@ if __name__ == '__main__':
     else:
         outdir = tempfile.mkdtemp()
 
+    metadata = get_metadata(indir)
     scandata = get_scandata(indir)
 
     pagedata = None
@@ -251,7 +265,7 @@ if __name__ == '__main__':
         outfiles.append((pagenum, outfile))
 
     if args.outpdf:
-        pdfs.save_pdf(outfiles, args.langs, args.outpdf)
+        pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf)
 
     if not args.outdir:
         shutil.rmtree(outdir)
