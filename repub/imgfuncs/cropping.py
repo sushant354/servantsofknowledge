@@ -33,6 +33,31 @@ def minmax_y (line):
             maxy = y
     return miny, maxy
 
+def get_min_max_x(vline0, vline1):
+    minx1, maxx1 = minmax_x( vline0)
+    minx2, maxx2 = minmax_x( vline1)
+    if minx1 < minx2:
+        minx = maxx1
+        maxx = minx2
+    else:
+        minx = maxx2
+        maxx = minx1
+
+    return minx, maxx
+
+def get_min_max_y(hline0, hline1):
+    miny1, maxy1 = minmax_y(hline0)
+    miny2, maxy2 = minmax_y(hline1)
+
+    if miny1 < miny2:
+        miny = maxy1
+        maxy = miny2
+    else:
+        miny = maxy2
+        maxy = miny1
+
+    return miny, maxy
+
 def get_crop_box(img, xmax, ymax, maxcontours):
     logger = logging.getLogger('repub.crop')
     contours = find_contour(img)
@@ -41,24 +66,13 @@ def get_crop_box(img, xmax, ymax, maxcontours):
 
     hlines, vlines = get_hvlines(contours, xmax, ymax)
 
-    minx1, maxx1 = minmax_x( vlines[0])
-    minx2, maxx2 = minmax_x( vlines[1])
-    if minx1 < minx2:
-        minx = maxx1
-        maxx = minx2
-    else:
-        minx = maxx2
-        maxx = minx1
+    minx = maxx = miny = maxy = None
 
-    miny1, maxy1 = minmax_y(hlines[0])
-    miny2, maxy2 = minmax_y(hlines[1])
+    if len(vlines) >= 2:
+        minx, maxx = get_min_max_x(vlines[0], vlines[1])
 
-    if miny1 < miny2:
-        miny = maxy1
-        maxy = miny2
-    else:
-        miny = maxy2
-        maxy = miny1
+    if len(hlines) >= 2:
+        miny, maxy = get_min_max_y(hlines[0], hlines[1])
 
     logger.warning('Bounding box: %s %s', (minx, miny), (maxx, maxy))
     
@@ -81,12 +95,15 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
           
         box = boxes[pagenum]
         for i in range(5):
-            stats[i].append(box[i])
+            if box[i] != None:
+                stats[i].append(box[i])
       
     for stats in [even, odd]:
         for i in range(5):
             if stats[i]:
                 stats[i] = statistics.median(stats[i])
+                if i < 4:
+                    stats[i] = int(stats[i])
          
     logger.warning ('Even: %s', even)
     logger.warning ('Odd: %s', odd)
@@ -106,7 +123,7 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
             change = False
             prev = box.copy()
             for i in range(4):
-                if abs(box[i]-stats[i]) > maxdiff:# or \
+                if box[i] == None or abs(box[i]-stats[i]) > maxdiff:# or \
                     change = True
                     box[i] = prevbox[i]
 
@@ -117,9 +134,9 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
             change = False
             prev = box.copy()
             for i in range(4):
-                if abs(box[i]-stats[i]) > maxfirst:# or \
+                if box[i] == None or abs(box[i]-stats[i]) > maxfirst:# or \
                     change = True
-                    box[i] = int(stats[i])
+                    box[i] = stats[i]
 
             if change:
                 logger.warning('Cropping box replaced for page %d from %s to %s', pagenum, prev, box)
@@ -128,7 +145,6 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
             preveven = box    
         else:
             prevodd  = box
-
 
 def crop(img, box):
     minx = box[0]

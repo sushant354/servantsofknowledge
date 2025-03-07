@@ -142,7 +142,7 @@ def get_scanned_pages(pagedata, indir, pagenums):
 
             if (not pageinfo or pageinfo['pageType'] != 'Color Card') and \
                     (not pagenums or pagenum in pagenums):
-                logger.error ('FILEAME: %s', filename)
+                logger.error ('FILENAME: %s', filename)
                 img = read_image(pageinfo, infile) 
                 yield (img, outfile, pagenum)
 
