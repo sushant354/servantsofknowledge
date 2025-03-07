@@ -52,6 +52,8 @@ def get_arg_parser():
     parser.add_argument('-r', '--reduce', action='store', dest='factor', \
                         required= False, type=float, \
                         help='reduce the image to factor')
+    parser.add_argument('-t', '--ocr', action='store_true', dest='do_ocr', \
+                        help='do ocr while making the PDF')
     return parser
 
 
@@ -265,7 +267,7 @@ if __name__ == '__main__':
         outfiles.append((pagenum, outfile))
 
     if args.outpdf:
-        pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf)
+        pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, args.do_ocr)
 
     if not args.outdir:
         shutil.rmtree(outdir)

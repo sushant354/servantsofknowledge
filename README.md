@@ -11,7 +11,10 @@ Install dependencies
 ```
 pip install -r requirements.txt 
 ```
-
+Install tesseract. On debian systems:
+```
+apt install tesseract-ocr tesseract-ocr-all
+```
 process_raw.py is the main program to transform scanned images to a PDF with text layer
 
 To convert Internet Archive images to PDF with text layer with cropping and language "eng+asm"
@@ -25,10 +28,10 @@ python process_raw.py -I <input_file_path.pdf> -O <output_file_path.pdf> -c -L e
 
 Options
 ```
-python process_raw.py -h
 usage: process_raw.py [-h] [-i INDIR] [-I INPDF] [-o OUTDIR] [-O OUTPDF]
                       [-l LOGLEVEL] [-L LANGS] [-f LOGFILE] [-m MAXCONTOURS]
                       [-x XMAX] [-y YMAX] [-d] [-p [PAGENUMS ...]] [-g] [-c]
+                      [-D] [-r FACTOR] [-t]
 
 For processing scanned book pages
 
@@ -52,10 +55,14 @@ options:
                         max number of contours to be examined
   -x XMAX, --xmax XMAX  horizontal line limits in pixels
   -y YMAX, --ymax YMAX  vertical line limits in pixels
-  -d, --drawcontours    vertical line limits in pixels
+  -d, --drawcontours    draw contours only on the image
   -p [PAGENUMS ...], --pagenums [PAGENUMS ...]
                         pagenums that should only be processed
   -g, --gray            only gray the image and threshold it
   -c, --crop            crop the scanned image
+  -D, --deskew          detect the skew and deskew
+  -r FACTOR, --reduce FACTOR
+                        reduce the image to factor
+  -t, --ocr             do ocr while making the PDF
 
 ```

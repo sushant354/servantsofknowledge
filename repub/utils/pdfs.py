@@ -3,6 +3,8 @@ import os
 import logging
 
 import pytesseract
+import img2pdf
+
 from pypdf import PdfWriter, PdfReader
 from pdf2image import convert_from_path
 
@@ -20,7 +22,7 @@ def get_metadata(filepath):
     reader = PdfReader(filepath)    
     return reader.metadata
 
-def save_pdf(outfiles, metadata, langs, outpdf):
+def save_pdf(outfiles, metadata, langs, outpdf, do_ocr):
     logger = logging.getLogger('repub.utils.pdfs')
     outfiles.sort(key = lambda x: x[0])
 
@@ -31,7 +33,11 @@ def save_pdf(outfiles, metadata, langs, outpdf):
     # export the searchable PDF to searchable.pdf
     for pagenum, outfile in outfiles:
         logger.info('Adding page %d with file %s to PDF', pagenum, outfile)
-        page = pytesseract.image_to_pdf_or_hocr(outfile, extension='pdf', lang =langs)
+        if do_ocr:
+            page = pytesseract.image_to_pdf_or_hocr(outfile, extension='pdf', lang =langs)
+        else:
+            page = img2pdf.convert(outfile)
+
         reader = PdfReader(io.BytesIO(page))
         pdf_writer.add_page(reader.get_page(0))
 
