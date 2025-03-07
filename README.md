@@ -57,5 +57,7 @@ options:
                         pagenums that should only be processed
   -g, --gray            only gray the image and threshold it
   -c, --crop            crop the scanned image
-
+  -r FACTOR, --reduce FACTOR
+                        reduce the image to factor
+                        Ex: -r 0.2 will make images 0.2 of the original size
 ```
