@@ -123,28 +123,34 @@ def get_metadata(indir):
     return m    
 
 def get_scanned_pages(pagedata, indir, pagenums):
+    fnames = []
     for filename in os.listdir(indir):
         reobj = re.match('(?P<pagenum>\\d{4}).(jpg|jp2)$', filename)
         if reobj:
             groupdict = reobj.groupdict('pagenum')
             pagenum   = groupdict['pagenum']
 
-            infile  = os.path.join(indir, filename)
-            if re.search('.jp2$', filename):
-                outfile = os.path.join(outdir, '%s.jpg' % pagenum)
-            else:
-                outfile = os.path.join(outdir, filename)
+            fnames.append((filename, pagenum))
 
-            pageinfo  = None
-            pagenum   = int(pagenum)
-            if pagedata:
-                pageinfo = pagedata['%d' % pagenum]
+    fnames.sort(key= lambda x:x[1])
 
-            if (not pageinfo or pageinfo['pageType'] != 'Color Card') and \
-                    (not pagenums or pagenum in pagenums):
-                logger.error ('FILENAME: %s', filename)
-                img = read_image(pageinfo, infile) 
-                yield (img, outfile, pagenum)
+    for filename, pagenum in fnames:
+        infile  = os.path.join(indir, filename)
+        if re.search('.jp2$', filename):
+            outfile = os.path.join(outdir, '%s.jpg' % pagenum)
+        else:
+            outfile = os.path.join(outdir, filename)
+
+        pageinfo  = None
+        pagenum   = int(pagenum)
+        if pagedata:
+            pageinfo = pagedata['%d' % pagenum]
+
+        if (not pageinfo or pageinfo['pageType'] != 'Color Card') and \
+                (not pagenums or pagenum in pagenums):
+            logger.error ('FILENAME: %s', filename)
+            img = read_image(pageinfo, infile) 
+            yield (img, outfile, pagenum)
 
 def draw_contours(pagedata, indir, args):        
     pagenums = args.pagenums
