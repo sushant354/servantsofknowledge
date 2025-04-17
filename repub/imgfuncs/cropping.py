@@ -110,6 +110,9 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
 
     preveven = None
     prevodd  = None
+    xwidth   = stats[2] - stats[0]
+    ywidth   = stats[3] - stats[1]
+
     for pagenum in pagenums:
         box = boxes[pagenum]
         if pagenum % 2 == 0:
@@ -119,13 +122,30 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
             stats = odd
             prevbox = prevodd
 
+
         if prevbox!= None:
             change = False
             prev = box.copy()
             for i in range(4):
-                if box[i] == None or abs(box[i]-stats[i]) > maxdiff:# or \
+                if box[i] == None:
                     change = True
                     box[i] = prevbox[i]
+
+            if abs(box[0]-stats[0]) >  maxdiff and abs(box[2]-box[0] - xwidth) > 100:
+                change = True
+                box[0] = prevbox[0]
+
+            if abs(box[2]-stats[2]) >  maxdiff and abs(box[2]-box[0] - xwidth) > 100:
+                change = True
+                box[2] = prevbox[2]
+
+            if abs(box[1]-stats[1]) >  maxdiff and abs(box[3]-box[1] - ywidth) > 100:
+                change = True
+                box[1] = prevbox[1]
+
+            if abs(box[3]-stats[3]) >  maxdiff and abs(box[3]-box[1] - ywidth) > 100:
+                change = True
+                box[3] = prevbox[3]
 
             if change:
                 logger.warning('Changing cropping box for page %d from %s to %s', pagenum, prev, box)

@@ -54,6 +54,8 @@ def get_arg_parser():
                         help='reduce the image to factor')
     parser.add_argument('-t', '--ocr', action='store_true', dest='do_ocr', \
                         help='do ocr while making the PDF')
+    parser.add_argument('-w', '--dewarp', action='store_true', \
+                        dest='dewarp', help='dewarp the images')
     return parser
 
 
@@ -266,6 +268,9 @@ if __name__ == '__main__':
             if hangle != None:
                 img = rotate(img, hangle)
             img = crop(img, box)
+            if args.dewarp:
+                img = dewarp(img)
+
             if args.factor:
                 img = resize_image(img, args.factor)
 
