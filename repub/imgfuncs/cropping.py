@@ -33,16 +33,28 @@ def minmax_y (line):
             maxy = y
     return miny, maxy
 
-def get_min_max_x(vline0, vline1):
+def get_min_max_x(vline0, vline1, columns):
+    logger = logging.getLogger('repub.crop')
     minx1, maxx1 = minmax_x( vline0)
     minx2, maxx2 = minmax_x( vline1)
-    if minx1 < minx2:
-        minx = maxx1
-        maxx = minx2
-    else:
-        minx = maxx2
-        maxx = minx1
 
+    logger.debug('MINX: %s',  (minx1, maxx1, minx2, maxx2, columns))
+    if minx1 < minx2:
+        if minx1 > columns - minx2:
+            minx = maxx1
+            maxx = maxx2
+        else:    
+            minx = minx1
+            maxx = minx2
+    else:
+        if minx2 > columns - minx1:
+            minx = maxx2
+            maxx = maxx1
+        else:    
+            minx = minx2
+            maxx = minx1
+
+    logger.debug ('FINAL: %s', (minx, maxx))
     return minx, maxx
 
 def get_min_max_y(hline0, hline1):
@@ -69,7 +81,7 @@ def get_crop_box(img, xmax, ymax, maxcontours):
     minx = maxx = miny = maxy = None
 
     if len(vlines) >= 2:
-        minx, maxx = get_min_max_x(vlines[0], vlines[1])
+        minx, maxx = get_min_max_x(vlines[0], vlines[1], img.shape[1])
 
     if len(hlines) >= 2:
         miny, maxy = get_min_max_y(hlines[0], hlines[1])
