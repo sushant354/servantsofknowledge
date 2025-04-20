@@ -5,7 +5,7 @@ import logging
 
 from .utils import  find_contour, get_hvlines
 
-def deskew(img, xmax, ymax, maxcontours):
+def deskew(img, xmax, ymax, maxcontours, rotate_type):
     logger = logging.getLogger('repub.deskew')
     contours = find_contour(img)
 
@@ -13,16 +13,35 @@ def deskew(img, xmax, ymax, maxcontours):
 
     hlines, vlines = get_hvlines(contours, xmax, ymax)
 
-    hangle = get_lines_angle(hlines)
+    hangle = get_hlines_angle(hlines)
     logger.warning('Hangle: %s', hangle)
-    vangle = get_lines_angle(vlines)
+    vangle = get_vlines_angle(vlines)
     logger.warning('Vangle: %s', vangle)
 
-    angle_deg = None 
-    if hangle and abs(hangle) > 0:
-        angle_deg = hangle 
-        img = rotate(img, angle_deg)
-    return img, angle_deg 
+    angle = merge_angles(hangle, vangle, rotate_type) 
+    if angle and abs(angle) > 0:
+        img = rotate(img, angle)
+    return img, angle
+
+def merge_angles(hangle, vangle, rotate_type):
+    angle = None
+    if rotate_type == 'horizontal' and hangle and abs(hangle) > 0:
+        angle = hangle
+    elif rotate_type == 'vertical' and vangle and abs(vangle) > 0:
+        angle = vangle
+    elif rotate_type == 'overall':
+        avg = 0
+        num = 0
+        if vangle and abs(vangle) > 0:
+            avg = vangle
+            num += 1
+        if hangle and abs(hangle) > 0:
+            avg += hangle
+            num += 1
+        if num > 0:
+            angle = avg/num
+
+    return angle
 
 def rotate(img, angle_deg):
     height, width = img.shape[:2]
@@ -43,7 +62,22 @@ def get_angle(line):
         ang = -1 * ang
     return math.degrees(ang)
 
-def get_lines_angle(lines):
+def get_vlines_angle(lines):
+    logger = logging.getLogger('repub.deskew')
+    angles = []
+
+    for line in lines:
+        deg = get_angle(line)
+        if deg < 0:
+            deg = 90+deg
+        else:
+            deg = -90+deg
+        angles.append(deg)
+    logger.warning('Angles: %s', angles)
+    degrees = sum(angles)/len(angles)
+    return degrees
+
+def get_hlines_angle(lines):
     logger = logging.getLogger('repub.deskew')
     angles = []
 
@@ -53,11 +87,4 @@ def get_lines_angle(lines):
     logger.warning('Angles: %s', angles)
     degrees = sum(angles)/len(angles)
     return degrees
-
-def get_vlines_angle(vlines):
-    angles = []
-    for vline in vlines:
-        angles.append(radian)
-    radian = sum(angles)/len(angles)
-    return math.degrees(radian)
 

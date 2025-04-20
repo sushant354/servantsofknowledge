@@ -56,6 +56,9 @@ def get_arg_parser():
                         help='do ocr while making the PDF')
     parser.add_argument('-w', '--dewarp', action='store_true', \
                         dest='dewarp', help='dewarp the images')
+    parser.add_argument('-R', '--rotate', action='store', default = 'vertical',\
+                        dest='rotate_type', \
+                        help='rotate by average of (horizontal|vertical|overall) lines')
     return parser
 
 
@@ -158,7 +161,8 @@ def draw_contours(pagedata, indir, args):
     pagenums = args.pagenums
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
         if args.deskew:
-            img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours)
+            img, hangle = deskew(img, args.xmax, args.ymax, \
+                                 args.maxcontours, args.rotate_type)
         contours = find_contour(img)
         contours = contours[:args.maxcontours]
 
@@ -170,14 +174,14 @@ def gray_images(pagedata, indir, args):
     pagenums = args.pagenums
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
         if args.deskew:
-            img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours)
+            img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type)
         gray = threshold_gray(img, 125, 255)
         cv2.imwrite(outfile, gray)
 
 def deskew_images(pagedata, indir, args):
     pagenums = args.pagenums
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
-        deskewed, angle = deskew(img, args.xmax, args.ymax, args.maxcontours)
+        deskewed, angle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type)
         cv2.imwrite(outfile, deskewed)
 
 def resize_image(img, factor):
@@ -191,7 +195,7 @@ def get_cropping_boxes(pagedata, indir, args):
     boxes = {}
     pagenums = args.pagenums
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
-        img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours)
+        img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type)
         box = get_crop_box(img, args.xmax, args.ymax, args.maxcontours)
         box.append(hangle)
         #box.append(0.0)
