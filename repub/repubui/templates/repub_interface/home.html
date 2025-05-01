@@ -1,0 +1,232 @@
+{% extends 'base.html' %}
+
+{% block title %}REPUB - Process Your Documents{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">Upload Document</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+
+                    <div class="form-section">
+                        <h3>Basic Information</h3>
+                        <div class="mb-3">
+                            <label for="{{ form.title.id_for_label }}" class="form-label">Title</label>
+                            {{ form.title }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="{{ form.input_file.id_for_label }}" class="form-label">{{ form.input_file.label }}</label>
+                            {{ form.input_file }}
+                            <div class="form-text">Upload a PDF file or a ZIP file containing images</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="{{ form.input_type.id_for_label }}" class="form-label">{{ form.input_type.label }}</label>
+                            {{ form.input_type }}
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Processing Options</h3>
+                        <div class="mb-3">
+                            <label for="{{ form.language.id_for_label }}" class="form-label">{{ form.language.label }}</label>
+                            {{ form.language }}
+                            <div class="form-text">{{ form.language.help_text }}</div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="form-check mb-3">
+                                    {{ form.crop }}
+                                    <label class="form-check-label" for="{{ form.crop.id_for_label }}">
+                                        {{ form.crop.label }}
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check mb-3">
+                                    {{ form.deskew }}
+                                    <label class="form-check-label" for="{{ form.deskew.id_for_label }}">
+                                        {{ form.deskew.label }}
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check mb-3">
+                                    {{ form.ocr }}
+                                    <label class="form-check-label" for="{{ form.ocr.id_for_label }}">
+                                        {{ form.ocr.label }}
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check mb-3">
+                                    {{ form.dewarp }}
+                                    <label class="form-check-label" for="{{ form.dewarp.id_for_label }}">
+                                        {{ form.dewarp.label }}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check mb-3">
+                                    {{ form.draw_contours }}
+                                    <label class="form-check-label" for="{{ form.draw_contours.id_for_label }}">
+                                        {{ form.draw_contours.label }}
+                                    </label>
+                                    <div class="form-text">{{ form.draw_contours.help_text }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check mb-3">
+                                    {{ form.gray }}
+                                    <label class="form-check-label" for="{{ form.gray.id_for_label }}">
+                                        {{ form.gray.label }}
+                                    </label>
+                                    <div class="form-text">{{ form.gray.help_text }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.rotate_type.id_for_label }}" class="form-label">{{ form.rotate_type.label }}</label>
+                                    {{ form.rotate_type }}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.reduce_factor.id_for_label }}" class="form-label">{{ form.reduce_factor.label }}</label>
+                                    {{ form.reduce_factor }}
+                                    <div class="form-text">{{ form.reduce_factor.help_text }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Advanced Options</h3>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="{{ form.xmax.id_for_label }}" class="form-label">{{ form.xmax.label }}</label>
+                                    {{ form.xmax }}
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="{{ form.ymax.id_for_label }}" class="form-label">{{ form.ymax.label }}</label>
+                                    {{ form.ymax }}
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="{{ form.maxcontours.id_for_label }}" class="form-label">{{ form.maxcontours.label }}</label>
+                                    {{ form.maxcontours }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">Process Document</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-header bg-secondary text-white">
+                <h3 class="mb-0">Recent Jobs</h3>
+            </div>
+            <div class="card-body">
+                {% if jobs %}
+                    <div class="list-group">
+                        {% for job in jobs %}
+                            <a href="{% url 'job_detail' job.id %}" class="list-group-item list-group-item-action job-card">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h5 class="mb-1">{{ job.title|default:"Untitled Job" }}</h5>
+                                    <small>{{ job.created_at|date:"M d, Y" }}</small>
+                                </div>
+                                <p class="mb-1">
+                                    <span class="badge
+                                        {% if job.status == 'completed' %}bg-success
+                                        {% elif job.status == 'processing' %}bg-warning
+                                        {% elif job.status == 'failed' %}bg-danger
+                                        {% else %}bg-secondary{% endif %}">
+                                        {{ job.status }}
+                                    </span>
+                                </p>
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted">No recent jobs found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Update file input label to show selected filename
+    document.querySelector('#{{ form.input_file.id_for_label }}').addEventListener('change', function(e) {
+        const fileName = e.target.files[0].name;
+        const label = document.querySelector('label[for="{{ form.input_file.id_for_label }}"]');
+        label.textContent = fileName;
+    });
+
+    // Show/hide advanced options
+    const toggleAdvanced = document.querySelector('#toggle-advanced');
+    const advancedSection = document.querySelector('#advanced-options');
+
+    if (toggleAdvanced && advancedSection) {
+        toggleAdvanced.addEventListener('click', function(e) {
+            e.preventDefault();
+            advancedSection.classList.toggle('d-none');
+            toggleAdvanced.textContent = advancedSection.classList.contains('d-none') ?
+                'Show Advanced Options' : 'Hide Advanced Options';
+        });
+    }
+    
+    // Add validation logic for mutually exclusive options
+    const cropCheckbox = document.querySelector('#{{ form.crop.id_for_label }}');
+    const drawContoursCheckbox = document.querySelector('#{{ form.draw_contours.id_for_label }}');
+    const grayCheckbox = document.querySelector('#{{ form.gray.id_for_label }}');
+    
+    function updateOptionsState() {
+        if (drawContoursCheckbox.checked) {
+            cropCheckbox.disabled = true;
+            grayCheckbox.disabled = true;
+        } else if (grayCheckbox.checked) {
+            cropCheckbox.disabled = true;
+            drawContoursCheckbox.disabled = true;
+        } else if (cropCheckbox.checked) {
+            drawContoursCheckbox.disabled = true;
+            grayCheckbox.disabled = true;
+        } else {
+            cropCheckbox.disabled = false;
+            drawContoursCheckbox.disabled = false;
+            grayCheckbox.disabled = false;
+        }
+    }
+    
+    cropCheckbox.addEventListener('change', updateOptionsState);
+    drawContoursCheckbox.addEventListener('change', updateOptionsState);
+    grayCheckbox.addEventListener('change', updateOptionsState);
+    
+    // Initial state
+    updateOptionsState();
+</script>
+{% endblock %}

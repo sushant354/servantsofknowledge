@@ -1,0 +1,417 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Page {{ page.page_number }}{% endblock %}
+
+{% block extra_head %}
+<!-- Resource hints for critical assets -->
+<link rel="preload" href="{{ STATIC_URL }}css/bootstrap-icons.css" as="style">
+
+<!-- Stylesheets -->
+<link rel="stylesheet" href="{{ STATIC_URL }}css/bootstrap-icons.css">
+<style>
+    .editor-container {
+        max-width: 100%;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 40px);
+    }
+
+    .image-container {
+        flex: 1;
+        background-color: #f8f9fa;
+        overflow: hidden;
+        position: relative;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+    }
+
+    .toolbar {
+        padding: 10px;
+        margin-bottom: 20px;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        border: 1px solid #dee2e6;
+    }
+
+    .toolbar-group {
+        display: flex;
+        gap: 5px;
+        align-items: center;
+    }
+
+    .status-bar {
+        background-color: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+        padding: 8px 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.9em;
+        color: #6c757d;
+        margin-top: 10px;
+    }
+
+    #notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1050;
+        min-width: 250px;
+    }
+
+    .btn[data-tooltip] {
+        position: relative;
+    }
+
+    .btn[data-tooltip]:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: rgba(0,0,0,.8);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+        z-index: 1000;
+        margin-bottom: 5px;
+    }
+
+    .btn[data-tooltip]:hover::before {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 5px solid transparent;
+        border-top-color: rgba(0,0,0,.8);
+        margin-bottom: -5px;
+    }
+
+    .snip-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1000;
+        cursor: crosshair;
+    }
+
+    .snip-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+    }
+
+    .selection-box {
+        position: absolute;
+        border: 2px solid #0d6efd;
+        background: rgba(13, 110, 253, 0.1);
+        pointer-events: none;
+        z-index: 1001;
+    }
+
+    .selection-dimensions {
+        position: absolute;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        pointer-events: none;
+        z-index: 1002;
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+        .toolbar {
+            padding: 5px;
+            gap: 5px;
+        }
+
+        .toolbar-group {
+            gap: 2px;
+        }
+
+        .btn {
+            padding: 4px 8px;
+            font-size: 14px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="editor-container">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'job_detail' job.id %}">Job Details</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'job_review' job.id %}">Review Pages</a></li>
+            <li class="breadcrumb-item active">Edit Page {{ page.page_number }}</li>
+        </ol>
+    </nav>
+
+    <div class="toolbar" role="toolbar" aria-label="Image editing tools">
+        <div class="toolbar-group">
+            {% if prev_page %}
+            <a href="{% url 'page_editor' job.id prev_page.page_number %}" 
+               class="btn btn-outline-primary"
+               aria-label="Previous page"
+               data-tooltip="Previous page">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            {% endif %}
+            
+            {% if next_page %}
+            <a href="{% url 'page_editor' job.id next_page.page_number %}"
+               class="btn btn-outline-primary"
+               aria-label="Next page"
+               data-tooltip="Next page">
+                Next <i class="bi bi-arrow-right"></i>
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="toolbar-group">
+            <button id="snip-mode" 
+                    class="btn btn-outline-secondary" 
+                    aria-label="Snip mode"
+                    data-tooltip="Snip mode (S)">
+                <i class="bi bi-scissors"></i> Snip
+            </button>
+            <button id="save-snip" 
+                    class="btn btn-outline-primary" 
+                    aria-label="Save snip"
+                    data-tooltip="Save snip (Ctrl+S)"
+                    style="display: none;">
+                <i class="bi bi-check-lg"></i> Save Snip
+            </button>
+            <button id="cancel-snip" 
+                    class="btn btn-outline-danger" 
+                    aria-label="Cancel snip"
+                    data-tooltip="Cancel snip (Esc)"
+                    style="display: none;">
+                <i class="bi bi-x-lg"></i> Cancel
+            </button>
+        </div>
+    </div>
+
+    <div class="image-container">
+        <img id="original-image" 
+             src="{{ media_url }}{{ page.original_image }}?t={{ now.timestamp }}"
+             alt="Original Page {{ page.page_number }}"
+             style="max-width: 100%;">
+        <canvas id="snip-canvas" class="snip-canvas" style="display: none;"></canvas>
+        <div id="snip-overlay" class="snip-overlay" style="display: none;"></div>
+        <div id="selection-box" class="selection-box" style="display: none;"></div>
+        <div id="selection-dimensions" class="selection-dimensions" style="display: none;"></div>
+    </div>
+
+    <div class="status-bar">
+        <div class="dimensions">
+            <span id="selection-size">No selection</span>
+        </div>
+    </div>
+
+    <div id="notification" class="toast" role="alert" aria-live="polite"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const image = document.getElementById('original-image');
+    let isSnipMode = false;
+    let isSnipping = false;
+    let startX = 0;
+    let startY = 0;
+    let snipCanvas = document.getElementById('snip-canvas');
+    let snipOverlay = document.getElementById('snip-overlay');
+    let selectionBox = document.getElementById('selection-box');
+    let selectionDimensions = document.getElementById('selection-dimensions');
+
+    // Initialize snip canvas
+    function initSnipCanvas() {
+        const img = document.getElementById('original-image');
+        snipCanvas.width = img.width;
+        snipCanvas.height = img.height;
+        snipCanvas.style.width = img.width + 'px';
+        snipCanvas.style.height = img.height + 'px';
+    }
+
+    // Snip mode controls
+    document.getElementById('snip-mode').addEventListener('click', function() {
+        if (!isSnipMode) {
+            enterSnipMode();
+        } else {
+            exitSnipMode();
+        }
+    });
+
+    function enterSnipMode() {
+        isSnipMode = true;
+        document.getElementById('snip-mode').classList.add('active');
+        initSnipCanvas();
+        snipCanvas.style.display = 'block';
+        snipOverlay.style.display = 'block';
+        document.getElementById('save-snip').style.display = 'inline-block';
+        document.getElementById('cancel-snip').style.display = 'inline-block';
+    }
+
+    function exitSnipMode() {
+        isSnipMode = false;
+        isSnipping = false;
+        document.getElementById('snip-mode').classList.remove('active');
+        snipCanvas.style.display = 'none';
+        snipOverlay.style.display = 'none';
+        selectionBox.style.display = 'none';
+        selectionDimensions.style.display = 'none';
+        document.getElementById('save-snip').style.display = 'none';
+        document.getElementById('cancel-snip').style.display = 'none';
+    }
+
+    // Snip event handlers
+    snipCanvas.addEventListener('mousedown', function(e) {
+        if (!isSnipMode) return;
+        isSnipping = true;
+        const rect = snipCanvas.getBoundingClientRect();
+        startX = e.clientX - rect.left;
+        startY = e.clientY - rect.top;
+        selectionBox.style.left = startX + 'px';
+        selectionBox.style.top = startY + 'px';
+        selectionBox.style.width = '0';
+        selectionBox.style.height = '0';
+        selectionBox.style.display = 'block';
+        selectionDimensions.style.display = 'block';
+    });
+
+    snipCanvas.addEventListener('mousemove', function(e) {
+        if (!isSnipMode || !isSnipping) return;
+        const rect = snipCanvas.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+        
+        const width = Math.abs(currentX - startX);
+        const height = Math.abs(currentY - startY);
+        const left = Math.min(currentX, startX);
+        const top = Math.min(currentY, startY);
+        
+        selectionBox.style.left = left + 'px';
+        selectionBox.style.top = top + 'px';
+        selectionBox.style.width = width + 'px';
+        selectionBox.style.height = height + 'px';
+        
+        selectionDimensions.textContent = `${Math.round(width)} × ${Math.round(height)}`;
+        selectionDimensions.style.left = (left + width/2 - selectionDimensions.offsetWidth/2) + 'px';
+        selectionDimensions.style.top = (top - 25) + 'px';
+        
+        document.getElementById('selection-size').textContent = `Selection: ${Math.round(width)}×${Math.round(height)}px`;
+    });
+
+    snipCanvas.addEventListener('mouseup', function() {
+        if (!isSnipMode) return;
+        isSnipping = false;
+    });
+
+    // Save snip
+    document.getElementById('save-snip').addEventListener('click', function() {
+        if (!isSnipMode) return;
+        
+        const img = document.getElementById('original-image');
+        const tempCanvas = document.createElement('canvas');
+        const ctx = tempCanvas.getContext('2d');
+        
+        // Get selection dimensions
+        const selection = selectionBox.getBoundingClientRect();
+        const container = snipCanvas.getBoundingClientRect();
+        const scale = img.naturalWidth / img.width;
+        
+        // Set canvas size to selection size
+        tempCanvas.width = selection.width * scale;
+        tempCanvas.height = selection.height * scale;
+        
+        // Draw selected portion
+        ctx.drawImage(
+            img,
+            (selection.left - container.left) * scale,
+            (selection.top - container.top) * scale,
+            selection.width * scale,
+            selection.height * scale,
+            0,
+            0,
+            tempCanvas.width,
+            tempCanvas.height
+        );
+        
+        // Convert to blob and save
+        tempCanvas.toBlob(function(blob) {
+            const formData = new FormData();
+            formData.append('snipped_image', blob);
+            
+            fetch(`/job/{{ job.id }}/page/{{ page.page_number }}/save-snip/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showNotification('Snip saved successfully', 'success');
+                    window.location.href = `{% url 'job_review' job.id %}?refresh=true&page={{ page.page_number }}`;
+                } else {
+                    showNotification('Error: ' + data.message, 'danger');
+                }
+            })
+            .catch(error => {
+                showNotification('Error saving snip: ' + error, 'danger');
+            });
+        });
+    });
+
+    // Cancel snip
+    document.getElementById('cancel-snip').addEventListener('click', exitSnipMode);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 's' || e.key === 'S') {
+            if (!e.ctrlKey && !isSnipMode) {
+                e.preventDefault();
+                document.getElementById('snip-mode').click();
+            }
+        }
+        if (e.key === 's' && e.ctrlKey && isSnipMode) {
+            e.preventDefault();
+            document.getElementById('save-snip').click();
+        }
+        if (e.key === 'Escape' && isSnipMode) {
+            e.preventDefault();
+            document.getElementById('cancel-snip').click();
+        }
+    });
+
+    // Notification helper
+    function showNotification(message, type = 'success') {
+        const notification = document.getElementById('notification');
+        notification.className = `toast bg-${type} text-white`;
+        notification.innerHTML = message;
+        notification.style.display = 'block';
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 3000);
+    }
+});
+</script>
+{% endblock %} 

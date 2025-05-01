@@ -1,6 +1,9 @@
 opencv-contrib-python
-pdf2image
-pypdf
-pytesseract
+pdf2image~=1.17.0
+pypdf~=5.4.0
+pytesseract~=0.3.13
 simplejson
-img2pdf
+img2pdf~=0.6.1
+
+numpy~=2.2.5
+Django~=5.2
