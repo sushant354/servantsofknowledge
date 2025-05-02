@@ -1,162 +1,174 @@
-For REPUB project
-==================
-First install the dependencies ..
+# REPUB Project
 
-symlink repub in your site packages
-```
-ln -s <maindirectory>/servantsofknowledge/repub <python_site_package_dir/repub
+REPUB is a powerful document processing tool that transforms scanned images into PDFs with searchable text layers, featuring automatic cropping, deskewing, and OCR capabilities.
 
-```
-Install dependencies
-```
-pip install -r requirements.txt 
-```
-Install tesseract. On debian systems:
-```
-apt install tesseract-ocr tesseract-ocr-all
-```
-process_raw.py is the main program to transform scanned images to a PDF with text layer
+## Table of Contents
 
-To convert Internet Archive images to PDF with text layer with cropping and language "eng+asm"
-```
+- [Installation](#installation)
+- [Command-Line Usage](#command-line-usage)
+  - [Examples](#examples)
+  - [Options](#options)
+- [RepuBUI Web Interface](#repub-ui-web-interface)
+  - [Setup](#setup)
+  - [Features](#features)
+  - [Directory Structure](#directory-structure)
+
+## Installation
+
+### Prerequisites
+
+- Python 3.6+
+- Tesseract OCR Engine
+
+### Setup Process
+
+1. **Install Python Dependencies**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Link REPUB Package**
+
+   Add the REPUB module to your Python path:
+
+   ```bash
+   ln -s <maindirectory>/servantsofknowledge/repub <python_site_package_dir>/repub
+   ```
+
+3. **Install Tesseract OCR**
+
+   #### Debian/Ubuntu:
+   ```bash
+   sudo apt install tesseract-ocr tesseract-ocr-all
+   ```
+
+   #### macOS:
+   ```bash
+   brew install tesseract
+   ```
+
+   #### Windows:
+   Download the installer from [Tesseract GitHub](https://github.com/UB-Mannheim/tesseract/wiki)
+
+## Command-Line Usage
+
+The core functionality is provided by `process_raw.py`, which converts scanned images or PDFs into searchable PDFs with text layers.
+
+### Examples
+
+**Process Images from Internet Archive:**
+
+```bash
 python process_raw.py -i <ia_scan_dir> -O <output_file_path.pdf> -c -L eng+asm
 ```
-To convert a PDF file to a PDF file with text layer with cropping and language "eng+kan". Remove "-c" if no need to crop.
-```
+
+**Convert PDF to Searchable PDF:**
+
+```bash
 python process_raw.py -I <input_file_path.pdf> -O <output_file_path.pdf> -c -L eng+kan
 ```
 
-Options
-```
-usage: process_raw.py [-h] [-i INDIR] [-I INPDF] [-o OUTDIR] [-O OUTPDF]
-                      [-l LOGLEVEL] [-L LANGS] [-f LOGFILE] [-m MAXCONTOURS]
-                      [-x XMAX] [-y YMAX] [-d] [-p [PAGENUMS ...]] [-g] [-c]
-                      [-D] [-r FACTOR] [-t]
+### Options
 
-For processing scanned book pages
+| Option                         | Description                               |
+|--------------------------------|-------------------------------------------|
+| `-i, --indir INDIR`            | Directory containing scanned images       |
+| `-I, --inpdf INPDF`            | Input PDF file                            |
+| `-o, --outdir OUTDIR`          | Directory for processed images            |
+| `-O, --outpdf OUTPDF`          | Output PDF filepath                       |
+| `-L, --language LANGS`         | OCR language(s) (e.g., eng+hin)           |
+| `-c, --crop`                   | Enable automatic cropping                 |
+| `-D, --deskew`                 | Enable deskewing                          |
+| `-t, --ocr`                    | Apply OCR while creating PDF              |
+| `-r, --reduce FACTOR`          | Resize images by factor                   |
+| `-m, --maxcontours MAXCONTOURS`| Maximum contours to analyze (default: 5)  |
+| `-x, --xmax XMAX`              | Horizontal line limit in pixels           |
+| `-y, --ymax YMAX`              | Vertical line limit in pixels             |
+| `-d, --drawcontours`           | Draw contours only (for debugging)        |
+| `-g, --gray`                   | Convert to grayscale only                 |
+| `-p, --pagenums`               | Process only specified pages              |
+| `-l, --loglevel`               | Set log level                             |
+| `-f, --logfile`                | Specify log file                          |
 
-options:
-  -h, --help            show this help message and exit
-  -i INDIR, --indir INDIR
-                        Filepath to scanned images directory
-  -I INPDF, --inpdf INPDF
-                        Input PDF File
-  -o OUTDIR, --outdir OUTDIR
-                        Filepath to processed directory
-  -O OUTPDF, --outpdf OUTPDF
-                        Output PDF filepath
-  -l LOGLEVEL, --loglevel LOGLEVEL
-                        debug level
-  -L LANGS, --language LANGS
-                        language for tesseract
-  -f LOGFILE, --logfile LOGFILE
-                        log file
-  -m MAXCONTOURS, --maxcontours MAXCONTOURS
-                        max number of contours to be examined
-  -x XMAX, --xmax XMAX  horizontal line limits in pixels
-  -y YMAX, --ymax YMAX  vertical line limits in pixels
-  -d, --drawcontours    draw contours only on the image
-  -p [PAGENUMS ...], --pagenums [PAGENUMS ...]
-                        pagenums that should only be processed
-  -g, --gray            only gray the image and threshold it
-  -c, --crop            crop the scanned image
-  -D, --deskew          detect the skew and deskew
-  -r FACTOR, --reduce FACTOR
-                        reduce the image to factor
-  -t, --ocr             do ocr while making the PDF
+## RepuBUI Web Interface
 
-```
+RepuBUI provides a user-friendly web interface to the REPUB functionality, making document processing accessible without command-line knowledge.
 
-RepuBUI - Web Interface
-======================
+### Setup
 
-RepuBUI is a web-based interface for the REPUB project that provides a user-friendly way to process documents. It offers all the functionality of the command-line tool through an intuitive web interface.
+1. **Ensure REPUB is installed** as described in the installation section.
 
-Installation & Setup
-------------------
+2. **Set up the web interface:**
 
-1. Make sure you have completed the REPUB installation steps above first.
+   ```bash
+   # Navigate to the RepuBUI directory
+   cd repub/repubui
+   
+   # Create and activate a virtual environment
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   
+   # Install dependencies
+   pip install -r requirements.txt
+   
+   # Set up the database
+   python manage.py makemigrations repub_interface
+   python manage.py migrate
+   
+   # Create an admin user (optional)
+   python manage.py createsuperuser
+   
+   # Start the development server
+   python manage.py runserver
+   ```
 
-2. Navigate to the RepuBUI directory and create a virtual environment:
-```bash
-cd repub/repubui
-python -m venv .venv
-source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
-```
+3. **Access the web interface** at http://127.0.0.1:8000
 
-3. Install additional dependencies for RepuBUI:
-```bash
-pip install -r requirements.txt
-```
+### Features
 
-4. Set up the database:
-```bash
-# Create initial migrations for the repub_interface app
-python manage.py makemigrations repub_interface
+- **User-Friendly Interface**: Upload and process documents through an intuitive web UI
+- **Flexible Input Formats**: Process PDFs or ZIP files containing images
+- **Comprehensive Processing Options**:
+  - OCR language selection with multi-language support
+  - Automatic cropping and deskewing
+  - Text layer generation
+  - Dewarping and rotation options
+  - Image resolution adjustment
+- **Real-Time Status Updates**: Monitor processing progress
+- **Interactive Review**: Examine and adjust processing results before finalizing
+- **Batch Processing**: Handle multiple documents efficiently
 
-# Apply all migrations (both Django's default and repub_interface)
-python manage.py migrate
-```
-
-5. Create a superuser (optional, for admin access):
-```bash
-python manage.py createsuperuser
-```
-
-6. Start the development server:
-```bash
-python manage.py runserver
-```
-
-The web interface will be available at http://127.0.0.1:8000
-
-Note: If you encounter any database errors when running the server, make sure you've:
-1. Created the migrations for repub_interface using `python manage.py makemigrations repub_interface`
-2. Applied all migrations using `python manage.py migrate`
-3. Have proper write permissions in the project directory
-
-Features
---------
-
-- Upload PDF files or ZIP files containing images
-- Configure processing options through a user-friendly interface:
-  - OCR language selection
-  - Cropping
-  - Deskewing
-  - OCR processing
-  - Dewarping
-  - Rotation options
-  - Image reduction
-- Real-time processing status updates
-- Download processed PDFs
-- Review and adjust page processing results
-- Admin interface for job management
-
-Directory Structure
------------------
+### Directory Structure
 
 ```
 repub/repubui/
 ├── manage.py              # Django management script
-├── repubui/              # Main project directory
-│   ├── settings.py       # Project settings
-│   ├── urls.py           # Main URL configuration
-│   └── wsgi.py          # WSGI configuration
-├── repub_interface/      # Main application
-│   ├── models.py         # Database models
-│   ├── views.py          # View functions
-│   ├── urls.py          # URL patterns
-│   └── templates/       # HTML templates
-└── templates/           # Global templates
+├── repubui/               # Main project directory
+│   ├── settings.py        # Project settings
+│   ├── urls.py            # Main URL configuration
+│   └── wsgi.py            # WSGI configuration
+├── repub_interface/       # Main application
+│   ├── models.py          # Database models
+│   ├── views.py           # View functions
+│   ├── urls.py            # URL patterns
+│   └── templates/         # HTML templates
+└── templates/             # Global templates
 ```
 
-Media Storage
-------------
+### Media Storage
 
-The application stores files in the following directories under `repub/repubui/media/`:
+The application automatically creates and manages the following directories under `repub/repubui/media/`:
 
-- `uploads/`: Original uploaded files
-- `processed/`: Processed output files
-- `thumbnails/`: Generated thumbnails for preview
+- `uploads/`: Stores uploaded document files
+- `processed/`: Contains processed output files
+- `thumbnails/`: Holds generated image previews
 
-These directories are automatically created when needed.
+## Troubleshooting
+
+If you encounter database errors when running the server:
+1. Verify you've created migrations: `python manage.py makemigrations repub_interface`
+2. Ensure migrations are applied: `python manage.py migrate`
+3. Check directory permissions for media storage folders
+4. Review the log file for specific error messages
+
