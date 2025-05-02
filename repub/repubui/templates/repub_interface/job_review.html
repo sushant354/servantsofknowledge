@@ -1,0 +1,295 @@
+{% extends 'base.html' %}
+
+{% block title %}Review: {{ job.title|default:"Untitled Job" }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .thumbnail-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    
+    .thumbnail-card {
+        width: 300px;
+        transition: transform 0.2s;
+        position: relative;
+    }
+    
+    .thumbnail-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    
+    .thumbnail-container img {
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+        cursor: pointer;
+    }
+    
+    .needs-review-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 100;
+    }
+    
+    .comparison-container {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .comparison-container .col {
+        flex: 1;
+    }
+    
+    .comparison-label {
+        text-align: center;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    /* Modal styles */
+    .image-modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0, 0, 0, 0.8);
+    }
+    
+    .modal-content {
+        margin: auto;
+        display: block;
+        max-width: 90%;
+        max-height: 90%;
+    }
+    
+    .close-modal {
+        position: absolute;
+        top: 20px;
+        right: 35px;
+        color: #f1f1f1;
+        font-size: 40px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    
+    .modal-buttons {
+        position: fixed;
+        bottom: 20px;
+        left: 0;
+        right: 0;
+        text-align: center;
+    }
+    
+    /* Review criteria explanation */
+    .criteria-explanation {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .criteria-explanation ul {
+        margin-bottom: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'job_detail' job.id %}">Job Details</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Review Pages</li>
+        </ol>
+    </nav>
+    
+    <div class="card shadow mb-4">
+        <div class="card-header bg-primary text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h3 class="mb-0">{{ job.title|default:"Untitled Job" }} - Review</h3>
+                <span class="badge bg-warning">{{ job.status }}</span>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <h4 class="alert-heading">Review Cropped Images</h4>
+                <p>Please review each page and adjust the cropping if needed. Click on any thumbnail to view a larger version, or use the "Edit" button to adjust the crop.</p>
+                <p>Pages marked with a <span class="badge bg-warning">Review Needed</span> badge may need your attention.</p>
+            </div>
+            
+            <div class="criteria-explanation">
+                <h5>Why are some pages marked for review?</h5>
+                <p>The system automatically identifies pages that might need manual adjustment based on the following criteria:</p>
+                <ul>
+                    <li>Unusual crop dimensions (too narrow or too small)</li>
+                    <li>Significant skew or rotation detected in the original image</li>
+                    <li>Auto-correction of inconsistent crop boxes between pages</li>
+                    <li>Potential text or content near the edges that might be cut off</li>
+                </ul>
+            </div>
+            
+            <h4 class="mb-3">Pages ({{ pages|length }})</h4>
+            
+            <div class="thumbnail-container">
+                {% for page in pages %}
+                    <div class="card thumbnail-card">
+                        {% if page.needs_review %}
+                            <span class="badge bg-warning needs-review-badge">Review Needed</span>
+                        {% elif page.reviewed %}
+                            <span class="badge bg-success needs-review-badge">Reviewed</span>
+                        {% endif %}
+                        
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Page {{ page.page_number }}</h5>
+                                <a href="{% url 'page_editor' job.id page.page_number %}" class="btn btn-sm btn-primary">Edit</a>
+                            </div>
+                        </div>
+                        
+                        <div class="card-body p-2">
+                            <div class="comparison-container">
+                                <div class="col">
+                                    <div class="comparison-label">Original</div>
+                                    {% if page.original_thumbnail %}
+                                        <img src="{{ page.original_thumbnail.url }}?t={{ now.timestamp }}" 
+                                            class="img-thumbnail original-thumb" 
+                                            alt="Original Page {{ page.page_number }}"
+                                            data-full="{{ media_url }}{{ page.original_image }}"
+                                            data-page="{{ page.page_number }}"
+                                            data-type="original"
+                                            data-can-crop="true"
+                                            onclick="openImageModal(this)">
+                                    {% else %}
+                                        <div class="text-center text-muted">No thumbnail</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col">
+                                    <div class="comparison-label">Processed</div>
+                                    {% if page.cropped_thumbnail %}
+                                        <img src="{{ page.cropped_thumbnail.url }}?t={{ now.timestamp }}" 
+                                            class="img-thumbnail cropped-thumb" 
+                                            alt="Cropped Page {{ page.page_number }}"
+                                            data-full="{{ media_url }}{{ page.cropped_image }}"
+                                            data-page="{{ page.page_number }}"
+                                            data-type="cropped"
+                                            data-can-crop="false"
+                                            onclick="openImageModal(this)">
+                                    {% else %}
+                                        <div class="text-center text-muted">No thumbnail</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="alert alert-warning w-100">No pages found for this job.</div>
+                {% endfor %}
+            </div>
+            
+            <div class="mt-4">
+                <form method="post" action="{% url 'job_review' job.id %}">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'job_detail' job.id %}" class="btn btn-secondary">Back to Job Details</a>
+                        <button type="submit" name="finalize" class="btn btn-primary">Finalize and Create PDF</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Image Modal -->
+<div id="imageModal" class="image-modal">
+    <span class="close-modal" onclick="closeImageModal()">&times;</span>
+    <img class="modal-content" id="modalImage">
+    <div class="modal-buttons">
+        <button class="btn btn-primary" id="editButton" style="display: none;">Edit Crop</button>
+        <button class="btn btn-secondary" onclick="closeImageModal()">Close</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Function to check if we're returning from the page editor
+    function checkForRefresh() {
+        // Check if there's a flag in the URL indicating we've just come back from editing
+        const urlParams = new URLSearchParams(window.location.search);
+        const refreshNeeded = urlParams.get('refresh');
+        const pageNumber = urlParams.get('page');
+        
+        if (refreshNeeded === 'true' && pageNumber) {
+            // Find the thumbnail for this page and force refresh it
+            const thumbnails = document.querySelectorAll(`img[data-page="${pageNumber}"]`);
+            if (thumbnails.length > 0) {
+                thumbnails.forEach(img => {
+                    const currentSrc = img.src;
+                    const baseUrl = currentSrc.split('?')[0];
+                    img.src = baseUrl + `?t=${new Date().getTime()}`;
+                });
+            }
+        }
+        
+        // Clear the URL parameters without reloading
+        if (refreshNeeded) {
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+        }
+    }
+
+    // Image modal functionality
+    function openImageModal(img) {
+        const modal = document.getElementById('imageModal');
+        const modalImg = document.getElementById('modalImage');
+        const editButton = document.getElementById('editButton');
+        
+        modal.style.display = "block";
+        // Add cache-busting timestamp to image URL
+        const imageUrl = img.getAttribute('data-full');
+        const timeStamp = new Date().getTime();
+        modalImg.src = imageUrl + '?t=' + timeStamp;
+        
+        const pageNumber = img.getAttribute('data-page');
+        const jobId = '{{ job.id }}';
+        const canCrop = img.getAttribute('data-can-crop') === 'true';
+        
+        // Only show edit button for original images
+        editButton.style.display = canCrop ? 'inline-block' : 'none';
+        
+        // Set up edit button to go to the editor page
+        if (canCrop) {
+            editButton.onclick = function() {
+                window.location.href = `/job/${jobId}/page/${pageNumber}/`;
+            };
+        }
+    }
+    
+    function closeImageModal() {
+        const modal = document.getElementById('imageModal');
+        modal.style.display = "none";
+    }
+    
+    // Close when clicking outside of the image
+    window.onclick = function(event) {
+        const modal = document.getElementById('imageModal');
+        if (event.target == modal) {
+            closeImageModal();
+        }
+    }
+    
+    // Run the refresh check when the page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        checkForRefresh();
+    });
+</script>
+{% endblock %} 

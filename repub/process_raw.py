@@ -29,7 +29,6 @@ def get_arg_parser():
                   default = 'eng', help='language for tesseract')
     parser.add_argument('-f', '--logfile', dest='logfile', action='store', \
                   default = None, help='log file')
-
     parser.add_argument('-m', '--maxcontours', type=int, dest='maxcontours',\
                         default=5, help='max number of contours to be examined')
     parser.add_argument('-x', '--xmax', type=int, dest='xmax', default=30, \

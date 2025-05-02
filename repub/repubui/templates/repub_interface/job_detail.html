@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+
+{% block title %}Job: {{ job.title|default:"Untitled Job" }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0">{{ job.title|default:"Untitled Job" }}</h3>
+                    <span class="badge
+                        {% if job.status == 'completed' %}bg-success
+                        {% elif job.status == 'processing' %}bg-warning
+                        {% elif job.status == 'failed' %}bg-danger
+                        {% else %}bg-secondary{% endif %}">
+                        {{ job.status }}
+                    </span>
+                </div>
+            </div>
+            <div class="card-body" id="job-status-container">
+                {% if job.status == 'processing' %}
+                    <div class="alert alert-info">
+                        <h4 class="alert-heading">Processing in progress!</h4>
+                        <p>Your document is currently being processed. This page will update automatically.</p>
+                        <div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                        </div>
+                    </div>
+                {% elif job.status == 'reviewing' %}
+                    <div class="alert alert-warning">
+                        <h4 class="alert-heading">Review needed!</h4>
+                        <p>Your document has been processed, but some pages may need crop adjustments. Please review the pages before finalizing.</p>
+                    </div>
+                    
+                    <a href="{% url 'job_review' job.id %}" class="btn btn-primary btn-lg mb-4">
+                        Review Cropped Pages
+                    </a>
+                {% elif job.status == 'finalizing' %}
+                    <div class="alert alert-info">
+                        <h4 class="alert-heading">Finalizing your document!</h4>
+                        <p>Your document is being finalized after your review. This page will update automatically.</p>
+                        <div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                        </div>
+                    </div>
+                {% elif job.status == 'failed' %}
+                    <div class="alert alert-danger">
+                        <h4 class="alert-heading">Processing failed!</h4>
+                        <p>There was an error while processing your document.</p>
+                        {% if job.error_message %}
+                            <hr>
+                            <p class="mb-0">Error details:</p>
+                            <pre class="mt-2">{{ job.error_message }}</pre>
+                        {% endif %}
+                    </div>
+                {% elif job.status == 'completed' %}
+                    <div class="alert alert-success">
+                        <h4 class="alert-heading">Processing complete!</h4>
+                        <p>Your document has been successfully processed.</p>
+                    </div>
+
+                    {% if job.output_file %}
+                        <a href="{% url 'job_download' job.id %}" class="btn btn-primary btn-lg mb-4">
+                            <i class="bi bi-download"></i> Download Processed PDF
+                        </a>
+                    {% endif %}
+                {% endif %}
+
+                <h4 class="mt-4 mb-3">Job Details</h4>
+                <table class="table table-bordered">
+                    <tbody>
+                        <tr>
+                            <th style="width: 30%">Created</th>
+                            <td>{{ job.created_at }}</td>
+                        </tr>
+                        <tr>
+                            <th>Input Type</th>
+                            <td>{{ job.get_input_type_display }}</td>
+                        </tr>
+                        <tr>
+                            <th>OCR Language</th>
+                            <td>{{ job.language }}</td>
+                        </tr>
+                        <tr>
+                            <th>Processing Options</th>
+                            <td>
+                                <ul class="list-unstyled mb-0">
+                                    {% if job.crop %}<li><span class="badge bg-secondary">Crop</span></li>{% endif %}
+                                    {% if job.deskew %}<li><span class="badge bg-secondary">Deskew</span></li>{% endif %}
+                                    {% if job.ocr %}<li><span class="badge bg-secondary">OCR</span></li>{% endif %}
+                                    {% if job.dewarp %}<li><span class="badge bg-secondary">Dewarp</span></li>{% endif %}
+                                    {% if job.draw_contours %}<li><span class="badge bg-secondary">Draw Contours</span></li>{% endif %}
+                                    {% if job.gray %}<li><span class="badge bg-secondary">Grayscale</span></li>{% endif %}
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Rotation Type</th>
+                            <td>{{ job.get_rotate_type_display }}</td>
+                        </tr>
+                        {% if job.reduce_factor %}
+                        <tr>
+                            <th>Reduce Factor</th>
+                            <td>{{ job.reduce_factor }}</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+
+                <div class="d-flex mt-4">
+                    <a href="{% url 'home' %}" class="btn btn-secondary me-2">Back to Home</a>
+
+                    {% if job.status == 'failed' %}
+                        <form method="post" action="{% url 'home' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="retry_job_id" value="{{ job.id }}">
+                            <button type="submit" class="btn btn-warning">Retry with Same Settings</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const jobId = '{{ job.id }}';
+    const currentStatus = '{{ job.status }}';
+    
+    // Only start polling if the job is processing or finalizing
+    if (currentStatus === 'processing' || currentStatus === 'finalizing') {
+        pollJobStatus();
+    }
+    
+    function pollJobStatus() {
+        fetch(`/job/${jobId}/status/`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status !== currentStatus) {
+                // If status has changed, refresh the content
+                fetch(window.location.href, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.text())
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const newContent = doc.getElementById('job-status-container');
+                    document.getElementById('job-status-container').innerHTML = newContent.innerHTML;
+                    
+                    // Update the badge in the header
+                    const newBadge = doc.querySelector('.card-header .badge');
+                    document.querySelector('.card-header .badge').outerHTML = newBadge.outerHTML;
+                    
+                    // If still processing or finalizing, continue polling
+                    if (data.status === 'processing' || data.status === 'finalizing') {
+                        setTimeout(pollJobStatus, 2000);
+                    }
+                });
+            } else {
+                // If status hasn't changed, continue polling
+                if (data.status === 'processing' || data.status === 'finalizing') {
+                    setTimeout(pollJobStatus, 2000);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error polling job status:', error);
+            // Retry after a delay even if there's an error
+            setTimeout(pollJobStatus, 5000);
+        });
+    }
+});
+</script>
+{% endblock %}
