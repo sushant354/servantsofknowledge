@@ -370,7 +370,13 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.status === 'success') {
                     showNotification('Snip saved successfully', 'success');
-                    window.location.href = `{% url 'job_review' job.id %}?refresh=true&page={{ page.page_number }}`;
+                    // Check if there's a next page that needs review
+                    if (data.next_page) {
+                        window.location.href = data.next_page.url;
+                    } else {
+                        // If no more pages need review, go back to review page
+                        window.location.href = `{% url 'job_review' job.id %}?refresh=true&page={{ page.page_number }}`;
+                    }
                 } else {
                     showNotification('Error: ' + data.message, 'danger');
                 }

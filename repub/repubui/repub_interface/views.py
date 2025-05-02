@@ -20,6 +20,7 @@ from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from .models import ProcessingJob, PageImage
 from .forms import ProcessingJobForm
+from .utils import process_and_save_image, create_and_save_thumbnail, get_next_page_for_review
 import numpy as np
 
 # Add the repub directory to the Python path
@@ -791,12 +792,15 @@ def finalize_job(job_id):
 @csrf_protect
 def save_snip(request, job_id, page_number):
     """
-    API endpoint for saving snipped images.
+    API endpoint for saving snipped images with improved error handling and code organization.
     """
     try:
         # Get job and page objects
         job = get_object_or_404(ProcessingJob, id=job_id)
         page = get_object_or_404(PageImage, job=job, page_number=page_number)
+        
+        # Get next page that needs review
+        next_page = get_next_page_for_review(job, page_number)
         
         # Validate file upload
         if 'snipped_image' not in request.FILES:
@@ -808,25 +812,13 @@ def save_snip(request, job_id, page_number):
         snipped_image = request.FILES['snipped_image']
         
         try:
-            # Convert uploaded image to OpenCV format
-            image_data = snipped_image.read()
-            nparr = np.frombuffer(image_data, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            
-            if img is None or img.size == 0:
-                raise ValueError("Invalid image data")
-            
             # Prepare output paths
             output_filename = f"{page.page_number:04d}_adjusted.jpg"
             relative_path = os.path.join(job.get_output_dir(), output_filename)
             output_path = os.path.join(settings.MEDIA_ROOT, relative_path)
             
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            
-            # Save snipped image with quality optimization
-            encode_params = [cv2.IMWRITE_JPEG_QUALITY, 95]
-            if not cv2.imwrite(output_path, img, encode_params):
+            # Process and save the snipped image
+            if not process_and_save_image(snipped_image.read(), output_path):
                 raise IOError("Failed to save snipped image")
             
             # Update page with new image paths
@@ -837,24 +829,9 @@ def save_snip(request, job_id, page_number):
             if page.cropped_thumbnail:
                 page.cropped_thumbnail.delete(save=False)
             
-            thumbnail = create_thumbnail(output_path)
-            if thumbnail:
-                thumbnail_filename = f"{page.page_number:04d}_cropped_thumb.jpg"
-                thumbnail_io = BytesIO()
-                thumbnail.save(thumbnail_io, format='JPEG', quality=85)
-                
-                thumbnail_file = ContentFile(thumbnail_io.getvalue())
-                page.cropped_thumbnail.save(
-                    thumbnail_filename,
-                    InMemoryUploadedFile(
-                        thumbnail_file,
-                        None,
-                        thumbnail_filename,
-                        'image/jpeg',
-                        len(thumbnail_io.getvalue()),
-                        None
-                    )
-                )
+            thumbnail_filename = f"{page.page_number:04d}_cropped_thumb.jpg"
+            if not create_and_save_thumbnail(output_path, page.cropped_thumbnail, thumbnail_filename):
+                logger.warning(f"Failed to create thumbnail for page {page.page_number}")
             
             # Mark page as reviewed
             page.reviewed = True
@@ -864,12 +841,21 @@ def save_snip(request, job_id, page_number):
             # Create cache buster
             timestamp = int(time.time())
             
-            return JsonResponse({
+            response_data = {
                 'status': 'success',
                 'message': 'Snip saved successfully',
                 'adjusted_url': f"{settings.MEDIA_URL}{relative_path}?t={timestamp}",
                 'thumbnail_url': f"{page.cropped_thumbnail.url}?t={timestamp}" if page.cropped_thumbnail else None
-            })
+            }
+            
+            # Add next page information if available
+            if next_page:
+                response_data['next_page'] = {
+                    'number': next_page.page_number,
+                    'url': reverse('page_editor', args=[job.id, next_page.page_number])
+                }
+            
+            return JsonResponse(response_data)
             
         except Exception as e:
             logger.error(f"Error processing snipped image: {str(e)}", exc_info=True)

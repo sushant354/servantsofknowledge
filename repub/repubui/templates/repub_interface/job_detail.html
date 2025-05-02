@@ -144,8 +144,9 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
-            if (data.status !== currentStatus) {
-                // If status has changed, refresh the content
+            // If status has changed or is still processing/finalizing, refresh the content
+            if (data.status !== currentStatus || data.status === 'processing' || data.status === 'finalizing') {
+                // Refresh the content
                 fetch(window.location.href, {
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest'
@@ -161,17 +162,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Update the badge in the header
                     const newBadge = doc.querySelector('.card-header .badge');
                     document.querySelector('.card-header .badge').outerHTML = newBadge.outerHTML;
-                    
-                    // If still processing or finalizing, continue polling
-                    if (data.status === 'processing' || data.status === 'finalizing') {
-                        setTimeout(pollJobStatus, 2000);
-                    }
                 });
-            } else {
-                // If status hasn't changed, continue polling
-                if (data.status === 'processing' || data.status === 'finalizing') {
-                    setTimeout(pollJobStatus, 2000);
-                }
+            }
+            
+            // Continue polling if still processing or finalizing
+            if (data.status === 'processing' || data.status === 'finalizing') {
+                setTimeout(pollJobStatus, 2000);
+            } else if (data.status === 'reviewing') {
+                // Redirect to review page if status is 'reviewing'
+                window.location.href = `{% url 'job_review' job.id %}`;
             }
         })
         .catch(error => {
