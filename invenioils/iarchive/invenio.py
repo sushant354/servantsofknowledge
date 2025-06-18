@@ -274,7 +274,7 @@ def update_document(document, item):
     if change:
         document = document.commit()
         db.session.commit()
-    return change 
+    return document 
 
 def get_document(indexer, item):
     item['pid'] = item['identifier']
@@ -294,7 +294,7 @@ def get_document(indexer, item):
                 document['metats'] < item['metats']:
             #check for meta field updates
             indexer.delete(document)
-            update_document(document, item)
+            document = update_document(document, item)
             index_document(indexer, document, doctext)
         return document
 
