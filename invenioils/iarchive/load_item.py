@@ -4,9 +4,14 @@ import shutil
 import argparse
 import re
 
+from datetime import datetime
+
 from iarchive import utils
 from iarchive import invenio 
 from iarchive import xmlops 
+
+def get_mtime(filepath):
+    return int(os.path.getmtime(filepath))
 
 def item_to_record(dirname):
     record     = None
@@ -17,6 +22,9 @@ def item_to_record(dirname):
         if record == None and filename.endswith('_meta.xml'):
             filepath = os.path.join(dirname, filename)
             record = xmlops.xml_to_record(filepath)
+            if record:
+                record['metats'] = get_mtime(filepath)
+
         if not thumbfile and re.search('__ia_thumb.jpg$', filename):
             thumbfile = os.path.join(dirname, filename)
         if not txtfile and re.search('_djvu.txt$', filename):
@@ -25,6 +33,7 @@ def item_to_record(dirname):
     if txtfile and record:
         doctext = open(txtfile, 'r', encoding='utf8', errors = 'ignore').read()
         record['doctext'] = doctext
+        record['docts']   = get_mtime(txtfile)
 
     return record, thumbfile
 

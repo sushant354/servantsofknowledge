@@ -1,17 +1,13 @@
 import re
-import uuid
 import logging
+import sqlalchemy 
 
 from invenio_db import db
 from invenio_pidstore.models import PersistentIdentifier, PIDStatus
 from invenio_pidstore.providers.recordid_v2 import RecordIdProviderV2
 from invenio_app.factory import create_app
-from flask import current_app
-
-from invenio_search import current_search
 
 from invenio_app_ils.documents.api import DOCUMENT_PID_TYPE, Document
-from invenio_app_ils.eitems.api import EITEM_PID_TYPE, EItem
 from invenio_app_ils.ill.api import BORROWING_REQUEST_PID_TYPE, BorrowingRequest
 from invenio_app_ils.internal_locations.api import INTERNAL_LOCATION_PID_TYPE, InternalLocation
 from invenio_app_ils.items.api import ITEM_PID_TYPE, Item
@@ -21,11 +17,10 @@ from invenio_app_ils.proxies import current_app_ils
 from invenio_app_ils.records_relations.api import RecordRelationsParentChild, RecordRelationsSiblings
 from invenio_app_ils.relations.api import Relation
 from invenio_app_ils.series.api import SERIES_PID_TYPE, Series
-from iso639 import languages
 from invenio_pidstore.errors import PIDDoesNotExistError
 from invenio_indexer.api import RecordIndexer
 from flask import url_for
-from invenio_app_ils.literature.covers_builder import build_openlibrary_urls, build_placeholder_urls
+from invenio_app_ils.literature.covers_builder import build_placeholder_urls
 from .collectiondict import collection_names 
 from langcodes import Language
 logger = logging.getLogger('iarchive')
@@ -44,6 +39,11 @@ def get_languages(langs):
     return ls
 
 def minter(pid_type, pid_field, record):
+    try:
+        pid = PersistentIdentifier.get(pid_type, record[pid_field])
+        return pid
+    except PIDDoesNotExistError:
+        pass
     """Mint the given PID for the given record."""
     pid = PersistentIdentifier.create(pid_type, record[pid_field], \
                                      status = PIDStatus.REGISTERED, \
@@ -141,17 +141,9 @@ def get_tags(collection):
            tags.append(x.title())
     return tags
 
-def get_document(indexer, item):
-    item['pid'] = item['identifier']
-
+def convert_to_document(item):
     if 'title' in item and isinstance(item['title'], list):
         item['title'] = ' - '.join(item['title'])
-
-    try:
-        document = Document.get_record_by_pid(item['pid'])
-        return document
-    except PIDDoesNotExistError:
-        pass
 
     if 'collection' in item:
         collection = item.pop('collection')
@@ -267,16 +259,56 @@ def get_document(indexer, item):
     if 'keywords' in item:
         item.pop('keywords')
 
+
+def update_document(document, item):
+    change = False
+    for k, v in item.items():
+        if k in document:
+            if document[k] != v:
+                document[k] = v 
+                change = True
+        else:
+            document[k] = v 
+            change = True
+
+    if change:
+        document = document.commit()
+        db.session.commit()
+    return change 
+
+def get_document(indexer, item):
+    item['pid'] = item['identifier']
+
     doctext = None
     if 'doctext' in  item:
         doctext = item.pop('doctext')
 
+    convert_to_document(item)
+    try:
+        document = Document.get_record_by_pid(item['pid'])
+    except (PIDDoesNotExistError,sqlalchemy.exc.NoResultFound) as e:
+        document = None 
+
+    if document:
+        if (doctext and document['docts'] < item['docts']) or \
+                document['metats'] < item['metats']:
+            #check for meta field updates
+            indexer.delete(document)
+            update_document(document, item)
+            index_document(indexer, document, doctext)
+        return document
+
     document = Document.create(item)
+
     minter(DOCUMENT_PID_TYPE, 'pid', document)
     db.session.commit()
+
+    index_document(indexer, document, doctext)
+    return document
+
+def index_document(indexer, document, doctext):
     if doctext:
         document['doctext'] = doctext
-
     try:        
         indexer.index(document)
     except Exception as e:
@@ -316,12 +348,3 @@ def add_ia_item(indexer, library_name, location, ia_item):
 
     if not document:
         return
-
-    docid = document['pid']
-    created_by = document['created_by']
-    item = {'pid': '%s-item' % docid, 'document_pid': docid, \
-            'location_pid': library['pid'], 'created_by': created_by, \
-            'medium': 'PAPER', 'status': 'CAN_CIRCULATE', 'barcode':'', \
-            'internal_location_pid': internal['pid'], \
-            'circulation_restriction': 'NO_RESTRICTION'}
-    item = get_item(indexer, item)
