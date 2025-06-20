@@ -53,7 +53,7 @@ class ProcessingJob(models.Model):
     reduce_factor = models.FloatField(null=True, blank=True)
 
     # Advanced options
-    xmax = models.IntegerField(default=30)
+    xmaximum = models.IntegerField(default=30)
     ymax = models.IntegerField(default=60)
     maxcontours = models.IntegerField(default=5)
 

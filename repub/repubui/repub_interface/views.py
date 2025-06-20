@@ -475,7 +475,7 @@ def process_job(job_id):
             'outpdf': os.path.join(output_dir, f"{job.title or 'processed'}.pdf"),
             'langs': job.language,
             'maxcontours': job.maxcontours,
-            'xmax': job.xmax,
+            'xmax': job.xmaximum,
             'ymax': job.ymax,
             'crop': job.crop,
             'deskew': job.deskew,

@@ -1,17 +1,20 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-your-secret-key-here'
-
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-default-key-for-development')
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
-
+DEBUG = os.getenv('DEBUG', 'False') == 'True' 
+DEPLOYMENT = os.getenv('DEPLOYMENT', 'local')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+DJANGO_SETTINGS_MODULE="reubui.settings"
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -52,14 +55,23 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'repubui.wsgi.application'
-
 # Database
-DATABASES = {
-    'default': {
+DATABASE_OPTIONS = {
+    'local': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+    },
+    'prod': {
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+        'NAME': os.getenv('DB_NAME', 'repubdb'),
+        'USER': os.getenv('DB_USER', 'repub'),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
+
+DATABASES = {'default': DATABASE_OPTIONS[DEPLOYMENT]}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -79,14 +91,13 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'static'),
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
 ]
 
 # Media files (uploads)

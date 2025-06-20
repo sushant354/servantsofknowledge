@@ -9,7 +9,7 @@ class ProcessingJobForm(forms.ModelForm):
         fields = [
             'title', 'input_file', 'input_type', 'language',
             'crop', 'deskew', 'ocr', 'dewarp', 'draw_contours', 'gray',
-            'rotate_type', 'reduce_factor', 'xmax', 'ymax', 'maxcontours'
+            'rotate_type', 'reduce_factor', 'xmaximum', 'ymax', 'maxcontours'
         ]
         widgets = {
             'title': forms.TextInput(attrs={'class': 'form-control'}),
@@ -24,7 +24,7 @@ class ProcessingJobForm(forms.ModelForm):
             'gray': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'rotate_type': forms.Select(attrs={'class': 'form-select'}),
             'reduce_factor': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'}),
-            'xmax': forms.NumberInput(attrs={'class': 'form-control'}),
+            'xmaximum': forms.NumberInput(attrs={'class': 'form-control'}),
             'ymax': forms.NumberInput(attrs={'class': 'form-control'}),
             'maxcontours': forms.NumberInput(attrs={'class': 'form-control'}),
         }
@@ -40,7 +40,7 @@ class ProcessingJobForm(forms.ModelForm):
             'gray': 'Convert to grayscale',
             'rotate_type': 'Rotation calculation method',
             'reduce_factor': 'Reduce image size by factor (optional)',
-            'xmax': 'Max horizontal line distance (pixels)',
+            'xmaximum': 'Max horizontal line distance (pixels)',
             'ymax': 'Max vertical line distance (pixels)',
             'maxcontours': 'Maximum contours to examine',
         }
