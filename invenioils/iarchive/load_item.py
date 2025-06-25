@@ -81,7 +81,16 @@ if __name__ == '__main__':
             continue
 
         record, thumbfile = item_to_record(dirpath)
-        if record and ('repub_state' not in record or record['repub_state'] == '19'):
+
+        if record:
+            if 'repub_state' in record and record['repub_state'] not in ['4', '19']:
+                logger.warning('Non-indexable repub state %s %s', record['repub_state'], dirname)
+                continue
+ 
+            if not thumbfile:
+                logger.warning('No thumbfile in %s', dirname)
+                continue
+
             filename = '%s.jpg' % dirname
             record['cover_metadata'] = {'img': '%s/%s' % (url_prefix, filename)}
             invenio.add_ia_item(indexer, libname, args.location, record)

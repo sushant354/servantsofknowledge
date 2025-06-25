@@ -23,6 +23,8 @@ from flask import url_for
 from invenio_app_ils.literature.covers_builder import build_placeholder_urls
 from .collectiondict import collection_names 
 from langcodes import Language
+import opensearchpy
+
 logger = logging.getLogger('iarchive')
 
 def get_languages(langs):
@@ -32,10 +34,14 @@ def get_languages(langs):
             ls = [langs.strip().upper()]
         return ls
 
+    lset = set()
     for lang in langs:
         lang = lang.strip()
         if len(lang) == 3:
-            ls.append(lang.upper())
+            lang = lang.upper()
+            if lang not in lset:
+                ls.append(lang)
+                lset.add(lang)
     return ls
 
 def minter(pid_type, pid_field, record):
@@ -145,6 +151,9 @@ def convert_to_document(item):
     if 'title' in item and isinstance(item['title'], list):
         item['title'] = ' - '.join(item['title'])
 
+    if 'source' in item and isinstance(item['source'], list):
+        item['source'] = ' - '.join(item['source'])
+
     if 'collection' in item:
         collection = item.pop('collection')
         if 'JaiGyan' in collection:
@@ -188,6 +197,12 @@ def convert_to_document(item):
 
     if 'notes' in item:
         notes = item.pop('notes')
+        if isinstance(notes, list):
+            notes = ' '.join(notes)
+
+        item['note'] = notes 
+    if 'note' in item:
+        notes = item.pop('note')
         if isinstance(notes, list):
             notes = ' '.join(notes)
 
@@ -290,12 +305,17 @@ def get_document(indexer, item):
         document = None 
 
     if document:
-        if (doctext and document['docts'] < item['docts']) or \
+        if (doctext and ('docts' not in document or document['docts'] < item['docts'])) or \
                 document['metats'] < item['metats']:
             #check for meta field updates
-            indexer.delete(document)
+            try:
+                indexer.delete(document)
+            except opensearchpy.exceptions.NotFoundError as e:
+                pass
             document = update_document(document, item)
             index_document(indexer, document, doctext)
+        else:
+            logger.info('Document already exists. No update %s', item['identifier'])
         return document
 
     document = Document.create(item)
