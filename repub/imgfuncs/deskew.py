@@ -11,7 +11,7 @@ def deskew(img, xmax, ymax, maxcontours, rotate_type):
 
     contours = contours[:maxcontours]
 
-    hlines, vlines = get_hvlines(contours, xmax, ymax)
+    hlines, vlines = get_hvlines(contours, xmax, ymax, img.shape)
 
     hangle = get_hlines_angle(hlines)
     logger.warning('Hangle: %s', hangle)

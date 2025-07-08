@@ -76,7 +76,7 @@ def get_crop_box(img, xmax, ymax, maxcontours):
 
     contours = contours[:maxcontours]
 
-    hlines, vlines = get_hvlines(contours, xmax, ymax)
+    hlines, vlines = get_hvlines(contours, xmax, ymax, img.shape)
 
     minx = maxx = miny = maxy = None
 

@@ -14,7 +14,7 @@ def find_contour(img):
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
     return contours
 
-def get_hvlines(contours, xmax, ymax):
+def get_hvlines(contours, xmax, ymax, shape):
     logger = logging.getLogger('repub.hvlines')
     hlines = []
     vlines = []
@@ -73,6 +73,10 @@ def get_hvlines(contours, xmax, ymax):
 
     vlines.sort(key = lambda t: abs(t[-1][1] - t[0][1]), reverse = True)
 
+    vlines = vlines[:5]
+
+    vlines = remove_close_vlines(vlines, shape[1])
+
     for hline in hlines[:5]:
         logger.debug('HLINES %d %s', abs(hline[-1][0] - hline[0][0]), hline)
 
@@ -80,6 +84,53 @@ def get_hvlines(contours, xmax, ymax):
         logger.debug('VLINES %d %s', abs(vline[-1][1] - vline[0][1]), vline)
 
     return hlines[:2], vlines[:2]
+
+def get_xavg(vline):
+    total = 0
+    count = 0
+    for point in vline:
+        total += point[0]
+        count += 1
+
+    return total/count
+
+def remove_close_vlines(vlines, columns):
+    lines   = []
+    uniques = []
+
+    for vline in vlines:
+        lines.append((vline, get_xavg(vline), abs(vline[-1][1] - vline[0][1])))
+
+    if len(lines) >= 2 and abs(lines[1][1] - lines[0][1]) < 200:
+        # pick vline that is farthest from the edge
+        logger = logging.getLogger('repub.hvlines')
+        x0    = lines[0][1]
+        size0 = lines[0][2]
+        logger.info('Duplicates at the edge x0: %d, size0: %d', x0, size0) 
+
+        duplicates = []
+        for vline, xavg, size in lines:
+            t = (vline, xavg, size)
+            if abs(xavg - x0) < 200 and size0 - size < 200:
+                logger.info('Adding to duplicates xavg:%d,size: %d', xavg, size)
+                duplicates.append(t)
+            else:
+                uniques.append(t)    
+
+        duplicates.sort(key = lambda x: t[1])
+        if x0 < columns - x0:
+            # even page
+            uniques.append(duplicates[-1])
+        else:
+            # odd page
+            uniques.append(duplicates[0])
+
+        vlines = []
+        for vline, xavg, size in uniques:
+            vlines.append(vline)
+        vlines.sort(key = lambda t: abs(t[-1][1] - t[0][1]), reverse = True)
+                           
+    return vlines
 
 def is_horizontal(havg, p1, p2, ymax):
     if havg == None or abs(havg -p2[1]) < ymax:
