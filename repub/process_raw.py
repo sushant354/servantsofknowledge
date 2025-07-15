@@ -233,15 +233,15 @@ if __name__ == '__main__':
         if not indir:
             indir = tempfile.mkdtemp()
         metadata = pdfs.get_metadata(args.inpdf)
-        print (metadata)
         pdfs.pdf_to_images(args.inpdf, indir)
+    else:
+        metadata = get_metadata(indir)
 
     if args.outdir:
         outdir = args.outdir
     else:
         outdir = tempfile.mkdtemp()
 
-    metadata = get_metadata(indir)
     scandata = get_scandata(indir)
 
     pagedata = None
@@ -274,8 +274,8 @@ if __name__ == '__main__':
             if args.dewarp:
                 img = dewarp(img)
 
-            if args.factor:
-                img = resize_image(img, args.factor)
+        if args.factor:
+            img = resize_image(img, args.factor)
 
         cv2.imwrite(outfile, img)
         outfiles.append((pagenum, outfile))
