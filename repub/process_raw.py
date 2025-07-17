@@ -55,6 +55,8 @@ def get_arg_parser():
                         help='do ocr while making the PDF')
     parser.add_argument('-w', '--dewarp', action='store_true', \
                         dest='dewarp', help='dewarp the images')
+    parser.add_argument('-H', '--outhocr', dest='outhocr', action='store', \
+                       required= False, help='Output HOCR filepath')
     parser.add_argument('-R', '--rotate', action='store', default = 'vertical',\
                         dest='rotate_type', \
                         help='rotate by average of (horizontal|vertical|overall) lines')
@@ -239,6 +241,9 @@ if __name__ == '__main__':
 
     if args.outdir:
         outdir = args.outdir
+        if os.path.exists(outdir):
+            shutil.rmtree(outdir)
+        os.mkdir(outdir)
     else:
         outdir = tempfile.mkdtemp()
 
@@ -281,7 +286,8 @@ if __name__ == '__main__':
         outfiles.append((pagenum, outfile))
 
     if args.outpdf:
-        pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, args.do_ocr)
+        pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, \
+                      args.do_ocr, args.outhocr)
 
     if not args.outdir:
         shutil.rmtree(outdir)

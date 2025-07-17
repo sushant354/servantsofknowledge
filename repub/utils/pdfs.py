@@ -8,6 +8,9 @@ import img2pdf
 from pypdf import PdfWriter, PdfReader
 from pdf2image import convert_from_path
 
+from . import htmlproc
+from .hocrproc import HocrStitch
+
 def pdf_to_images(inpdf, indir):
     images = convert_from_path(inpdf, poppler_path="")
 
@@ -22,7 +25,7 @@ def get_metadata(filepath):
     reader = PdfReader(filepath)    
     return reader.metadata
 
-def save_pdf(outfiles, metadata, langs, outpdf, do_ocr):
+def save_pdf(outfiles, metadata, langs, outpdf, do_ocr, outhocr):
     logger = logging.getLogger('repub.utils.pdfs')
     outfiles.sort(key = lambda x: x[0])
 
@@ -31,15 +34,31 @@ def save_pdf(outfiles, metadata, langs, outpdf, do_ocr):
         pdf_writer.add_metadata(metadata)
 
     # export the searchable PDF to searchable.pdf
+    hocrstitch = HocrStitch()
+    head       = None
+
     for pagenum, outfile in outfiles:
         logger.info('Adding page %d with file %s to PDF', pagenum, outfile)
         if do_ocr:
-            page = pytesseract.image_to_pdf_or_hocr(outfile, extension='pdf', lang =langs)
+            if outhocr:
+                page, hocr = pytesseract.run_and_get_multiple_output(outfile, extensions=['pdf', 'hocr'], lang =langs)
+                hocr = hocr.decode('utf-8')
+                print (hocr)
+                d = htmlproc.parse_html(hocr)
+                hocrstitch.add_page(d)
+            else:    
+                page = pytesseract.image_to_pdf_or_hocr(outfile, extension='pdf', lang =langs)
         else:
             page = img2pdf.convert(outfile)
 
         reader = PdfReader(io.BytesIO(page))
         pdf_writer.add_page(reader.get_page(0))
+ 
+    if outhocr:
+        hocrstr = hocrstitch.get_combined() 
+        f = open(outhocr, 'w', encoding = 'utf-8')
+        f.write(hocrstr)
+        f.close()
 
     with open(outpdf, "wb") as f:
         pdf_writer.write(f)   
