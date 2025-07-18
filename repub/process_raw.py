@@ -57,6 +57,8 @@ def get_arg_parser():
                         dest='dewarp', help='dewarp the images')
     parser.add_argument('-H', '--outhocr', dest='outhocr', action='store', \
                        required= False, help='Output HOCR filepath')
+    parser.add_argument('-T', '--outtxt', dest='outtxt', action='store', \
+                       required= False, help='Output TEXT filepath')
     parser.add_argument('-R', '--rotate', action='store', default = 'vertical',\
                         dest='rotate_type', \
                         help='rotate by average of (horizontal|vertical|overall) lines')
@@ -287,7 +289,7 @@ if __name__ == '__main__':
 
     if args.outpdf:
         pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, \
-                      args.do_ocr, args.outhocr)
+                      args.do_ocr, args.outhocr, args.outtxt)
 
     if not args.outdir:
         shutil.rmtree(outdir)

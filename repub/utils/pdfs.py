@@ -26,7 +26,18 @@ def get_metadata(filepath):
     reader = PdfReader(filepath)    
     return reader.metadata
 
-def save_pdf(outfiles, metadata, langs, outpdf, do_ocr, outhocr):
+def multiple_formats(imgpath, langs, outhocr, outtxt):
+    extensions = ['pdf']
+    if outhocr:
+        extensions.append('hocr')
+    if outtxt:    
+        extensions.append('txt')
+
+    result = pytesseract.run_and_get_multiple_output(imgpath, lang =langs, \
+                                                     extensions = extensions)
+    return result
+
+def save_pdf(outfiles, metadata, langs, outpdf, do_ocr, outhocr, outtxt):
     logger = logging.getLogger('repub.utils.pdfs')
     outfiles.sort(key = lambda x: x[0])
 
@@ -37,16 +48,25 @@ def save_pdf(outfiles, metadata, langs, outpdf, do_ocr, outhocr):
     # export the searchable PDF to searchable.pdf
     hocrstitch = HocrStitch()
     head       = None
+    textpages  = []
 
     for pagenum, outfile in outfiles:
         logger.info('Adding page %d with file %s to PDF', pagenum, outfile)
         if do_ocr:
+            result = multiple_formats(outfile, langs, outhocr, outtxt)
+            page = result[0]
             if outhocr:
-                page, hocr = pytesseract.run_and_get_multiple_output(outfile, extensions=['pdf', 'hocr'], lang =langs)
+                hocr = result[1]
                 hocr = hocr.decode('utf-8')
                 d = htmlproc.parse_html(hocr)
                 hocrstitch.add_page(d)
-            else:    
+                if outtxt:    
+                    txt = result[2]
+                    textpages.append(txt)
+            elif outtxt:
+                txt = result[1]
+                textpages.append(txt)
+            else:        
                 page = pytesseract.image_to_pdf_or_hocr(outfile, extension='pdf', lang =langs)
         else:
             page = img2pdf.convert(outfile)
@@ -54,6 +74,12 @@ def save_pdf(outfiles, metadata, langs, outpdf, do_ocr, outhocr):
         reader = PdfReader(io.BytesIO(page))
         pdf_writer.add_page(reader.get_page(0))
  
+    if outtxt:
+        txtstr = '\n'.join(textpages)
+        f = open(outtxt, 'w', encoding = 'utf-8')
+        f.write(txtstr)
+        f.close()
+
     if outhocr:
         hocrstr = hocrstitch.get_combined() 
         hocrbytes = hocrstr.encode('utf-8')
@@ -61,5 +87,5 @@ def save_pdf(outfiles, metadata, langs, outpdf, do_ocr, outhocr):
         f.write(hocrbytes)
         f.close()
 
-    with open(outpdf, "wb") as f:
+    with open(outpdf, 'wb') as f:
         pdf_writer.write(f)   
