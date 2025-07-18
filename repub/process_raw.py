@@ -59,6 +59,8 @@ def get_arg_parser():
                        required= False, help='Output HOCR filepath')
     parser.add_argument('-T', '--outtxt', dest='outtxt', action='store', \
                        required= False, help='Output TEXT filepath')
+    parser.add_argument('-N', '--thumbnail', dest='thumbnail', action='store', \
+                       required= False, help='Output Thumbnail filepath')
     parser.add_argument('-R', '--rotate', action='store', default = 'vertical',\
                         dest='rotate_type', \
                         help='rotate by average of (horizontal|vertical|overall) lines')
@@ -269,6 +271,7 @@ if __name__ == '__main__':
         boxes = get_cropping_boxes(pagedata, indir, args)
 
     outfiles = []
+    thumbnail = None
     for img, outfile, pagenum in get_scanned_pages(pagedata, indir, \
                                                    args.pagenums):
         if args.crop:
@@ -283,9 +286,15 @@ if __name__ == '__main__':
 
         if args.factor:
             img = resize_image(img, args.factor)
+        
+        if pagenum == 1 and args.thumbnail:
+            thumbnail = resize_image(img, 0.1) 
 
         cv2.imwrite(outfile, img)
         outfiles.append((pagenum, outfile))
+
+    if args.thumbnail:
+        cv2.imwrite(args.thumbnail, thumbnail)
 
     if args.outpdf:
         pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, \
