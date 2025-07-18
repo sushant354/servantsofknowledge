@@ -61,6 +61,10 @@ def get_arg_parser():
                        required= False, help='Output TEXT filepath')
     parser.add_argument('-N', '--thumbnail', dest='thumbnail', action='store', \
                        required= False, help='Output Thumbnail filepath')
+    parser.add_argument('-A', '--iadir', dest='iadir', action='store', \
+                       required= False, \
+                       help='Directory for Internet Archive Full Repub')
+
     parser.add_argument('-R', '--rotate', action='store', default = 'vertical',\
                         dest='rotate_type', \
                         help='rotate by average of (horizontal|vertical|overall) lines')
@@ -196,6 +200,11 @@ def resize_image(img, factor):
     dim    = (width, height)
     return cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
 
+def mk_clean(outdir):
+    if os.path.exists(outdir):
+        shutil.rmtree(outdir)
+    os.mkdir(outdir)
+
 def get_cropping_boxes(pagedata, indir, args):
     boxes = {}
     pagenums = args.pagenums
@@ -216,8 +225,8 @@ if __name__ == '__main__':
     setup_logging(args.loglevel, filename = args.logfile)
     logger = logging.getLogger('repub.main')
 
-    if not args.outdir and not args.outpdf:
-        print ('Need either output directory for images or the pdf file for output', file=sys.stderr)
+    if not args.outdir and not args.outpdf and not args.iadir:
+        print ('Need either output directory for images or the pdf file for output or the InternetArchive directory', file=sys.stderr)
         parser.print_help()
         sys.exit(0)
 
@@ -243,11 +252,18 @@ if __name__ == '__main__':
     else:
         metadata = get_metadata(indir)
 
-    if args.outdir:
-        outdir = args.outdir
-        if os.path.exists(outdir):
-            shutil.rmtree(outdir)
+    if args.iadir:
+        mk_clean(args.iadir)
+        outdir         = os.path.join(args.iadir, 'output')
+        args.thumbnail = os.path.join(args.iadir, '__ia_thumb.jpg')
+        args.outhocr   = os.path.join(args.iadir, 'x_hocr.html.gz')
+        args.outtxt    = os.path.join(args.iadir, 'x_text.txt')
+        args.outpdf    = os.path.join(args.iadir, 'x_final.pdf')
         os.mkdir(outdir)
+        args.outdir = outdir
+    elif args.outdir:
+        outdir = args.outdir
+        mk_clean(outdir)
     else:
         outdir = tempfile.mkdtemp()
 
