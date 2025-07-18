@@ -16,6 +16,11 @@ Install tesseract. On debian systems:
 apt install tesseract-ocr tesseract-ocr-all
 ```
 process_raw.py is the main program to transform scanned images to a PDF with text layer
+For full Repub of Internet Archive images:
+```
+python process_raw.py -i <ia_scan_dir> -A <repub-dir> -c --ocr  -L <langs>
+```
+
 
 To convert Internet Archive images to PDF with text layer with cropping and language "eng+asm"
 ```
@@ -31,7 +36,8 @@ Options
 usage: process_raw.py [-h] [-i INDIR] [-I INPDF] [-o OUTDIR] [-O OUTPDF]
                       [-l LOGLEVEL] [-L LANGS] [-f LOGFILE] [-m MAXCONTOURS]
                       [-x XMAX] [-y YMAX] [-d] [-p [PAGENUMS ...]] [-g] [-c]
-                      [-D] [-r FACTOR] [-t]
+                      [-D] [-r FACTOR] [-t] [-w] [-H OUTHOCR] [-T OUTTXT]
+                      [-N THUMBNAIL] [-A IADIR] [-R ROTATE_TYPE]
 
 For processing scanned book pages
 
@@ -64,7 +70,18 @@ options:
   -r FACTOR, --reduce FACTOR
                         reduce the image to factor
   -t, --ocr             do ocr while making the PDF
-
+  -w, --dewarp          dewarp the images
+  -H OUTHOCR, --outhocr OUTHOCR
+                        Output HOCR filepath
+  -T OUTTXT, --outtxt OUTTXT
+                        Output TEXT filepath
+  -N THUMBNAIL, --thumbnail THUMBNAIL
+                        Output Thumbnail filepath
+  -A IADIR, --iadir IADIR
+                        Directory for Internet Archive Full Repub
+  -R ROTATE_TYPE, --rotate ROTATE_TYPE
+                        rotate by average of (horizontal|vertical|overall)
+                        lines
 ```
 
 RepuBUI - Web Interface
