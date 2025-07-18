@@ -1,6 +1,7 @@
 import io
 import os
 import logging
+import gzip
 
 import pytesseract
 import img2pdf
@@ -43,7 +44,6 @@ def save_pdf(outfiles, metadata, langs, outpdf, do_ocr, outhocr):
             if outhocr:
                 page, hocr = pytesseract.run_and_get_multiple_output(outfile, extensions=['pdf', 'hocr'], lang =langs)
                 hocr = hocr.decode('utf-8')
-                print (hocr)
                 d = htmlproc.parse_html(hocr)
                 hocrstitch.add_page(d)
             else:    
@@ -56,8 +56,9 @@ def save_pdf(outfiles, metadata, langs, outpdf, do_ocr, outhocr):
  
     if outhocr:
         hocrstr = hocrstitch.get_combined() 
-        f = open(outhocr, 'w', encoding = 'utf-8')
-        f.write(hocrstr)
+        hocrbytes = hocrstr.encode('utf-8')
+        f = gzip.open(outhocr, 'wb')
+        f.write(hocrbytes)
         f.close()
 
     with open(outpdf, "wb") as f:
