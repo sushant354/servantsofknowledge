@@ -1,5 +1,4 @@
 import os
-import sys
 import tempfile
 import zipfile
 import shutil
@@ -7,10 +6,10 @@ import threading
 import cv2
 import json
 import time
+import logging
 from PIL import Image
 from io import BytesIO
 from django.shortcuts import render, redirect, get_object_or_404
-from django.urls import reverse
 from django.conf import settings
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.core.files.base import ContentFile
@@ -18,12 +17,15 @@ from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
+from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from .models import ProcessingJob, PageImage
-from .forms import ProcessingJobForm
+from .forms import ProcessingJobForm, UserRegistrationForm
 import numpy as np
 
-# Add the repub directory to the Python path
-sys.path.append(os.path.join(settings.BASE_DIR, '..'))
+# Set up logger for this module
+logger = logging.getLogger(__name__)
 
 # Import functions from the original repub package
 from repub.process_raw import setup_logging
@@ -33,38 +35,67 @@ from repub.utils.pdfs import pdf_to_images, save_pdf
 from repub.imgfuncs.utils import find_contour, threshold_gray
 
 
+@login_required
 def home(request):
-    jobs = ProcessingJob.objects.order_by('-created_at')[:10]
+    jobs = ProcessingJob.objects.filter(user=request.user).order_by('-created_at')[:10]
     form = ProcessingJobForm()
 
     if request.method == 'POST':
+        logger.debug(f"POST request received with FILES: {list(request.FILES.keys())}")
+        logger.debug(f"POST data: {dict(request.POST)}")
+        
         form = ProcessingJobForm(request.POST, request.FILES)
-        if form.is_valid():
-            # First check if a file was actually uploaded
-            if 'input_file' not in request.FILES:
-                form.add_error('input_file', 'No file was uploaded. Please select a file to upload.')
-                return render(request, 'repub_interface/home.html', {
-                    'form': form,
-                    'jobs': jobs
-                })
+        logger.debug(f"Form is valid: {form.is_valid()}")
+        
+        if not form.is_valid():
+            logger.debug(f"Form errors: {form.errors}")
+            messages.error(request, "Please correct the errors below.")
+            # Process field names for display
+            form_errors_processed = {}
+            for field, errors in form.errors.items():
+                if field == "__all__":
+                    display_field = "General"
+                else:
+                    display_field = field.replace('_', ' ').title()
+                form_errors_processed[display_field] = errors
+            return render(request, 'repub_interface/home.html', {
+                'form': form,
+                'jobs': jobs,
+                'form_errors_processed': form_errors_processed
+            })
+        
+        # First check if a file was actually uploaded
+        if 'input_file' not in request.FILES:
+            form.add_error('input_file', 'No file was uploaded. Please select a file to upload.')
+            messages.error(request, "No file was uploaded. Please select a file to upload.")
+            return render(request, 'repub_interface/home.html', {
+                'form': form,
+                'jobs': jobs
+            })
 
-            # Save the form to create the job
-            job = form.save()
+        # Save the form to create the job
+        job = form.save(commit=False)
+        job.user = request.user
+        job.save()
 
-            # Create directories for this job
-            input_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
-            output_dir = os.path.join(settings.MEDIA_ROOT, 'processed', str(job.id))
-            thumbnail_dir = os.path.join(settings.MEDIA_ROOT, 'thumbnails', str(job.id))
-            os.makedirs(input_dir, exist_ok=True)
-            os.makedirs(output_dir, exist_ok=True)
-            os.makedirs(thumbnail_dir, exist_ok=True)
+        logger.debug(f"Created job {job.id} with file: {job.input_file}")
 
-            # Start processing in background thread
-            thread = threading.Thread(target=process_job, args=(job.id,))
-            thread.daemon = True
-            thread.start()
+        # Create directories for this job
+        input_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
+        output_dir = os.path.join(settings.MEDIA_ROOT, 'processed', str(job.id))
+        thumbnail_dir = os.path.join(settings.MEDIA_ROOT, 'thumbnails', str(job.id))
+        os.makedirs(input_dir, exist_ok=True)
+        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(thumbnail_dir, exist_ok=True)
 
-            return redirect('job_detail', job_id=job.id)
+        # Start processing in background thread
+        thread = threading.Thread(target=process_job, args=(job.id,))
+        thread.daemon = True
+        thread.start()
+
+        logger.debug(f"Started processing job {job.id} in background thread")
+        messages.success(request, f'Job "{job.title or "Untitled"}" has been submitted and is being processed.')
+        return redirect('job_detail', job_id=job.id)
 
     return render(request, 'repub_interface/home.html', {
         'form': form,
@@ -72,8 +103,9 @@ def home(request):
     })
 
 
+@login_required
 def job_detail(request, job_id):
-    job = get_object_or_404(ProcessingJob, id=job_id)
+    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
     
     # If the job is in reviewing status, redirect to the review page
     if job.status == 'reviewing':
@@ -84,8 +116,9 @@ def job_detail(request, job_id):
     })
 
 
+@login_required
 def job_review(request, job_id):
-    job = get_object_or_404(ProcessingJob, id=job_id)
+    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
     pages = job.pages.all().order_by('page_number')
     
     if request.method == 'POST' and 'finalize' in request.POST:
@@ -109,12 +142,13 @@ def job_review(request, job_id):
 
 
 @require_http_methods(["GET"])
+@login_required
 def page_editor(request, job_id, page_number):
     """
     View for editing page crops with optimized loading and error handling.
     """
     try:
-        job = get_object_or_404(ProcessingJob, id=job_id)
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
         page = get_object_or_404(PageImage, job=job, page_number=page_number)
         
         # Get adjacent pages for navigation
@@ -155,6 +189,7 @@ def page_editor(request, job_id, page_number):
 
 @require_http_methods(["POST"])
 @csrf_protect
+@login_required
 def update_crop(request, job_id, page_number):
     """
     API endpoint for updating page crops with optimized processing and error handling.
@@ -178,7 +213,7 @@ def update_crop(request, job_id, page_number):
             }, status=400)
         
         # Get job and page objects
-        job = get_object_or_404(ProcessingJob, id=job_id)
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
         page = get_object_or_404(PageImage, job=job, page_number=page_number)
         
         # Validate original image
@@ -295,8 +330,9 @@ def update_crop(request, job_id, page_number):
         }, status=500)
 
 
+@login_required
 def job_download(request, job_id):
-    job = get_object_or_404(ProcessingJob, id=job_id)
+    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
     if job.output_file and job.status == 'completed':
         file_path = job.output_file.path
         response = FileResponse(open(file_path, 'rb'))
@@ -312,7 +348,7 @@ def create_thumbnail(image_path, max_size=(300, 300)):
         img.thumbnail(max_size, Image.Resampling.LANCZOS)
         return img
     except Exception as e:
-        print(f"Error creating thumbnail for {image_path}: {str(e)}")
+        logger.error(f"Error creating thumbnail for {image_path}: {str(e)}", exc_info=True)
         return None
 
 
@@ -371,9 +407,9 @@ def get_scanned_pages(input_dir):
             if img is not None and img.size > 0:
                 yield (img, full_path, pagenum)
             else:
-                print(f"Warning: Could not read image or empty image: {full_path}")
+                logger.warning(f"Could not read image or empty image: {full_path}")
         except Exception as e:
-            print(f"Error reading image {full_path}: {str(e)}")
+            logger.error(f"Error reading image {full_path}: {str(e)}", exc_info=True)
             continue
 
 
@@ -386,7 +422,7 @@ def get_cropping_boxes(input_dir, args):
         for img, outfile, pagenum in get_scanned_pages(input_dir):
             # Skip processing if image is None or empty
             if img is None or img.size == 0:
-                print(f"Skipping empty image for cropping: {outfile}")
+                logger.warning(f"Skipping empty image for cropping: {outfile}")
                 continue
 
             try:
@@ -399,10 +435,10 @@ def get_cropping_boxes(input_dir, args):
                 box.append(hangle)
                 boxes[pagenum] = box
             except Exception as e:
-                print(f"Error creating crop box for page {pagenum}: {str(e)}")
+                logger.error(f"Error creating crop box for page {pagenum}: {str(e)}", exc_info=True)
                 continue
     except Exception as e:
-        print(f"Error in get_cropping_boxes: {str(e)}")
+        logger.error(f"Error in get_cropping_boxes: {str(e)}", exc_info=True)
         return boxes
 
     # Only fix boxes if we have enough pages
@@ -411,7 +447,7 @@ def get_cropping_boxes(input_dir, args):
             fix_wrong_boxes(boxes, 200, 250)
         except (TypeError, ValueError) as e:
             # Log the error but continue with the existing boxes
-            print(f"Warning: Error fixing cropping boxes: {str(e)}")
+            logger.warning(f"Error fixing cropping boxes: {str(e)}")
 
     return boxes
 
@@ -426,7 +462,7 @@ def process_job(job_id):
         setup_logging('info')
 
         # Get the input and output directories/files
-        input_file_path = os.path.join(settings.MEDIA_ROOT, job.input_file.name)
+        input_file_path = job.input_file.path if job.input_file else None
         input_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
         output_dir = os.path.join(settings.MEDIA_ROOT, 'processed', str(job.id))
         thumbnail_dir = os.path.join(settings.MEDIA_ROOT, 'thumbnails', str(job.id))
@@ -437,15 +473,20 @@ def process_job(job_id):
         debug_info = []
         debug_info.append(f"Processing job ID: {job.id}")
         debug_info.append(f"Input file: {input_file_path}")
+        debug_info.append(f"Input file exists: {os.path.exists(input_file_path) if input_file_path else False}")
         debug_info.append(f"Input directory: {input_dir}")
 
         # Process based on input type
         if job.input_type == 'pdf':
             debug_info.append("Input type: PDF")
+            if not input_file_path or not os.path.exists(input_file_path):
+                raise ValueError(f"PDF file not found at: {input_file_path}")
             # Extract images from PDF
             pdf_to_images(input_file_path, input_dir)
         elif job.input_type == 'images':
             debug_info.append("Input type: Images")
+            if not input_file_path or not os.path.exists(input_file_path):
+                raise ValueError(f"Image file not found at: {input_file_path}")
             # If it's a ZIP file, extract it
             if input_file_path.lower().endswith('.zip'):
                 debug_info.append("Extracting ZIP file")
@@ -737,6 +778,9 @@ def process_job(job_id):
         debug_str = "\n".join(debug_info) if 'debug_info' in locals() else "No debug info available"
         job.error_message = f"{str(e)}\n\nDebug Info:\n{debug_str}\n\n{traceback.format_exc()}"
         job.save()
+        logger.error(f"Job {job_id} failed: {str(e)}")
+        logger.error(f"Debug info: {debug_str}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
 
 
 def finalize_job(job_id):
@@ -771,7 +815,17 @@ def finalize_job(job_id):
 
         # Save PDF
         metadata = None  # We don't have metadata in this context
-        save_pdf(outfiles, metadata, job.language, output_pdf, job.ocr)
+        
+        # Prepare output paths for hocr and txt files if OCR is enabled
+        outhocr = None
+        outtxt = None
+        if job.ocr:
+            hocr_filename = f"output_{job.id}.hocr.gz"
+            txt_filename = f"output_{job.id}.txt"
+            outhocr = os.path.join(os.path.dirname(output_pdf), hocr_filename)
+            outtxt = os.path.join(os.path.dirname(output_pdf), txt_filename)
+        
+        save_pdf(outfiles, metadata, job.language, output_pdf, job.ocr, outhocr, outtxt)
 
         # Update job with output file
         relative_path = os.path.relpath(output_pdf, settings.MEDIA_ROOT)
@@ -789,13 +843,14 @@ def finalize_job(job_id):
 
 @require_http_methods(["POST"])
 @csrf_protect
+@login_required
 def save_snip(request, job_id, page_number):
     """
     API endpoint for saving snipped images.
     """
     try:
         # Get job and page objects
-        job = get_object_or_404(ProcessingJob, id=job_id)
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
         page = get_object_or_404(PageImage, job=job, page_number=page_number)
         
         # Validate file upload
@@ -887,12 +942,13 @@ def save_snip(request, job_id, page_number):
 
 
 @require_http_methods(["GET"])
+@login_required
 def job_status(request, job_id):
     """
     API endpoint for checking job status via AJAX.
     """
     try:
-        job = get_object_or_404(ProcessingJob, id=job_id)
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
         return JsonResponse({
             'status': job.status,
             'needs_review': job.needs_review
@@ -902,3 +958,17 @@ def job_status(request, job_id):
             'status': 'error',
             'message': str(e)
         }, status=500)
+
+
+def register(request):
+    if request.method == 'POST':
+        form = UserRegistrationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            login(request, user)
+            messages.success(request, 'Registration successful!')
+            return redirect('home')
+    else:
+        form = UserRegistrationForm()
+    
+    return render(request, 'registration/register.html', {'form': form})

@@ -10,6 +10,45 @@
                 <h3 class="mb-0">Upload Document</h3>
             </div>
             <div class="card-body">
+                {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <h5>Please correct the following errors:</h5>
+                        <ul class="mb-0">
+                            {% if form_errors_processed %}
+                                {% for field, errors in form_errors_processed.items %}
+                                    {% for error in errors %}
+                                        <li><strong>{{ field }}:</strong> {{ error }}</li>
+                                    {% endfor %}
+                                {% endfor %}
+                            {% else %}
+                                {% for field, errors in form.errors.items %}
+                                    {% for error in errors %}
+                                        <li><strong>{% if field == "__all__" %}General{% else %}{{ field }}{% endif %}:</strong> {{ error }}</li>
+                                    {% endfor %}
+                                {% endfor %}
+                            {% endif %}
+                        </ul>
+                    </div>
+                {% endif %}
+                
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+                
+                <!-- Success message for newly created jobs -->
+                {% if request.GET.job_created %}
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <h5 class="alert-heading">Job Created Successfully!</h5>
+                        <p>Your document has been uploaded and processing has started. You will be redirected to the job details page.</p>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endif %}
+                
                 <form method="post" enctype="multipart/form-data">
                     {% csrf_token %}
 
@@ -116,8 +155,8 @@
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="mb-3">
-                                    <label for="{{ form.xmax.id_for_label }}" class="form-label">{{ form.xmax.label }}</label>
-                                    {{ form.xmax }}
+                                    <label for="{{ form.xmaximum.id_for_label }}" class="form-label">{{ form.xmaximum.label }}</label>
+                                    {{ form.xmaximum }}
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -180,11 +219,23 @@
 
 {% block extra_js %}
 <script>
-    // Update file input label to show selected filename
-    document.querySelector('#{{ form.input_file.id_for_label }}').addEventListener('change', function(e) {
-        const fileName = e.target.files[0].name;
-        const label = document.querySelector('label[for="{{ form.input_file.id_for_label }}"]');
-        label.textContent = fileName;
+    // Update file input label to show selected filename(s)
+    const fileInput = document.querySelector('#{{ form.input_file.id_for_label }}');
+    const fileLabel = document.querySelector('label[for="{{ form.input_file.id_for_label }}"]');
+    let originalLabelText = fileLabel ? fileLabel.textContent : '{{ form.input_file.label }}';
+    
+    fileInput.addEventListener('change', function(e) {
+        if (!fileLabel) return; // Early return if label not found
+        
+        if (e.target.files && e.target.files.length > 0) {
+            if (e.target.files.length === 1) {
+                fileLabel.textContent = e.target.files[0].name;
+            } else {
+                fileLabel.textContent = `${e.target.files.length} files selected`;
+            }
+        } else {
+            fileLabel.textContent = originalLabelText;
+        }
     });
 
     // Show/hide advanced options
@@ -206,19 +257,19 @@
     const grayCheckbox = document.querySelector('#{{ form.gray.id_for_label }}');
     
     function updateOptionsState() {
+        // Add null checks before accessing checked property
+        if (!cropCheckbox || !drawContoursCheckbox || !grayCheckbox) return;
+        
+        // Instead of disabling fields, uncheck conflicting options
         if (drawContoursCheckbox.checked) {
-            cropCheckbox.disabled = true;
-            grayCheckbox.disabled = true;
+            cropCheckbox.checked = false;
+            grayCheckbox.checked = false;
         } else if (grayCheckbox.checked) {
-            cropCheckbox.disabled = true;
-            drawContoursCheckbox.disabled = true;
+            cropCheckbox.checked = false;
+            drawContoursCheckbox.checked = false;
         } else if (cropCheckbox.checked) {
-            drawContoursCheckbox.disabled = true;
-            grayCheckbox.disabled = true;
-        } else {
-            cropCheckbox.disabled = false;
-            drawContoursCheckbox.disabled = false;
-            grayCheckbox.disabled = false;
+            drawContoursCheckbox.checked = false;
+            grayCheckbox.checked = false;
         }
     }
     
@@ -228,5 +279,47 @@
     
     // Initial state
     updateOptionsState();
+    
+    // Enhanced form submission handling
+    document.querySelector('form').addEventListener('submit', function(e) {
+        console.log('Form is being submitted');
+        
+        // Check if file is selected
+        const fileInput = document.querySelector('#{{ form.input_file.id_for_label }}');
+        if (!fileInput.files || fileInput.files.length === 0) {
+            console.log('No file selected');
+            alert('Please select a file to upload');
+            e.preventDefault();
+            return false;
+        }
+        
+        console.log('File selected:', fileInput.files[0].name);
+        
+        // Show loading state
+        const submitButton = document.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        
+        // Add loading spinner
+        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Processing...';
+        
+        // Small delay to ensure the loading state is visible before form submission
+        setTimeout(function() {
+            // The form will submit normally and Django will redirect to job_detail
+            // The loading state provides user feedback during submission
+        }, 100);
+    });
+    
+    // Check if we should show a success message (for when user navigates back)
+    if (window.location.search.includes('job_created=true')) {
+        // Show success message and redirect to job detail if we have a job ID
+        const urlParams = new URLSearchParams(window.location.search);
+        const jobId = urlParams.get('job_id');
+        if (jobId) {
+            setTimeout(function() {
+                window.location.href = `/job/${jobId}/`;
+            }, 2000);
+        }
+    }
+});
 </script>
 {% endblock %}

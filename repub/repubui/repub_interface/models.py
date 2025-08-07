@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 import os
 import uuid
 import json
@@ -18,6 +19,7 @@ def get_thumbnail_path(instance, filename):
 
 class ProcessingJob(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, related_name='processing_jobs', null=True, blank=True)
     title = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, default='pending',

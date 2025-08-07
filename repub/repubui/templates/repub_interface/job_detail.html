@@ -129,7 +129,27 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const jobId = '{{ job.id }}';
-    const currentStatus = '{{ job.status }}';
+    let currentStatus = '{{ job.status }}';
+    const reviewUrl = '{% url "job_review" job.id %}';
+    
+    // Helper function to show status alerts and handle page reload
+    function showStatusAlert(alertClass, heading, message) {
+        const statusContainer = document.getElementById('job-status-container');
+        statusContainer.innerHTML = `
+            <div class="alert ${alertClass}">
+                <h4 class="alert-heading">${heading}</h4>
+                <p>${message}</p>
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                </div>
+            </div>
+        `;
+        
+        // Refresh after a short delay to show the message
+        setTimeout(() => {
+            window.location.reload();
+        }, 1500);
+    }
     
     // Only start polling if the job is processing or finalizing
     if (currentStatus === 'processing' || currentStatus === 'finalizing') {
@@ -145,7 +165,45 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.status !== currentStatus) {
-                // If status has changed, refresh the content
+                // If status has changed to reviewing, redirect to review page
+                if (data.status === 'reviewing') {
+                    // Update currentStatus to prevent unnecessary refreshes
+                    currentStatus = data.status;
+                    
+                    // Show a brief message before redirecting
+                    const statusContainer = document.getElementById('job-status-container');
+                    statusContainer.innerHTML = `
+                        <div class="alert alert-success">
+                            <h4 class="alert-heading">Processing complete!</h4>
+                            <p>Your document has been processed successfully. Redirecting to review page...</p>
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Redirect after a short delay to show the message
+                    setTimeout(() => {
+                        window.location.href = reviewUrl;
+                    }, 1500);
+                    return;
+                }
+                
+                // If status has changed to completed or failed, refresh the page
+                if (data.status === 'completed' || data.status === 'failed') {
+                    // Update currentStatus to prevent unnecessary refreshes
+                    currentStatus = data.status;
+                    
+                    // Show appropriate alert and refresh page
+                    if (data.status === 'completed') {
+                        showStatusAlert('alert-success', 'Finalization complete!', 'Your document has been finalized successfully. Refreshing page...');
+                    } else {
+                        showStatusAlert('alert-danger', 'Processing failed!', 'There was an error during processing. Refreshing page...');
+                    }
+                    return;
+                }
+                
+                // For other status changes, refresh the content
                 fetch(window.location.href, {
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest'
@@ -161,6 +219,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Update the badge in the header
                     const newBadge = doc.querySelector('.card-header .badge');
                     document.querySelector('.card-header .badge').outerHTML = newBadge.outerHTML;
+                    
+                    // Update currentStatus to prevent unnecessary refreshes
+                    currentStatus = data.status;
                     
                     // If still processing or finalizing, continue polling
                     if (data.status === 'processing' || data.status === 'finalizing') {

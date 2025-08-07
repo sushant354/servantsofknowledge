@@ -1,5 +1,7 @@
 import os
 from django import forms
+from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.models import User
 from .models import ProcessingJob
 
 
@@ -85,3 +87,41 @@ class ProcessingJobForm(forms.ModelForm):
             self.add_error('gray', 'Grayscale conversion cannot be used with other processing options.')
 
         return cleaned_data
+
+
+class UserRegistrationForm(UserCreationForm):
+    email = forms.EmailField(required=True)
+    first_name = forms.CharField(max_length=30, required=False)
+    last_name = forms.CharField(max_length=30, required=False)
+
+    class Meta:
+        model = User
+        fields = ('username', 'first_name', 'last_name', 'email', 'password1', 'password2')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Add Bootstrap classes to form fields
+        for field_name, field in self.fields.items():
+            field.widget.attrs['class'] = 'form-control'
+        
+        # Add placeholders
+        self.fields['username'].widget.attrs['placeholder'] = 'Username'
+        self.fields['first_name'].widget.attrs['placeholder'] = 'First Name (Optional)'
+        self.fields['last_name'].widget.attrs['placeholder'] = 'Last Name (Optional)'
+        self.fields['email'].widget.attrs['placeholder'] = 'Email Address'
+        self.fields['password1'].widget.attrs['placeholder'] = 'Password'
+        self.fields['password2'].widget.attrs['placeholder'] = 'Confirm Password'
+        # Add autocomplete and aria-describedby for password fields
+        self.fields['password1'].widget.attrs['autocomplete'] = 'new-password'
+        self.fields['password2'].widget.attrs['autocomplete'] = 'new-password'
+        self.fields['password1'].widget.attrs['aria-describedby'] = 'password1-helptext'
+        self.fields['password2'].widget.attrs['aria-describedby'] = 'password2-helptext'
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.email = self.cleaned_data['email']
+        user.first_name = self.cleaned_data['first_name']
+        user.last_name = self.cleaned_data['last_name']
+        if commit:
+            user.save()
+        return user
