@@ -81,7 +81,7 @@
                             <div class="col-md-3">
                                 <div class="form-check mb-3">
                                     {{ form.crop }}
-                                    <label class="form-check-label" for="{{ form.crop.id_for_label }}">
+                                    <label class="form-check-label" for="{{ form.crop.id_for_label }}" id="crop-label">
                                         {{ form.crop.label }}
                                     </label>
                                 </div>
@@ -89,7 +89,7 @@
                             <div class="col-md-3">
                                 <div class="form-check mb-3">
                                     {{ form.deskew }}
-                                    <label class="form-check-label" for="{{ form.deskew.id_for_label }}">
+                                    <label class="form-check-label" for="{{ form.deskew.id_for_label }}" id="deskew-label">
                                         {{ form.deskew.label }}
                                     </label>
                                 </div>
@@ -97,7 +97,7 @@
                             <div class="col-md-3">
                                 <div class="form-check mb-3">
                                     {{ form.ocr }}
-                                    <label class="form-check-label" for="{{ form.ocr.id_for_label }}">
+                                    <label class="form-check-label" for="{{ form.ocr.id_for_label }}" id="ocr-label">
                                         {{ form.ocr.label }}
                                     </label>
                                 </div>
@@ -113,7 +113,7 @@
                         </div>
 
                         <div class="row">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="form-check mb-3">
                                     {{ form.draw_contours }}
                                     <label class="form-check-label" for="{{ form.draw_contours.id_for_label }}">
@@ -122,13 +122,22 @@
                                     <div class="form-text">{{ form.draw_contours.help_text }}</div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="form-check mb-3">
                                     {{ form.gray }}
                                     <label class="form-check-label" for="{{ form.gray.id_for_label }}">
                                         {{ form.gray.label }}
                                     </label>
                                     <div class="form-text">{{ form.gray.help_text }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check mb-3">
+                                    {{ form.iadir }}
+                                    <label class="form-check-label" for="{{ form.iadir.id_for_label }}">
+                                        {{ form.iadir.label }}
+                                    </label>
+                                    <div class="form-text">{{ form.iadir.help_text }}</div>
                                 </div>
                             </div>
                         </div>
@@ -252,74 +261,162 @@
     }
     
     // Add validation logic for mutually exclusive options
-    const cropCheckbox = document.querySelector('#{{ form.crop.id_for_label }}');
-    const drawContoursCheckbox = document.querySelector('#{{ form.draw_contours.id_for_label }}');
-    const grayCheckbox = document.querySelector('#{{ form.gray.id_for_label }}');
     
-    function updateOptionsState() {
-        // Add null checks before accessing checked property
-        if (!cropCheckbox || !drawContoursCheckbox || !grayCheckbox) return;
+    // Wait for DOM to be fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, setting up IA Directory Structure validation...');
         
-        // Instead of disabling fields, uncheck conflicting options
-        if (drawContoursCheckbox.checked) {
-            cropCheckbox.checked = false;
-            grayCheckbox.checked = false;
-        } else if (grayCheckbox.checked) {
-            cropCheckbox.checked = false;
-            drawContoursCheckbox.checked = false;
-        } else if (cropCheckbox.checked) {
-            drawContoursCheckbox.checked = false;
-            grayCheckbox.checked = false;
+        const cropCheckbox = document.querySelector('#{{ form.crop.id_for_label }}');
+        const drawContoursCheckbox = document.querySelector('#{{ form.draw_contours.id_for_label }}');
+        const grayCheckbox = document.querySelector('#{{ form.gray.id_for_label }}');
+        const iadirCheckbox = document.querySelector('#{{ form.iadir.id_for_label }}');
+        const deskewCheckbox = document.querySelector('#{{ form.deskew.id_for_label }}');
+        const ocrCheckbox = document.querySelector('#{{ form.ocr.id_for_label }}');
+        
+        console.log('Found checkboxes:');
+        console.log('cropCheckbox:', cropCheckbox);
+        console.log('iadirCheckbox:', iadirCheckbox);
+        console.log('deskewCheckbox:', deskewCheckbox);
+        console.log('ocrCheckbox:', ocrCheckbox);
+    
+    console.log('Found checkboxes:');
+    console.log('cropCheckbox:', cropCheckbox);
+    console.log('iadirCheckbox:', iadirCheckbox);
+    console.log('deskewCheckbox:', deskewCheckbox);
+    console.log('ocrCheckbox:', ocrCheckbox);
+    
+        function updateOptionsState() {
+            console.log('updateOptionsState called');
+            console.log('iadirCheckbox:', iadirCheckbox);
+            console.log('cropCheckbox:', cropCheckbox);
+            console.log('deskewCheckbox:', deskewCheckbox);
+            console.log('ocrCheckbox:', ocrCheckbox);
+            
+            // Add null checks before accessing checked property
+            if (!cropCheckbox || !drawContoursCheckbox || !grayCheckbox || !iadirCheckbox) {
+                console.log('Some checkboxes not found, returning');
+                return;
+            }
+            
+            console.log('iadirCheckbox.checked:', iadirCheckbox.checked);
+            
+            // Handle IA Directory Structure logic
+            if (!iadirCheckbox.checked) {
+                console.log('IA Directory Structure is unchecked, disabling options');
+                // If IA Directory Structure is unchecked, uncheck crop, deskew, and OCR
+                if (cropCheckbox) {
+                    cropCheckbox.checked = false;
+                    cropCheckbox.disabled = true;
+                    const cropLabel = document.getElementById('crop-label');
+                    if (cropLabel) cropLabel.style.opacity = '0.5';
+                    console.log('Disabled crop checkbox');
+                }
+                if (deskewCheckbox) {
+                    deskewCheckbox.checked = false;
+                    deskewCheckbox.disabled = true;
+                    const deskewLabel = document.getElementById('deskew-label');
+                    if (deskewLabel) deskewLabel.style.opacity = '0.5';
+                    console.log('Disabled deskew checkbox');
+                }
+                if (ocrCheckbox) {
+                    ocrCheckbox.checked = false;
+                    ocrCheckbox.disabled = true;
+                    const ocrLabel = document.getElementById('ocr-label');
+                    if (ocrLabel) ocrLabel.style.opacity = '0.5';
+                    console.log('Disabled ocr checkbox');
+                }
+            } else {
+                console.log('IA Directory Structure is checked, enabling options');
+                // Re-enable options when IA Directory Structure is checked
+                if (cropCheckbox) {
+                    cropCheckbox.disabled = false;
+                    const cropLabel = document.getElementById('crop-label');
+                    if (cropLabel) cropLabel.style.opacity = '1';
+                    console.log('Enabled crop checkbox');
+                }
+                if (deskewCheckbox) {
+                    deskewCheckbox.disabled = false;
+                    const deskewLabel = document.getElementById('deskew-label');
+                    if (deskewLabel) deskewLabel.style.opacity = '1';
+                    console.log('Enabled deskew checkbox');
+                }
+                if (ocrCheckbox) {
+                    ocrCheckbox.disabled = false;
+                    const ocrLabel = document.getElementById('ocr-label');
+                    if (ocrLabel) ocrLabel.style.opacity = '1';
+                    console.log('Enabled ocr checkbox');
+                }
+            }
+            
+            // Handle mutually exclusive options
+            if (drawContoursCheckbox.checked) {
+                cropCheckbox.checked = false;
+                grayCheckbox.checked = false;
+            } else if (grayCheckbox.checked) {
+                cropCheckbox.checked = false;
+                drawContoursCheckbox.checked = false;
+            } else if (cropCheckbox.checked) {
+                drawContoursCheckbox.checked = false;
+                grayCheckbox.checked = false;
+            }
         }
-    }
-    
-    cropCheckbox.addEventListener('change', updateOptionsState);
-    drawContoursCheckbox.addEventListener('change', updateOptionsState);
-    grayCheckbox.addEventListener('change', updateOptionsState);
-    
-    // Initial state
-    updateOptionsState();
-    
-    // Enhanced form submission handling
-    document.querySelector('form').addEventListener('submit', function(e) {
-        console.log('Form is being submitted');
         
-        // Check if file is selected
-        const fileInput = document.querySelector('#{{ form.input_file.id_for_label }}');
-        if (!fileInput.files || fileInput.files.length === 0) {
-            console.log('No file selected');
-            alert('Please select a file to upload');
-            e.preventDefault();
-            return false;
+        if (cropCheckbox) cropCheckbox.addEventListener('change', updateOptionsState);
+        if (drawContoursCheckbox) drawContoursCheckbox.addEventListener('change', updateOptionsState);
+        if (grayCheckbox) grayCheckbox.addEventListener('change', updateOptionsState);
+        if (iadirCheckbox) {
+            iadirCheckbox.addEventListener('change', function() {
+                console.log('iadirCheckbox changed to:', iadirCheckbox.checked);
+                updateOptionsState();
+            });
         }
         
-        console.log('File selected:', fileInput.files[0].name);
+        // Initial state
+        console.log('Running initial state setup...');
+        updateOptionsState();
+        console.log('Initial state setup complete');
         
-        // Show loading state
-        const submitButton = document.querySelector('button[type="submit"]');
-        submitButton.disabled = true;
-        
-        // Add loading spinner
-        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Processing...';
-        
-        // Small delay to ensure the loading state is visible before form submission
-        setTimeout(function() {
-            // The form will submit normally and Django will redirect to job_detail
-            // The loading state provides user feedback during submission
-        }, 100);
-    });
-    
-    // Check if we should show a success message (for when user navigates back)
-    if (window.location.search.includes('job_created=true')) {
-        // Show success message and redirect to job detail if we have a job ID
-        const urlParams = new URLSearchParams(window.location.search);
-        const jobId = urlParams.get('job_id');
-        if (jobId) {
+        // Enhanced form submission handling
+        document.querySelector('form').addEventListener('submit', function(e) {
+            console.log('Form is being submitted');
+            
+            // Check if file is selected
+            const fileInput = document.querySelector('#{{ form.input_file.id_for_label }}');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                console.log('No file selected');
+                alert('Please select a file to upload');
+                e.preventDefault();
+                return false;
+            }
+            
+            console.log('File selected:', fileInput.files[0].name);
+            
+            // Show loading state
+            const submitButton = document.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            
+            // Add loading spinner
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Processing...';
+            
+            // Small delay to ensure the loading state is visible before form submission
             setTimeout(function() {
-                window.location.href = `/job/${jobId}/`;
-            }, 2000);
+                // The form will submit normally and Django will redirect to job_detail
+                // The loading state provides user feedback during submission
+            }, 100);
+        });
+        
+        // Check if we should show a success message (for when user navigates back)
+        if (window.location.search.includes('job_created=true')) {
+            // Show success message and redirect to job detail if we have a job ID
+            const urlParams = new URLSearchParams(window.location.search);
+            const jobId = urlParams.get('job_id');
+            if (jobId) {
+                setTimeout(function() {
+                    window.location.href = `/job/${jobId}/`;
+                }, 2000);
+            }
         }
-    }
+    });
 });
 </script>
 {% endblock %}

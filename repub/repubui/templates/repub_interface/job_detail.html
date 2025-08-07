@@ -64,6 +64,102 @@
                         <a href="{% url 'job_download' job.id %}" class="btn btn-primary btn-lg mb-4">
                             <i class="bi bi-download"></i> Download Processed PDF
                         </a>
+                        
+                        <a href="{% url 'job_review' job.id %}" class="btn btn-secondary btn-lg mb-4 ms-2">
+                            <i class="bi bi-eye"></i> Review Pages
+                        </a>
+                    {% endif %}
+
+                    {% if job.iadir and ia_structure %}
+                        <div class="mt-4">
+                            <h4 class="mb-3">Internet Archive Directory Structure</h4>
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i> This job was processed with Internet Archive directory structure. All files are organized according to IA standards.
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h5 class="mb-0"><i class="bi bi-folder"></i> {{ ia_structure.relative_path }}/</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <div class="directory-tree">
+                                                {% regroup ia_structure.files by directory as grouped_files %}
+                                                {% for directory in grouped_files %}
+                                                    <div class="directory-group mb-3">
+                                                        <h6 class="directory-name">
+                                                            <i class="bi bi-folder-open"></i> 
+                                                            {% if directory.grouper == '.' %}
+                                                                <span class="text-muted">Root Directory</span>
+                                                            {% else %}
+                                                                {{ directory.grouper }}/
+                                                            {% endif %}
+                                                        </h6>
+                                                        <div class="files-list">
+                                                            {% for file in directory.list %}
+                                                                <div class="file-item d-flex justify-content-between align-items-center py-2 px-3 mb-1 bg-light rounded">
+                                                                    <div class="file-info d-flex align-items-center">
+                                                                        {% if file.name|slice:"-4:" == ".jpg" or file.name|slice:"-4:" == ".png" %}
+                                                                            <i class="bi bi-image text-primary me-2"></i>
+                                                                        {% elif file.name|slice:"-4:" == ".pdf" %}
+                                                                            <i class="bi bi-file-pdf text-danger me-2"></i>
+                                                                        {% elif file.name|slice:"-4:" == ".txt" %}
+                                                                            <i class="bi bi-file-text text-info me-2"></i>
+                                                                        {% elif file.name|slice:"-3:" == ".gz" %}
+                                                                            <i class="bi bi-file-zip text-warning me-2"></i>
+                                                                        {% else %}
+                                                                            <i class="bi bi-file text-secondary me-2"></i>
+                                                                        {% endif %}
+                                                                        <span class="file-name">{{ file.name }}</span>
+                                                                        <small class="text-muted ms-2">
+                                                                            ({{ file.size|filesizeformat }})
+                                                                        </small>
+                                                                    </div>
+                                                                    <div class="file-actions">
+                                                                        <a href="{% url 'job_download_ia_file' job.id file.path %}" 
+                                                                           class="btn btn-sm btn-outline-primary">
+                                                                            <i class="bi bi-download"></i> Download
+                                                                        </a>
+                                                                    </div>
+                                                                </div>
+                                                            {% endfor %}
+                                                        </div>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="ia-info">
+                                                <h6>IA File Description</h6>
+                                                <div class="file-descriptions">
+                                                    <div class="mb-2">
+                                                        <strong>__ia_thumb.jpg:</strong><br>
+                                                        <small class="text-muted">Main thumbnail image for the collection</small>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <strong>x_final.pdf:</strong><br>
+                                                        <small class="text-muted">Final processed PDF document</small>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <strong>x_text.txt:</strong><br>
+                                                        <small class="text-muted">Extracted text from OCR</small>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <strong>x_hocr.html.gz:</strong><br>
+                                                        <small class="text-muted">HOCR data with text positioning</small>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <strong>output/ folder:</strong><br>
+                                                        <small class="text-muted">Individual processed page images</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     {% endif %}
                 {% endif %}
 
@@ -92,6 +188,7 @@
                                     {% if job.dewarp %}<li><span class="badge bg-secondary">Dewarp</span></li>{% endif %}
                                     {% if job.draw_contours %}<li><span class="badge bg-secondary">Draw Contours</span></li>{% endif %}
                                     {% if job.gray %}<li><span class="badge bg-secondary">Grayscale</span></li>{% endif %}
+                                    {% if job.iadir %}<li><span class="badge bg-info">Internet Archive Directory</span></li>{% endif %}
                                 </ul>
                             </td>
                         </tr>

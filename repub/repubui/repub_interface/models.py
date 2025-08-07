@@ -53,6 +53,9 @@ class ProcessingJob(models.Model):
                                        ('overall', 'Overall')
                                    ])
     reduce_factor = models.FloatField(null=True, blank=True)
+    
+    # Internet Archive directory option (default enabled)
+    iadir = models.BooleanField(default=True, help_text='Use Internet Archive directory structure for output')
 
     # Advanced options
     xmaximum = models.IntegerField(default=30)
@@ -78,6 +81,45 @@ class ProcessingJob(models.Model):
         
     def get_thumbnail_dir(self):
         return os.path.join('media', 'thumbnails', str(self.id))
+        
+    def get_ia_directory_structure(self):
+        """Get Internet Archive directory structure with all files"""
+        if not self.iadir:
+            return None
+            
+        from django.conf import settings
+        ia_path = os.path.join(settings.MEDIA_ROOT, 'ia_output', str(self.id))
+        
+        if not os.path.exists(ia_path):
+            return None
+            
+        structure = {
+            'base_path': ia_path,
+            'relative_path': f'ia_output/{self.id}',
+            'files': []
+        }
+        
+        # Get all files in IA directory recursively
+        for root, dirs, files in os.walk(ia_path):
+            for file in files:
+                full_path = os.path.join(root, file)
+                relative_to_ia = os.path.relpath(full_path, ia_path)
+                relative_to_media = os.path.relpath(full_path, settings.MEDIA_ROOT)
+                
+                file_info = {
+                    'name': file,
+                    'path': relative_to_ia,
+                    'full_path': full_path,
+                    'media_path': relative_to_media,
+                    'size': os.path.getsize(full_path) if os.path.exists(full_path) else 0,
+                    'directory': os.path.dirname(relative_to_ia) or '.'
+                }
+                structure['files'].append(file_info)
+                
+        # Sort files by directory then name
+        structure['files'].sort(key=lambda x: (x['directory'], x['name']))
+        
+        return structure
 
 
 class PageImage(models.Model):

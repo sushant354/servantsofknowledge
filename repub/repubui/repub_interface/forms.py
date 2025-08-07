@@ -6,12 +6,18 @@ from .models import ProcessingJob
 
 
 class ProcessingJobForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set default value for iadir to True
+        if 'instance' not in kwargs or kwargs['instance'] is None:
+            self.fields['iadir'].initial = True
+    
     class Meta:
         model = ProcessingJob
         fields = [
             'title', 'input_file', 'input_type', 'language',
             'crop', 'deskew', 'ocr', 'dewarp', 'draw_contours', 'gray',
-            'rotate_type', 'reduce_factor', 'xmaximum', 'ymax', 'maxcontours'
+            'rotate_type', 'reduce_factor', 'xmaximum', 'ymax', 'maxcontours', 'iadir'
         ]
         widgets = {
             'title': forms.TextInput(attrs={'class': 'form-control'}),
@@ -29,6 +35,7 @@ class ProcessingJobForm(forms.ModelForm):
             'xmaximum': forms.NumberInput(attrs={'class': 'form-control'}),
             'ymax': forms.NumberInput(attrs={'class': 'form-control'}),
             'maxcontours': forms.NumberInput(attrs={'class': 'form-control'}),
+            'iadir': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
         labels = {
             'input_file': 'Upload File',
@@ -45,6 +52,7 @@ class ProcessingJobForm(forms.ModelForm):
             'xmaximum': 'Max horizontal line distance (pixels)',
             'ymax': 'Max vertical line distance (pixels)',
             'maxcontours': 'Maximum contours to examine',
+            'iadir': 'Internet Archive Directory Structure',
         }
         help_texts = {
             'input_file': 'For PDF input type: upload a PDF file. For Images input type: upload a ZIP file with images or a single image file.',
@@ -52,6 +60,7 @@ class ProcessingJobForm(forms.ModelForm):
             'reduce_factor': 'Values less than 1 reduce the size (e.g., 0.5 is half size)',
             'draw_contours': 'Only draws contours on the images without other processing - useful for debugging',
             'gray': 'Only converts images to grayscale without other processing',
+            'iadir': 'Creates Internet Archive-style directory structure with organized output files (recommended). When disabled, crop, deskew, and OCR options will be automatically disabled.',
         }
 
     def clean_input_file(self):
@@ -79,6 +88,13 @@ class ProcessingJobForm(forms.ModelForm):
         draw_contours = cleaned_data.get('draw_contours')
         gray = cleaned_data.get('gray')
         crop = cleaned_data.get('crop')
+        iadir = cleaned_data.get('iadir')
+        
+        # If IA Directory Structure is disabled, disable crop, deskew, and OCR
+        if not iadir:
+            cleaned_data['crop'] = False
+            cleaned_data['deskew'] = False
+            cleaned_data['ocr'] = False
         
         if draw_contours and (gray or crop):
             self.add_error('draw_contours', 'Draw contours cannot be used with other processing options.')

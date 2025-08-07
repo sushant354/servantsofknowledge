@@ -110,9 +110,13 @@ def job_detail(request, job_id):
     # If the job is in reviewing status, redirect to the review page
     if job.status == 'reviewing':
         return redirect('job_review', job_id=job.id)
+    
+    # Get Internet Archive directory structure if enabled
+    ia_structure = job.get_ia_directory_structure() if job.iadir else None
         
     return render(request, 'repub_interface/job_detail.html', {
-        'job': job
+        'job': job,
+        'ia_structure': ia_structure
     })
 
 
@@ -341,6 +345,30 @@ def job_download(request, job_id):
     return HttpResponse("File not available", status=404)
 
 
+@login_required
+def job_download_ia_file(request, job_id, file_path):
+    """Download a specific file from the IA directory structure"""
+    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    
+    if not job.iadir:
+        return HttpResponse("Internet Archive mode not enabled", status=400)
+    
+    # Validate the file path
+    ia_base_path = os.path.join(settings.MEDIA_ROOT, 'ia_output', str(job.id))
+    full_file_path = os.path.join(ia_base_path, file_path)
+    
+    # Security check: ensure the file is within the job's IA directory
+    if not full_file_path.startswith(ia_base_path):
+        return HttpResponse("Invalid file path", status=400)
+    
+    if not os.path.exists(full_file_path):
+        return HttpResponse("File not found", status=404)
+    
+    response = FileResponse(open(full_file_path, 'rb'))
+    response['Content-Disposition'] = f'attachment; filename="{os.path.basename(full_file_path)}"'
+    return response
+
+
 def create_thumbnail(image_path, max_size=(300, 300)):
     """Create a thumbnail of the given image"""
     try:
@@ -464,11 +492,31 @@ def process_job(job_id):
         # Get the input and output directories/files
         input_file_path = job.input_file.path if job.input_file else None
         input_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
-        output_dir = os.path.join(settings.MEDIA_ROOT, 'processed', str(job.id))
+        
+        # Handle Internet Archive directory structure if enabled
+        if job.iadir:
+            iadir_path = os.path.join(settings.MEDIA_ROOT, 'ia_output', str(job.id))
+            output_dir = os.path.join(iadir_path, 'output')
+            thumbnail_path = os.path.join(iadir_path, '__ia_thumb.jpg')
+            outhocr_path = os.path.join(iadir_path, 'x_hocr.html.gz')
+            outtxt_path = os.path.join(iadir_path, 'x_text.txt')
+            outpdf_path = os.path.join(iadir_path, 'x_final.pdf')
+        else:
+            output_dir = os.path.join(settings.MEDIA_ROOT, 'processed', str(job.id))
+            thumbnail_path = None
+            outhocr_path = None
+            outtxt_path = None
+            outpdf_path = os.path.join(output_dir, f"{job.title or 'processed'}.pdf")
+            
         thumbnail_dir = os.path.join(settings.MEDIA_ROOT, 'thumbnails', str(job.id))
+        
         os.makedirs(input_dir, exist_ok=True)
         os.makedirs(output_dir, exist_ok=True)
         os.makedirs(thumbnail_dir, exist_ok=True)
+        
+        if job.iadir:
+            os.makedirs(os.path.dirname(iadir_path), exist_ok=True)
+            os.makedirs(iadir_path, exist_ok=True)
 
         debug_info = []
         debug_info.append(f"Processing job ID: {job.id}")
@@ -513,7 +561,7 @@ def process_job(job_id):
         args = {
             'indir': input_dir,
             'outdir': output_dir,
-            'outpdf': os.path.join(output_dir, f"{job.title or 'processed'}.pdf"),
+            'outpdf': outpdf_path,
             'langs': job.language,
             'maxcontours': job.maxcontours,
             'xmax': job.xmaximum,
@@ -528,6 +576,13 @@ def process_job(job_id):
             'factor': job.reduce_factor,
             'pagenums': None,  # Process all pages
         }
+        
+        # Add Internet Archive specific paths if enabled
+        if job.iadir:
+            args['iadir'] = iadir_path
+            args['thumbnail'] = thumbnail_path
+            args['outhocr'] = outhocr_path
+            args['outtxt'] = outtxt_path
 
         # Check if we have any files to process by enumerating all files recursively
         image_files = []
@@ -758,18 +813,12 @@ def process_job(job_id):
                 f"No pages were successfully processed. Please check your input files.\n\nDebug info:\n" + "\n".join(
                     debug_info))
 
-        # Check if any pages need review
+        # Check if any pages need review and mark job appropriately
         needs_review = any(page.needs_review for page in page_objects)
+        job.needs_review = needs_review
         
-        if needs_review:
-            # Set job status to awaiting review
-            job.needs_review = True
-            job.status = 'reviewing'
-            job.save()
-            debug_info.append("Job marked as awaiting review")
-            return
-            
-        # If no review needed, proceed directly to finalization
+        # Always proceed directly to finalization (skip review step initially)
+        debug_info.append("Proceeding directly to finalization")
         finalize_job(job.id)
 
     except Exception as e:
@@ -792,9 +841,13 @@ def finalize_job(job_id):
         job.status = 'finalizing'
         job.save()
         
-        # Get the output directory and PDF path
-        output_dir = os.path.join(settings.MEDIA_ROOT, 'processed', str(job.id))
-        output_pdf = os.path.join(output_dir, f"{job.title or 'processed'}.pdf")
+        # Get the output directory and PDF path based on iadir setting
+        if job.iadir:
+            iadir_path = os.path.join(settings.MEDIA_ROOT, 'ia_output', str(job.id))
+            output_pdf = os.path.join(iadir_path, 'x_final.pdf')
+        else:
+            output_dir = os.path.join(settings.MEDIA_ROOT, 'processed', str(job.id))
+            output_pdf = os.path.join(output_dir, f"{job.title or 'processed'}.pdf")
         
         # Collect all pages
         outfiles = []
@@ -819,13 +872,63 @@ def finalize_job(job_id):
         # Prepare output paths for hocr and txt files if OCR is enabled
         outhocr = None
         outtxt = None
-        if job.ocr:
-            hocr_filename = f"output_{job.id}.hocr.gz"
-            txt_filename = f"output_{job.id}.txt"
-            outhocr = os.path.join(os.path.dirname(output_pdf), hocr_filename)
-            outtxt = os.path.join(os.path.dirname(output_pdf), txt_filename)
+        logger.info(f"Job {job.id} OCR setting: {job.ocr}, IA directory: {job.iadir}")
         
-        save_pdf(outfiles, metadata, job.language, output_pdf, job.ocr, outhocr, outtxt)
+        if job.ocr:
+            if job.iadir:
+                # Use IA naming convention
+                iadir_path = os.path.join(settings.MEDIA_ROOT, 'ia_output', str(job.id))
+                # Ensure the IA directory exists
+                os.makedirs(iadir_path, exist_ok=True)
+                outhocr = os.path.join(iadir_path, 'x_hocr.html.gz')
+                outtxt = os.path.join(iadir_path, 'x_text.txt')
+                logger.info(f"IA OCR files will be created at: {outhocr}, {outtxt}")
+            else:
+                # Use regular naming convention
+                hocr_filename = f"output_{job.id}.hocr.gz"
+                txt_filename = f"output_{job.id}.txt"
+                outhocr = os.path.join(os.path.dirname(output_pdf), hocr_filename)
+                outtxt = os.path.join(os.path.dirname(output_pdf), txt_filename)
+                # Ensure the output directory exists
+                os.makedirs(os.path.dirname(output_pdf), exist_ok=True)
+                logger.info(f"Regular OCR files will be created at: {outhocr}, {outtxt}")
+        else:
+            logger.info(f"OCR is disabled for job {job.id}, no OCR files will be created")
+        
+        try:
+            logger.info(f"Starting PDF creation with OCR={job.ocr}, outhocr={outhocr}, outtxt={outtxt}")
+            save_pdf(outfiles, metadata, job.language, output_pdf, job.ocr, outhocr, outtxt)
+            logger.info(f"PDF creation completed: {output_pdf}")
+            
+            # Check if OCR files were actually created
+            if job.ocr:
+                if outhocr and os.path.exists(outhocr):
+                    logger.info(f"HOCR file created successfully: {outhocr}")
+                elif outhocr:
+                    logger.error(f"HOCR file was NOT created: {outhocr}")
+                    
+                if outtxt and os.path.exists(outtxt):
+                    logger.info(f"Text file created successfully: {outtxt}")
+                elif outtxt:
+                    logger.error(f"Text file was NOT created: {outtxt}")
+        except Exception as e:
+            logger.error(f"Error during PDF creation: {str(e)}", exc_info=True)
+            raise
+
+        # Create IA thumbnail if in IA mode
+        if job.iadir and outfiles:
+            try:
+                # Use the first page image to create the IA thumbnail
+                first_page_image_path = outfiles[0][1]  # outfiles contains (page_number, image_path) tuples
+                ia_thumb_path = os.path.join(os.path.dirname(output_pdf), '__ia_thumb.jpg')
+                
+                # Create thumbnail using PIL
+                thumbnail = create_thumbnail(first_page_image_path, max_size=(180, 360))
+                if thumbnail:
+                    thumbnail.save(ia_thumb_path, 'JPEG', quality=85)
+                    logger.info(f"Created IA thumbnail: {ia_thumb_path}")
+            except Exception as e:
+                logger.warning(f"Failed to create IA thumbnail: {str(e)}")
 
         # Update job with output file
         relative_path = os.path.relpath(output_pdf, settings.MEDIA_ROOT)
