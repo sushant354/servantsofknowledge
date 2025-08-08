@@ -1,17 +1,17 @@
 import os
-import re
 import argparse
 import logging
 import sys
 import shutil
 import tempfile 
 
-import json
 import cv2
 from repub.imgfuncs.cropping import crop, get_crop_box, fix_wrong_boxes
 from repub.imgfuncs.utils import find_contour, threshold_gray
-from repub.utils import pdfs, xml_ops
+from repub.utils import pdfs
 from repub.imgfuncs.deskew import deskew, rotate
+from repub.utils import utils
+from repub.utils.scandir import Scandir
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(description='For processing scanned book pages')
@@ -71,104 +71,8 @@ def get_arg_parser():
     return parser
 
 
-#logformat   = '%(asctime)s: %(name)s: %(levelname)s %(message)s'
-logformat   = '%(name)s: %(message)s'
-dateformat  = '%Y-%m-%d %H:%M:%S'
-
-def initialize_file_logging(loglevel, filepath):
-    logging.basicConfig(\
-        level    = loglevel,  \
-        format   = logformat, \
-        datefmt  = dateformat, \
-        stream   = filepath
-    )
-
-def initialize_stream_logging(loglevel = logging.INFO):
-    logging.basicConfig(\
-        level    = loglevel,  \
-        format   = logformat, \
-        datefmt  = dateformat \
-    )
-
-
-def setup_logging(level, filename = None):
-    leveldict = {'critical': logging.CRITICAL, 'error': logging.ERROR, \
-                 'warning': logging.WARNING,   'info': logging.INFO, \
-                 'debug': logging.DEBUG}
-    loglevel = leveldict[level]
-
-    if filename:
-        filestream = open(filename, 'w', encoding='utf8')
-        initialize_file_logging(loglevel, filestream)
-    else:
-        initialize_stream_logging(loglevel)
-
-
-def read_image(scaninfo, infile):
-    img = cv2.imread(infile)
-
-    if scaninfo:
-        if scaninfo['rotateDegree'] == -90:
-            img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        elif scaninfo['rotateDegree'] == 90:
-            img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
-
-    return img    
-
-def get_scandata(indir):
-    filepath = os.path.join(indir, 'scandata.json')
-    if not os.path.exists(filepath):
-        return None
-
-    scanfh = open(filepath, 'r', encoding = 'utf8')
-    s      = scanfh.read()
-    scanfh.close()
-    return json.loads(s)
-
-def get_metadata(indir):
-    filepath = os.path.join(indir, 'metadata.xml')
-    if not os.path.exists(filepath):
-        return None
-
-    metadata = xml_ops.parse_xml(filepath)
-    m = {}
-    for k, v in metadata.items():
-        m['/%s' % k.title()] = v
-    return m    
-
-def get_scanned_pages(pagedata, indir, pagenums):
-    fnames = []
-    for filename in os.listdir(indir):
-        reobj = re.match('(?P<pagenum>\\d{4}).(jpg|jp2)$', filename)
-        if reobj:
-            groupdict = reobj.groupdict('pagenum')
-            pagenum   = groupdict['pagenum']
-
-            fnames.append((filename, pagenum))
-
-    fnames.sort(key= lambda x:x[1])
-
-    for filename, pagenum in fnames:
-        infile  = os.path.join(indir, filename)
-        if re.search('.jp2$', filename):
-            outfile = os.path.join(outdir, '%s.jpg' % pagenum)
-        else:
-            outfile = os.path.join(outdir, filename)
-
-        pageinfo  = None
-        pagenum   = int(pagenum)
-        if pagedata:
-            pageinfo = pagedata['%d' % pagenum]
-
-        if (not pageinfo or pageinfo['pageType'] != 'Color Card') and \
-                (not pagenums or pagenum in pagenums):
-            logger.error ('FILENAME: %s', filename)
-            img = read_image(pageinfo, infile) 
-            yield (img, outfile, pagenum)
-
-def draw_contours(pagedata, indir, args):        
-    pagenums = args.pagenums
-    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
+def draw_contours(scandir, args):        
+    for img, outfile, pagenum in scandir.get_scanned_pages():
         if args.deskew:
             img, hangle = deskew(img, args.xmax, args.ymax, \
                                  args.maxcontours, args.rotate_type)
@@ -179,17 +83,15 @@ def draw_contours(pagedata, indir, args):
 
         cv2.imwrite(outfile, img)
 
-def gray_images(pagedata, indir, args):
-    pagenums = args.pagenums
-    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
+def gray_images(scandir, args):
+    for img, outfile, pagenum in scandir.get_scanned_pages():
         if args.deskew:
             img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type)
         gray = threshold_gray(img, 125, 255)
         cv2.imwrite(outfile, gray)
 
-def deskew_images(pagedata, indir, args):
-    pagenums = args.pagenums
-    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
+def deskew_images(scandir,  args):
+    for img, outfile, pagenum in scandir.get_scanned_pages():
         deskewed, angle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type)
         cv2.imwrite(outfile, deskewed)
 
@@ -205,10 +107,9 @@ def mk_clean(outdir):
         shutil.rmtree(outdir)
     os.mkdir(outdir)
 
-def get_cropping_boxes(pagedata, indir, args):
+def get_cropping_boxes(scandir, args):
     boxes = {}
-    pagenums = args.pagenums
-    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, pagenums):
+    for img, outfile, pagenum in scandir.get_scanned_pages():
         img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type)
         box = get_crop_box(img, args.xmax, args.ymax, args.maxcontours)
         box.append(hangle)
@@ -218,11 +119,55 @@ def get_cropping_boxes(pagedata, indir, args):
     fix_wrong_boxes(boxes, 200, 250)
     return boxes
 
+def process_images(scandir, should_crop, should_dewarp, resize_factor, thumbnail_file):
+    logger = logging.getLogger('repub.main')
+    if should_crop:
+        boxes = get_cropping_boxes(scandir, args)
+
+    outfiles = []
+    thumbnail = None
+    for img, outfile, pagenum in scandir.get_scanned_pages(): 
+        if should_crop:
+            box = boxes[pagenum]
+            logger.warning('Bounding box for page %d: %s', pagenum, box)
+            hangle = box[4]
+            if hangle != None:
+                img = rotate(img, hangle)
+            img = crop(img, box)
+            if should_dewarp:
+                img = dewarp(img)
+
+        if resize_factor:
+            img = resize_image(img, resize_factor)
+        
+        if thumbnail_file and thumbnail is None and scandir.is_cover_page(pagenum):
+            thumbnail = resize_image(img, 0.1) 
+
+        cv2.imwrite(outfile, img)
+        outfiles.append((pagenum, outfile))
+
+    if thumbnail is not None:
+        cv2.imwrite(thumbnail_file, thumbnail)
+
+    return outfiles
+
+def initialize_iadir(args):
+    mk_clean(args.iadir)
+    outdir         = os.path.join(args.iadir, 'output')
+    args.thumbnail = os.path.join(args.iadir, '__ia_thumb.jpg')
+    args.outhocr   = os.path.join(args.iadir, 'x_hocr.html.gz')
+    args.outtxt    = os.path.join(args.iadir, 'x_text.txt')
+    args.outpdf    = os.path.join(args.iadir, 'x_final.pdf')
+    os.mkdir(outdir)
+    args.outdir = outdir
+    args.crop = True
+    args.do_ocr = True
+
 if __name__ == '__main__':
     parser = get_arg_parser()
     args   = parser.parse_args()
 
-    setup_logging(args.loglevel, filename = args.logfile)
+    utils.setup_logging(args.loglevel, filename = args.logfile)
     logger = logging.getLogger('repub.main')
 
     if not args.outdir and not args.outpdf and not args.iadir:
@@ -249,69 +194,31 @@ if __name__ == '__main__':
             indir = tempfile.mkdtemp()
         metadata = pdfs.get_metadata(args.inpdf)
         pdfs.pdf_to_images(args.inpdf, indir)
-    else:
-        metadata = get_metadata(indir)
 
     if args.iadir:
-        mk_clean(args.iadir)
-        outdir         = os.path.join(args.iadir, 'output')
-        args.thumbnail = os.path.join(args.iadir, '__ia_thumb.jpg')
-        args.outhocr   = os.path.join(args.iadir, 'x_hocr.html.gz')
-        args.outtxt    = os.path.join(args.iadir, 'x_text.txt')
-        args.outpdf    = os.path.join(args.iadir, 'x_final.pdf')
-        os.mkdir(outdir)
-        args.outdir = outdir
+        initialize_iadir(args)
+        outdir = args.outdir
     elif args.outdir:
         outdir = args.outdir
         mk_clean(outdir)
     else:
         outdir = tempfile.mkdtemp()
 
-    scandata = get_scandata(indir)
-
-    pagedata = None
-    if scandata:
-        pagedata = scandata['pageData']
+    scandir = Scandir(indir, outdir, args.pagenums)
+    if not args.inpdf:
+        metadata = scandir.metadata
 
     if args.drawcontours:
-        draw_contours(pagedata, indir, args)
+        draw_contours(scandir, args)
         sys.exit(0)
     elif args.gray:
-        gray_images(pagedata, indir, args)
+        gray_images(scandir, args)
         sys.exit(0)
     elif args.deskew:
-        deskew_images(pagedata, indir, args)
+        deskew_images(scandir, args)
         sys.exit(0)
 
-    if args.crop:
-        boxes = get_cropping_boxes(pagedata, indir, args)
-
-    outfiles = []
-    thumbnail = None
-    for img, outfile, pagenum in get_scanned_pages(pagedata, indir, \
-                                                   args.pagenums):
-        if args.crop:
-            box = boxes[pagenum]
-            logger.warning('Bounding box for page %d: %s', pagenum, box)
-            hangle = box[4]
-            if hangle != None:
-                img = rotate(img, hangle)
-            img = crop(img, box)
-            if args.dewarp:
-                img = dewarp(img)
-
-        if args.factor:
-            img = resize_image(img, args.factor)
-        
-        if pagenum == 1 and args.thumbnail:
-            thumbnail = resize_image(img, 0.1) 
-
-        cv2.imwrite(outfile, img)
-        outfiles.append((pagenum, outfile))
-
-    if args.thumbnail:
-        cv2.imwrite(args.thumbnail, thumbnail)
-
+    outfiles = process_images(scandir, args.crop, args.dewarp, args.factor, args.thumbnail)
     if args.outpdf:
         pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, \
                       args.do_ocr, args.outhocr, args.outtxt)
