@@ -72,7 +72,8 @@ def get_arg_parser():
 
 
 def draw_contours(scandir, args):        
-    for img, outfile, pagenum in scandir.get_scanned_pages():
+    outfiles = []
+    for img, infile, outfile, pagenum in scandir.get_scanned_pages():
         if args.deskew:
             img, hangle = deskew(img, args.xmax, args.ymax, \
                                  args.maxcontours, args.rotate_type)
@@ -82,18 +83,27 @@ def draw_contours(scandir, args):
         img = cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
 
         cv2.imwrite(outfile, img)
+        outfiles.append((pagenum, outfile))
+    return outfiles
 
 def gray_images(scandir, args):
-    for img, outfile, pagenum in scandir.get_scanned_pages():
+    outfiles = []
+    for img, infile, outfile, pagenum in scandir.get_scanned_pages():
         if args.deskew:
             img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type)
         gray = threshold_gray(img, 125, 255)
         cv2.imwrite(outfile, gray)
+        outfiles.append((pagenum, outfile))
+    return outfiles
 
 def deskew_images(scandir,  args):
-    for img, outfile, pagenum in scandir.get_scanned_pages():
+    outfiles = []
+    for img, infile, outfile, pagenum in scandir.get_scanned_pages():
         deskewed, angle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type)
         cv2.imwrite(outfile, deskewed)
+        outfiles.append((pagenum, outfile))
+
+    return outfiles
 
 def resize_image(img, factor):
     (h, w) = img.shape[:2]
@@ -109,7 +119,7 @@ def mk_clean(outdir):
 
 def get_cropping_boxes(scandir, args):
     boxes = {}
-    for img, outfile, pagenum in scandir.get_scanned_pages():
+    for img, infile, outfile, pagenum in scandir.get_scanned_pages():
         img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type)
         box = get_crop_box(img, args.xmax, args.ymax, args.maxcontours)
         box.append(hangle)
@@ -119,35 +129,35 @@ def get_cropping_boxes(scandir, args):
     fix_wrong_boxes(boxes, 200, 250)
     return boxes
 
-def process_images(scandir, should_crop, should_dewarp, resize_factor, thumbnail_file):
+def process_images(scandir, args):
     logger = logging.getLogger('repub.main')
-    if should_crop:
+    if args.crop:
         boxes = get_cropping_boxes(scandir, args)
 
     outfiles = []
     thumbnail = None
-    for img, outfile, pagenum in scandir.get_scanned_pages(): 
-        if should_crop:
+    for img, infile, outfile, pagenum in scandir.get_scanned_pages(): 
+        if args.crop:
             box = boxes[pagenum]
             logger.warning('Bounding box for page %d: %s', pagenum, box)
             hangle = box[4]
             if hangle != None:
                 img = rotate(img, hangle)
             img = crop(img, box)
-            if should_dewarp:
+            if args.dewarp:
                 img = dewarp(img)
 
-        if resize_factor:
-            img = resize_image(img, resize_factor)
+        if args.factor:
+            img = resize_image(img, args.factor)
         
-        if thumbnail_file and thumbnail is None and scandir.is_cover_page(pagenum):
+        if args.thumbnail and thumbnail is None and scandir.is_cover_page(pagenum):
             thumbnail = resize_image(img, 0.1) 
 
         cv2.imwrite(outfile, img)
         outfiles.append((pagenum, outfile))
 
     if thumbnail is not None:
-        cv2.imwrite(thumbnail_file, thumbnail)
+        cv2.imwrite(args.thumbnail, thumbnail)
 
     return outfiles
 
@@ -218,7 +228,7 @@ if __name__ == '__main__':
         deskew_images(scandir, args)
         sys.exit(0)
 
-    outfiles = process_images(scandir, args.crop, args.dewarp, args.factor, args.thumbnail)
+    outfiles = process_images(scandir, args)
     if args.outpdf:
         pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, \
                       args.do_ocr, args.outhocr, args.outtxt)

@@ -1,5 +1,4 @@
 import os
-import tempfile
 import zipfile
 import shutil
 import threading
@@ -28,12 +27,10 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # Import functions from the original repub package
-from repub.process_raw import setup_logging
-from repub.imgfuncs.cropping import get_crop_box, crop, fix_wrong_boxes
-from repub.imgfuncs.deskew import rotate, deskew
-from repub.utils.pdfs import pdf_to_images, save_pdf
-from repub.imgfuncs.utils import find_contour, threshold_gray
-
+from repub import process_raw 
+from repub.imgfuncs.cropping import crop
+from repub.utils.scandir import Scandir
+from repub.utils import pdfs
 
 @login_required
 def home(request):
@@ -79,14 +76,6 @@ def home(request):
         job.save()
 
         logger.debug(f"Created job {job.id} with file: {job.input_file}")
-
-        # Create directories for this job
-        input_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
-        output_dir = os.path.join(settings.MEDIA_ROOT, 'processed', str(job.id))
-        thumbnail_dir = os.path.join(settings.MEDIA_ROOT, 'thumbnails', str(job.id))
-        os.makedirs(input_dir, exist_ok=True)
-        os.makedirs(output_dir, exist_ok=True)
-        os.makedirs(thumbnail_dir, exist_ok=True)
 
         # Start processing in background thread
         thread = threading.Thread(target=process_job, args=(job.id,))
@@ -352,323 +341,135 @@ def create_thumbnail(image_path, max_size=(300, 300)):
         return None
 
 
-def resize_image(img, factor):
-    """Resize an image based on a factor"""
-    (h, w) = img.shape[:2]
-    width = int(w * factor)
-    height = int(h * factor)
-    dim = (width, height)
-    return cv2.resize(img, dim, interpolation=cv2.INTER_AREA)
+class Args:
+    def __init__(self, job, input_dir, output_dir):
+        img_dir = os.path.join(output_dir, 'output')
+        os.makedirs(img_dir, exist_ok=True)
 
+        self.indir  = input_dir
+        self.outdir = img_dir
+        self.outpdf = os.path.join(output_dir, "x_final.pdf")
+        self.langs  = job.language
 
-def get_scanned_pages(input_dir):
-    """Get all image files from the input directory and its subdirectories"""
-    import re
-    import os
+        self.thumbnail    = os.path.join(output_dir, '__ia_thumb.jpg')
+        self.outhocr      = os.path.join(output_dir, 'x_hocr.html.gz')
+        self.outtxt       = os.path.join(output_dir, 'x_text.txt')
 
-    # Find all image files recursively
-    image_files = []
-    seen_page_numbers = set()  # To track page numbers we've already seen
+        self.maxcontours  = job.maxcontours
+        self.xmax         = job.xmaximum
+        self.ymax         = job.ymax
+        self.crop         = job.crop
+        self.deskew       = job.deskew
+        self.do_ocr       = job.ocr
 
-    # First pass: collect all full-size images (not in thumbnails directory)
-    for root, dirs, files in os.walk(input_dir):
-        # Skip thumbnails directory
-        if 'thumbnails' in root.lower():
-            continue
-
-        for filename in files:
-            if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
-                # Skip files that don't look like normal page scans
-                if 'slip' in filename.lower() or 'metadata' in filename.lower():
-                    continue
-
-                full_path = os.path.join(root, filename)
-
-                # Try to get page number from filename
-                reobj = re.match(r'.*?(\d+)\.(jpg|jpeg|png|tif|tiff)$', filename.lower())
-                if reobj:
-                    pagenum = int(reobj.group(1))
-                    if pagenum in seen_page_numbers:
-                        continue  # Skip duplicates
-                    seen_page_numbers.add(pagenum)
-                else:
-                    # If no page number in filename, use a counter
-                    pagenum = len(image_files) + 1
-
-                image_files.append((full_path, pagenum))
-
-    # Sort by page number
-    image_files.sort(key=lambda x: x[1])
-
-    # Process each file
-    for full_path, pagenum in image_files:
-        try:
-            img = cv2.imread(full_path)
-            if img is not None and img.size > 0:
-                yield (img, full_path, pagenum)
-            else:
-                logger.warning(f"Could not read image or empty image: {full_path}")
-        except Exception as e:
-            logger.error(f"Error reading image {full_path}: {str(e)}", exc_info=True)
-            continue
-
-
-def get_cropping_boxes(input_dir, args):
-    """Create cropping boxes for all pages"""
-    boxes = {}
-
-    # Process each page to get cropping boxes
-    try:
-        for img, outfile, pagenum in get_scanned_pages(input_dir):
-            # Skip processing if image is None or empty
-            if img is None or img.size == 0:
-                logger.warning(f"Skipping empty image for cropping: {outfile}")
-                continue
-
-            try:
-                if args['deskew']:
-                    img, hangle = deskew(img, args['xmax'], args['ymax'], args['maxcontours'], args['rotate_type'])
-                else:
-                    hangle = None
-
-                box = get_crop_box(img, args['xmax'], args['ymax'], args['maxcontours'])
-                box.append(hangle)
-                boxes[pagenum] = box
-            except Exception as e:
-                logger.error(f"Error creating crop box for page {pagenum}: {str(e)}", exc_info=True)
-                continue
-    except Exception as e:
-        logger.error(f"Error in get_cropping_boxes: {str(e)}", exc_info=True)
-        return boxes
-
-    # Only fix boxes if we have enough pages
-    if len(boxes) >= 2:
-        try:
-            fix_wrong_boxes(boxes, 200, 250)
-        except (TypeError, ValueError) as e:
-            # Log the error but continue with the existing boxes
-            logger.warning(f"Error fixing cropping boxes: {str(e)}")
-
-    return boxes
-
+        self.dewarp       = job.dewarp
+        self.drawcontours = job.draw_contours
+        self.gray         = job.gray
+        self.rotate_type  = job.rotate_type
+        self.factor       = job.reduce_factor
+        self.pagenums     = None
 
 def process_job(job_id):
     job = ProcessingJob.objects.get(id=job_id)
     job.status = 'processing'
+    job.output_file = None 
     job.save()
 
-    try:
-        # Set up logging
-        setup_logging('info')
+    # Get the input and output directories/files
+    input_file_path = job.input_file.path if job.input_file else None
+    input_dir       = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id), 'extracted')
+    output_dir      = os.path.join(settings.MEDIA_ROOT, 'processed', str(job.id))
 
-        # Get the input and output directories/files
-        input_file_path = job.input_file.path if job.input_file else None
-        input_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
-        output_dir = os.path.join(settings.MEDIA_ROOT, 'processed', str(job.id))
-        thumbnail_dir = os.path.join(settings.MEDIA_ROOT, 'thumbnails', str(job.id))
-        os.makedirs(input_dir, exist_ok=True)
-        os.makedirs(output_dir, exist_ok=True)
-        os.makedirs(thumbnail_dir, exist_ok=True)
+    os.makedirs(input_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
-        debug_info = []
-        debug_info.append(f"Processing job ID: {job.id}")
-        debug_info.append(f"Input file: {input_file_path}")
-        debug_info.append(f"Input file exists: {os.path.exists(input_file_path) if input_file_path else False}")
-        debug_info.append(f"Input directory: {input_dir}")
+    logfile   = os.path.join(output_dir, 'processing.log')
+    loghandle = open(logfile, 'a', encoding='utf-8')
 
-        # Process based on input type
-        if job.input_type == 'pdf':
-            debug_info.append("Input type: PDF")
-            if not input_file_path or not os.path.exists(input_file_path):
-                raise ValueError(f"PDF file not found at: {input_file_path}")
-            # Extract images from PDF
-            pdf_to_images(input_file_path, input_dir)
-        elif job.input_type == 'images':
-            debug_info.append("Input type: Images")
-            if not input_file_path or not os.path.exists(input_file_path):
-                raise ValueError(f"Image file not found at: {input_file_path}")
-            # If it's a ZIP file, extract it
-            if input_file_path.lower().endswith('.zip'):
-                debug_info.append("Extracting ZIP file")
-                with zipfile.ZipFile(input_file_path, 'r') as zip_ref:
-                    zip_ref.extractall(input_dir)
+    loghandle.write(f"Processing job ID: {job.id}\n")
+    loghandle.write(f"Input file: {input_file_path}\n")
+    loghandle.write(f"Input file exists: {os.path.exists(input_file_path) if input_file_path else False}\n")
+    loghandle.write(f"Input directory: {input_dir}\n")
 
-                # List all extracted files for debugging
-                all_files = []
-                for root, dirs, files in os.walk(input_dir):
-                    for file in files:
-                        all_files.append(os.path.join(root, file))
-                debug_info.append(f"Extracted {len(all_files)} files from ZIP")
-                if all_files:
-                    debug_info.append(f"Extracted files: {all_files[:20]}")  # List first 20 files
+    # Process based on input type
+    if job.input_type == 'pdf':
+        loghandle.write("Input type: PDF")
+        if not input_file_path or not os.path.exists(input_file_path):
+            raise ValueError(f"PDF file not found at: {input_file_path}")
+        # Extract images from PDF
+        pdfs.pdf_to_images(input_file_path, input_dir)
+    elif job.input_type == 'images':
+        loghandle.write("Input type: Images\n")
+        if not input_file_path or not os.path.exists(input_file_path):
+            raise ValueError(f"Image file not found at: {input_file_path}\n")
+        # If it's a ZIP file, extract it
+        if input_file_path.lower().endswith('.zip'):
+            loghandle.write("Extracting ZIP file\n")
+            with zipfile.ZipFile(input_file_path, 'r') as zip_ref:
+                zip_ref.extractall(input_dir)
+
+            # List all extracted files for debugging
+            n = 0 
+            for root, dirs, files in os.walk(input_dir):
+                for file in files:
+                    n += 1
+            loghandle.write(f"Extracted {n} files from ZIP\n")
 
             # If it's a single image, copy it to the input directory
-            elif input_file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
-                debug_info.append("Processing single image file")
-                filename = os.path.basename(input_file_path)
-                destination = os.path.join(input_dir, filename)
-                shutil.copy(input_file_path, destination)
+        elif input_file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
+            loghandle.write("Processing single image file")
+            filename = os.path.basename(input_file_path)
+            destination = os.path.join(input_dir, filename)
+            shutil.copy(input_file_path, destination)
 
-        # Create a dictionary of arguments similar to argparse
-        args = {
-            'indir': input_dir,
-            'outdir': output_dir,
-            'outpdf': os.path.join(output_dir, f"{job.title or 'processed'}.pdf"),
-            'langs': job.language,
-            'maxcontours': job.maxcontours,
-            'xmax': job.xmaximum,
-            'ymax': job.ymax,
-            'crop': job.crop,
-            'deskew': job.deskew,
-            'do_ocr': job.ocr,
-            'dewarp': job.dewarp,
-            'draw_contours': job.draw_contours,
-            'gray': job.gray,
-            'rotate_type': job.rotate_type,
-            'factor': job.reduce_factor,
-            'pagenums': None,  # Process all pages
-        }
-
-        # Check if we have any files to process by enumerating all files recursively
-        image_files = []
-        for root, _, files in os.walk(input_dir):
-            # Skip thumbnails directory
-            if 'thumbnails' in root.lower():
-                continue
-
-            for file in files:
-                if file.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
-                    # Skip files that don't look like normal page scans
-                    if 'slip' in file.lower() or 'metadata' in file.lower():
-                        continue
-                    image_files.append(os.path.join(root, file))
-
-        debug_info.append(f"Found {len(image_files)} image files to process")
-        if image_files:
-            debug_info.append(f"First few image files: {image_files[:5]}")
-
-        if not image_files:
-            raise ValueError(
-                f"No image files found to process. Please check your input file.\n\nDebug info:\n" + "\n".join(
-                    debug_info))
-
-        # Handle special processing modes: draw contours and grayscale
-        if args['draw_contours']:
-            debug_info.append("Processing in 'draw contours' mode")
-            # Process each page to draw contours
-            outfiles = []
-            for img, outfile, pagenum in get_scanned_pages(input_dir):
-                if args['deskew']:
-                    img, hangle = deskew(img, args['xmax'], args['ymax'], args['maxcontours'], args['rotate_type'])
-                
-                contours = find_contour(img)
-                contours = contours[:args['maxcontours']]
-                img = cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
-                
-                # Save processed image
-                processed_file = os.path.join(output_dir, f"{pagenum:04d}.jpg")
-                cv2.imwrite(processed_file, img)
-                outfiles.append((pagenum, processed_file))
-            
-            # Sort outfiles by page number
-            outfiles.sort(key=lambda x: x[0])
-            
-            # Save PDF
-            metadata = None
-            output_pdf_path = args['outpdf']
-            save_pdf(outfiles, metadata, args['langs'], output_pdf_path, args['do_ocr'])
-            
-            # Update job with output file
-            relative_path = os.path.relpath(output_pdf_path, settings.MEDIA_ROOT)
-            job.output_file = relative_path
-            job.status = 'completed'
-            job.save()
-            return
+        args = Args(job, input_dir, output_dir)
+        scandir = Scandir(args.indir, args.outdir, args.pagenums)
+        if job.input_type == 'pdf':
+            metadata = pdfs.get_metadata(input_file_path)
+        else:
+            metadata = scandir.metadata
+        if args.drawcontours:
+            outfiles = process_raw.draw_contours(scandir, args)
+        elif args.gray:
+            outfiles = process_raw.gray_images(scandir, args)
+        elif args.deskew and not args.crop:
+            outfiles = process_raw.deskew_images(scandir, args)
+        else:
+            outfiles = process_raw.process_images(scandir, args)
+            if args.outpdf:
+                pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, \
+                              args.do_ocr, args.outhocr, args.outtxt)
+                relative_path = os.path.relpath(args.outpdf, settings.MEDIA_ROOT)
+                job.output_file = relative_path
         
-        elif args['gray']:
-            debug_info.append("Processing in 'grayscale' mode")
-            # Process each page to convert to grayscale
-            outfiles = []
-            for img, outfile, pagenum in get_scanned_pages(input_dir):
-                if args['deskew']:
-                    img, hangle = deskew(img, args['xmax'], args['ymax'], args['maxcontours'], args['rotate_type'])
+
+        process_img_files(scandir, job)
+
+        job.status = 'completed'
+        job.save()
+
+
+def process_img_files(scandir, job):        
+    for img, infile, outfile, pagenum in scandir.get_scanned_pages():
+        # Save original file reference
+        rel_original_path = os.path.relpath(infile, settings.MEDIA_ROOT)
+            
+        # Create PageImage object
+        page = PageImage(job=job, page_number=pagenum, \
+                         original_image=rel_original_path)
+            
+        # Create thumbnail for original image
+        original_thumbnail = create_thumbnail(infile)
+            
+        if original_thumbnail:
+            # Save the thumbnail
+            fname = f"{pagenum:04d}_original_thumb.jpg"
+            thumbnail_io = BytesIO()
+            original_thumbnail.save(thumbnail_io, format='JPEG')
                 
-                gray = threshold_gray(img, 125, 255)
-                
-                # Save processed image
-                processed_file = os.path.join(output_dir, f"{pagenum:04d}.jpg")
-                cv2.imwrite(processed_file, gray)
-                outfiles.append((pagenum, processed_file))
-            
-            # Sort outfiles by page number
-            outfiles.sort(key=lambda x: x[0])
-            
-            # Save PDF
-            metadata = None
-            output_pdf_path = args['outpdf']
-            save_pdf(outfiles, metadata, args['langs'], output_pdf_path, args['do_ocr'])
-            
-            # Update job with output file
-            relative_path = os.path.relpath(output_pdf_path, settings.MEDIA_ROOT)
-            job.output_file = relative_path
-            job.status = 'completed'
-            job.save()
-            return
-
-        # Create cropping boxes if needed
-        boxes = None
-        if args['crop']:
-            try:
-                boxes = get_cropping_boxes(input_dir, args)
-                if not boxes:
-                    debug_info.append("Warning: Could not create cropping boxes")
-            except Exception as e:
-                debug_info.append(f"Warning: Error creating cropping boxes: {str(e)}")
-
-        # Process each page and store thumbnails
-        outfiles = []
-        page_count = 0
-        page_objects = []
-
-        # Get all pages to process
-        try:
-            all_pages = list(get_scanned_pages(input_dir))
-            debug_info.append(f"Retrieved {len(all_pages)} pages to process")
-        except Exception as e:
-            debug_info.append(f"Error retrieving pages: {str(e)}")
-            all_pages = []
-
-        for img, outfile, pagenum in all_pages:
-            page_count += 1
-            debug_info.append(f"Processing page {pagenum} ({outfile})")
-
-            # Skip processing if image is None or empty
-            if img is None or img.size == 0:
-                debug_info.append(f"Skipping empty image: {outfile}")
-                continue
-
-            # Save original file reference
-            rel_original_path = os.path.relpath(outfile, settings.MEDIA_ROOT)
-            
-            # Create PageImage object
-            page = PageImage(
-                job=job,
-                page_number=pagenum,
-                original_image=rel_original_path
-            )
-            
-            # Create thumbnail for original image
-            original_thumbnail = create_thumbnail(outfile)
-            
-            if original_thumbnail:
-                # Save the thumbnail
-                fname = f"{pagenum:04d}_original_thumb.jpg"
-                thumbnail_io = BytesIO()
-                original_thumbnail.save(thumbnail_io, format='JPEG')
-                
-                # Create and save thumbnail
-                thumbnail_file = ContentFile(thumbnail_io.getvalue())
-                page.original_thumbnail.save(fname, InMemoryUploadedFile(
+            # Create and save thumbnail
+            thumbnail_file = ContentFile(thumbnail_io.getvalue())
+            page.original_thumbnail.save(fname, InMemoryUploadedFile(
                     thumbnail_file,
                     None,
                     fname,
@@ -676,66 +477,19 @@ def process_job(job_id):
                     len(thumbnail_io.getvalue()),
                     None
                 ))
-
-            # Process the image
-            processed_img = img.copy()
-            
-            if args['deskew'] and not args['crop']:  # If crop is True, deskew is already done in get_cropping_boxes
-                try:
-                    processed_img, angle = deskew(processed_img, args['xmax'], args['ymax'], args['maxcontours'], args['rotate_type'])
-                    debug_info.append(f"Deskewed page {pagenum} with angle {angle}")
-                except Exception as e:
-                    debug_info.append(f"Warning: Error during deskew for page {pagenum}: {str(e)}")
-
-            if args['crop'] and boxes and pagenum in boxes:
-                try:
-                    box = boxes[pagenum]
-                    page.set_auto_crop_box(box)
-                    
-                    if box[4] is not None:
-                        processed_img = rotate(processed_img, box[4])
-                    processed_img = crop(processed_img, box)
-                    debug_info.append(f"Cropped page {pagenum} with box {box}")
-                    
-                    # Mark page as needing review
-                    page.needs_review = True
-                except Exception as e:
-                    debug_info.append(f"Warning: Error during cropping for page {pagenum}: {str(e)}")
-
-            if args['factor'] and args['factor'] > 0 and args['factor'] != 1.0:
-                try:
-                    processed_img = resize_image(processed_img, args['factor'])
-                    debug_info.append(f"Resized page {pagenum} with factor {args['factor']}")
-                except Exception as e:
-                    debug_info.append(f"Warning: Error during resize for page {pagenum}: {str(e)}")
-
-            # Verify that img is not None or empty before saving
-            if processed_img is None or processed_img.size == 0:
-                debug_info.append(f"Skipping writing empty processed image for page {pagenum}")
-                continue
-
-            # Save processed image
-            try:
-                processed_file = os.path.join(output_dir, f"{pagenum:04d}.jpg")
-                cv2.imwrite(processed_file, processed_img)
-                outfiles.append((pagenum, processed_file))
+       
+        # Create thumbnail for final image
+        final_thumbnail = create_thumbnail(outfile)
                 
-                # Update page with cropped image path
-                rel_cropped_path = os.path.relpath(processed_file, settings.MEDIA_ROOT)
-                page.cropped_image = rel_cropped_path
-                
-                # Create thumbnail for cropped image
-                cropped_thumbnail = create_thumbnail(processed_file)
-                
-                if cropped_thumbnail:
-                    # Save the thumbnail
-                    fname = f"{pagenum:04d}_cropped_thumb.jpg"
-                    thumbnail_io = BytesIO()
-                    cropped_thumbnail.save(thumbnail_io, format='JPEG')
+        if final_thumbnail:
+            # Save the thumbnail
+            fname = f"{pagenum:04d}_cropped_thumb.jpg"
+            thumbnail_io = BytesIO()
+            final_thumbnail.save(thumbnail_io, format='JPEG')
                     
-                    # Create and save thumbnail
-                    thumbnail_file = ContentFile(thumbnail_io.getvalue())
-                    page.cropped_thumbnail.save(fname, InMemoryUploadedFile(
+            # Create and save thumbnail
+            thumbnail_file = ContentFile(thumbnail_io.getvalue())
+            page.cropped_thumbnail.save(fname, InMemoryUploadedFile(
                         thumbnail_file,
                         None,
                         fname,
@@ -744,102 +498,8 @@ def process_job(job_id):
                         None
                     ))
                 
-                # Save the page object
-                page.save()
-                page_objects.append(page)
-                
-            except Exception as e:
-                debug_info.append(f"Error saving processed image for page {pagenum}: {str(e)}")
-
-        debug_info.append(f"Processed {page_count} pages")
-
-        if not outfiles:
-            raise ValueError(
-                f"No pages were successfully processed. Please check your input files.\n\nDebug info:\n" + "\n".join(
-                    debug_info))
-
-        # Check if any pages need review
-        needs_review = any(page.needs_review for page in page_objects)
-        
-        if needs_review:
-            # Set job status to awaiting review
-            job.needs_review = True
-            job.status = 'reviewing'
-            job.save()
-            debug_info.append("Job marked as awaiting review")
-            return
-            
-        # If no review needed, proceed directly to finalization
-        finalize_job(job.id)
-
-    except Exception as e:
-        import traceback
-        job.status = 'failed'
-        debug_str = "\n".join(debug_info) if 'debug_info' in locals() else "No debug info available"
-        job.error_message = f"{str(e)}\n\nDebug Info:\n{debug_str}\n\n{traceback.format_exc()}"
-        job.save()
-        logger.error(f"Job {job_id} failed: {str(e)}")
-        logger.error(f"Debug info: {debug_str}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-
-
-def finalize_job(job_id):
-    """Finalize a job by creating the final PDF from processed images"""
-    try:
-        job = ProcessingJob.objects.get(id=job_id)
-        
-        # Set job status to finalizing
-        job.status = 'finalizing'
-        job.save()
-        
-        # Get the output directory and PDF path
-        output_dir = os.path.join(settings.MEDIA_ROOT, 'processed', str(job.id))
-        output_pdf = os.path.join(output_dir, f"{job.title or 'processed'}.pdf")
-        
-        # Collect all pages
-        outfiles = []
-        for page in job.pages.all().order_by('page_number'):
-            # Determine which image to use for this page
-            if page.adjusted_image:  # User adjusted the crop
-                image_path = os.path.join(settings.MEDIA_ROOT, page.adjusted_image)
-                outfiles.append((page.page_number, image_path))
-            elif page.cropped_image:  # Use auto-cropped image
-                image_path = os.path.join(settings.MEDIA_ROOT, page.cropped_image)
-                outfiles.append((page.page_number, image_path))
-        
-        # Sort by page number
-        outfiles.sort(key=lambda x: x[0])
-        
-        if not outfiles:
-            raise ValueError("No processed pages found for finalization")
-
-        # Save PDF
-        metadata = None  # We don't have metadata in this context
-        
-        # Prepare output paths for hocr and txt files if OCR is enabled
-        outhocr = None
-        outtxt = None
-        if job.ocr:
-            hocr_filename = f"output_{job.id}.hocr.gz"
-            txt_filename = f"output_{job.id}.txt"
-            outhocr = os.path.join(os.path.dirname(output_pdf), hocr_filename)
-            outtxt = os.path.join(os.path.dirname(output_pdf), txt_filename)
-        
-        save_pdf(outfiles, metadata, job.language, output_pdf, job.ocr, outhocr, outtxt)
-
-        # Update job with output file
-        relative_path = os.path.relpath(output_pdf, settings.MEDIA_ROOT)
-        job.output_file = relative_path
-        job.status = 'completed'
-        job.save()
-
-    except Exception as e:
-        import traceback
-        job = ProcessingJob.objects.get(id=job_id)
-        job.status = 'failed'
-        job.error_message = f"Error during finalization: {str(e)}\n\n{traceback.format_exc()}"
-        job.save()
-
+        # Save the page object
+        page.save()
 
 @require_http_methods(["POST"])
 @csrf_protect

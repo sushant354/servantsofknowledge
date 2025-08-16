@@ -34,19 +34,26 @@
                 {% if messages %}
                     {% for message in messages %}
                         {% if "error" in message.tags %}
-                            {% set alert_class = "danger" %}
+                            <div class="alert alert-danger">
+                                {{ message }}
+                            </div>
                         {% elif "warning" in message.tags %}
-                            {% set alert_class = "warning" %}
+                            <div class="alert alert-warning">
+                                {{ message }}
+                            </div>
                         {% elif "success" in message.tags %}
-                            {% set alert_class = "success" %}
+                            <div class="alert alert-success">
+                                {{ message }}
+                            </div>
                         {% elif "info" in message.tags %}
-                            {% set alert_class = "info" %}
+                            <div class="alert alert-info">
+                                {{ message }}
+                            </div>
                         {% else %}
-                            {% set alert_class = "secondary" %}
+                            <div class="alert alert-secondary">
+                                {{ message }}
+                            </div>
                         {% endif %}
-                        <div class="alert alert-{{ alert_class }}">
-                            {{ message }}
-                        </div>
                     {% endfor %}
                 {% endif %}
                 

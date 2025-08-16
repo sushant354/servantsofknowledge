@@ -7,7 +7,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = os.getenv('BASE_DIR')
+if BASE_DIR == None:
+    BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Add the repub directory to Python path for importing repub modules
 REPUB_DIR = BASE_DIR.parent
@@ -30,13 +32,13 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'repub_interface',
+    'rest_framework',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -94,7 +96,12 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
-
+POSTMARK = {
+    'TOKEN': os.getenv('POSTMARK_TOKEN'),
+    'TEST_MODE': False,
+    'VERBOSITY': 0,
+}
+EMAIL_BACKEND = 'postmarker.django.EmailBackend'
 # Internationalization
 LANGUAGE_CODE = 'en-us'
 USE_I18N = True

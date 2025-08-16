@@ -67,21 +67,34 @@ def get_scanned_pages(pagedata, indir, outdir, pagenums):
                 (not pagenums or pagenum in pagenums):
             logger.error ('FILENAME: %s', filename)
             img = read_image(pageinfo, infile) 
-            yield (img, outfile, pagenum)
+            yield (img, infile, outfile, pagenum)
 
 class Scandir:
     def __init__(self, indir, outdir, pagenums):
         self.logger   = logging.getLogger('repub.scandir')
-        self.indir    = indir
+        self.indir    = self.find_input_dir(indir)
         self.outdir   = outdir
         self.pagenums = pagenums
        
-        scandata = get_scandata(indir)
+        scandata = get_scandata(self.indir)
 
         self.pagedata = None
         if scandata:
             self.pagedata = scandata['pageData']
         self.metadata =  get_metadata(indir)
+
+    def find_input_dir(self, indir):
+        while True:
+            filenames = os.listdir(indir)
+            if len(filenames) != 1:
+                return indir
+            
+            filepath = os.path.join(indir, filenames[0])
+            if not os.path.isdir(filepath):
+                return indir
+            indir = filepath
+
+        return None
 
     def get_scanned_pages(self):
         for d in get_scanned_pages(self.pagedata, self.indir, self.outdir, \
