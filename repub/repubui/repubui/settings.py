@@ -130,9 +130,8 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = 'noreply@repubui.local'
 
 # Session security settings
-SESSION_COOKIE_AGE = 1800  # 30 minutes
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True
-SESSION_SAVE_EVERY_REQUEST = True
+SESSION_COOKIE_AGE = 24*30*3600  # 30 days 
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False 
 
 # Security settings - only enabled in production (when DEBUG=False)
 if not DEBUG:

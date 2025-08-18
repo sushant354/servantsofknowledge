@@ -36,7 +36,7 @@ class ProcessingJob(models.Model):
     input_file = models.FileField(upload_to=get_upload_path, blank=True, null=True)
     input_type = models.CharField(max_length=10,
                                   choices=[('pdf', 'PDF'), ('images', 'Images')],
-                                  default='pdf')
+                                  default='images')
 
     # Processing options
     language = models.CharField(max_length=100, default='eng')
@@ -52,7 +52,7 @@ class ProcessingJob(models.Model):
                                        ('vertical', 'Vertical'),
                                        ('overall', 'Overall')
                                    ])
-    reduce_factor = models.FloatField(null=True, blank=True)
+    reduce_factor = models.FloatField(null=True, blank=True, default = "0.2")
 
     # Advanced options
     xmaximum = models.IntegerField(default=30)

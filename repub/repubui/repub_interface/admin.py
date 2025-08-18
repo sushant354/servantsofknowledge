@@ -15,7 +15,7 @@ class ProcessingJobAdmin(admin.ModelAdmin):
             'fields': ('language', 'crop', 'deskew', 'ocr', 'dewarp', 'rotate_type', 'reduce_factor')
         }),
         ('Advanced Options', {
-            'fields': ('xmax', 'ymax', 'maxcontours')
+            'fields': ('xmaximum', 'ymax', 'maxcontours')
         }),
         ('Error Information', {
             'fields': ('error_message',)
