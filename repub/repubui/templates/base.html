@@ -68,6 +68,13 @@
                     <li class="nav-item">
                         <a class="nav-link{% if request.resolver_match.url_name == 'home' %} active{% endif %}" href="{% url 'home' %}">Home</a>
                     </li>
+                    {% if user.is_authenticated %}
+                    <li class="nav-item">
+                        <a class="nav-link{% if request.resolver_match.url_name == 'all_jobs' %} active{% endif %}" href="{% url 'all_jobs' %}">
+                            <i class="bi bi-list-task"></i> All Jobs
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
                 <ul class="navbar-nav">
                     {% if user.is_authenticated %}

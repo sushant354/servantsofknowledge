@@ -19,6 +19,7 @@ from django.utils import timezone
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.core.paginator import Paginator
 from .models import ProcessingJob, PageImage
 from .forms import ProcessingJobForm, UserRegistrationForm
 import numpy as np
@@ -31,6 +32,26 @@ from repub import process_raw
 from repub.imgfuncs.cropping import crop
 from repub.utils.scandir import Scandir
 from repub.utils import pdfs
+
+@login_required
+def all_jobs(request):
+    jobs_list = ProcessingJob.objects.filter(user=request.user).order_by('-created_at')
+    
+    paginator = Paginator(jobs_list, 10)  # Show 10 jobs per page
+    page_number = request.GET.get('page')
+    jobs = paginator.get_page(page_number)
+    
+    context = {
+        'jobs': jobs,
+        'total_jobs': jobs_list.count(),
+        'completed_jobs': jobs_list.filter(status='completed').count(),
+        'processing_jobs': jobs_list.filter(status='processing').count(),
+        'failed_jobs': jobs_list.filter(status='failed').count(),
+        'reviewing_jobs': jobs_list.filter(status='reviewing').count(),
+    }
+    
+    return render(request, 'repub_interface/all_jobs.html', context)
+
 
 @login_required
 def home(request):
