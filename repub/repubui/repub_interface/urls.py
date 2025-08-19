@@ -8,6 +8,7 @@ urlpatterns = [
     path('job/<uuid:job_id>/', views.job_detail, name='job_detail'),
     path('job/<uuid:job_id>/download/', views.job_download, name='job_download'),
     path('job/<uuid:job_id>/output-directory/', views.job_output_directory, name='job_output_directory'),
+    path('job/<uuid:job_id>/output-directory/<path:subpath>/', views.job_output_directory, name='job_output_directory_subpath'),
     path('job/<uuid:job_id>/review/', views.job_review, name='job_review'),
     path('job/<uuid:job_id>/page/<int:page_number>/', views.page_editor, name='page_editor'),
     path('job/<uuid:job_id>/page/<int:page_number>/update-crop/', views.update_crop, name='update_crop'),

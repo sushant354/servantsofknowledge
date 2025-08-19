@@ -644,57 +644,90 @@ def job_status(request, job_id):
 
 
 @login_required
-def job_output_directory(request, job_id):
+def job_output_directory(request, job_id, subpath=''):
     job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
     
-    # Get the output directory path
-    output_dir = job.get_output_dir()
+    # Get the base output directory path
+    base_output_dir = job.get_output_dir()
     
-    if not os.path.exists(output_dir):
-        messages.error(request, 'Output directory does not exist yet.')
-        return redirect('job_detail', job_id=job.id)
+    # Construct the current directory path
+    if subpath:
+        # Sanitize the subpath to prevent directory traversal
+        subpath = subpath.strip('/')
+        subpath_parts = [part for part in subpath.split('/') if part and part != '..']
+        current_dir = os.path.join(base_output_dir, *subpath_parts)
+        current_subpath = '/'.join(subpath_parts)
+    else:
+        current_dir = base_output_dir
+        current_subpath = ''
+    
+    # Security check: ensure we're still within the job's output directory
+    if not os.path.commonpath([base_output_dir, current_dir]) == base_output_dir:
+        messages.error(request, 'Access denied: Invalid directory path.')
+        return redirect('job_output_directory', job_id=job_id)
+    
+    if not os.path.exists(current_dir):
+        messages.error(request, 'Directory does not exist.')
+        return redirect('job_output_directory', job_id=job_id)
+    
+    # Build breadcrumb navigation
+    breadcrumbs = [{'name': 'Output', 'path': ''}]
+    if current_subpath:
+        path_parts = current_subpath.split('/')
+        for i, part in enumerate(path_parts):
+            breadcrumb_path = '/'.join(path_parts[:i+1])
+            breadcrumbs.append({'name': part, 'path': breadcrumb_path})
     
     # Get directory contents
     items = []
-    for item_name in sorted(os.listdir(output_dir)):
-        item_path = os.path.join(output_dir, item_name)
-        is_dir = os.path.isdir(item_path)
-           
-        item_info = {
-            'name': item_name,
-            'is_directory': is_dir,
-            'size': None,
-            'modified': None,
-            'mime_type': None,
-            'relative_url': None
-        }
-            
-        if is_dir:
-            # Count items in subdirectory
-            try:
-                subitem_count = len(os.listdir(item_path))
-                item_info['size'] = f"{subitem_count} items"
-            except:
-                item_info['size'] = "Unknown"
-        else:
-            # Get file info
-            try:
-                stat_info = os.stat(item_path)
-                item_info['size'] = format_file_size(stat_info.st_size)
-                item_info['modified'] = timezone.datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.get_current_timezone())
-                    
-                # Get mime type
-                mime_type, _ = mimetypes.guess_type(item_path)
-                item_info['mime_type'] = mime_type
-                  
-                # Create relative URL for media files
-                relative_path = os.path.relpath(item_path, settings.MEDIA_ROOT)
-                item_info['relative_url'] = f"{settings.MEDIA_URL}{relative_path}"
-                    
-            except Exception as e:
-                logger.error(f"Error getting file info for {item_path}: {e}")
-            
-        items.append(item_info)
+    try:
+        for item_name in sorted(os.listdir(current_dir)):
+            item_path = os.path.join(current_dir, item_name)
+            is_dir = os.path.isdir(item_path)
+               
+            item_info = {
+                'name': item_name,
+                'is_directory': is_dir,
+                'size': None,
+                'modified': None,
+                'mime_type': None,
+                'relative_url': None,
+                'subpath': os.path.join(current_subpath, item_name).replace('\\', '/') if current_subpath else item_name
+            }
+                
+            if is_dir:
+                # Count items in subdirectory
+                try:
+                    subitem_count = len(os.listdir(item_path))
+                    item_info['size'] = f"{subitem_count} items"
+                except:
+                    item_info['size'] = "Unknown"
+            else:
+                # Get file info
+                try:
+                    stat_info = os.stat(item_path)
+                    item_info['size'] = format_file_size(stat_info.st_size)
+                    item_info['modified'] = timezone.datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.get_current_timezone())
+                        
+                    # Get mime type
+                    mime_type, _ = mimetypes.guess_type(item_path)
+                    item_info['mime_type'] = mime_type
+                      
+                    # Create relative URL for media files
+                    relative_path = os.path.relpath(item_path, settings.MEDIA_ROOT)
+                    item_info['relative_url'] = f"{settings.MEDIA_URL}{relative_path}"
+                        
+                except Exception as e:
+                    logger.error(f"Error getting file info for {item_path}: {e}")
+                
+            items.append(item_info)
+    except PermissionError:
+        messages.error(request, 'Permission denied accessing directory.')
+        return redirect('job_output_directory', job_id=job_id)
+    except Exception as e:
+        logger.error(f"Error reading directory {current_dir}: {e}")
+        messages.error(request, 'Error reading directory contents.')
+        return redirect('job_output_directory', job_id=job_id)
             
     # Separate directories and files
     directories = [item for item in items if item['is_directory']]
@@ -702,10 +735,13 @@ def job_output_directory(request, job_id):
     
     context = {
         'job': job,
-        'output_dir': output_dir,
+        'current_dir': current_dir,
+        'current_subpath': current_subpath,
+        'breadcrumbs': breadcrumbs,
         'directories': directories,
         'files': files,
-        'total_items': len(items)
+        'total_items': len(items),
+        'parent_path': '/'.join(current_subpath.split('/')[:-1]) if current_subpath and '/' in current_subpath else '' if current_subpath else None
     }
     
     return render(request, 'repub_interface/job_output_directory.html', context)

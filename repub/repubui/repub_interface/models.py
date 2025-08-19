@@ -71,7 +71,7 @@ class ProcessingJob(models.Model):
         return f"Job {self.id} - {self.status}"
 
     def get_input_dir(self):
-        return os.path.join('media', 'uploads', str(self.id))
+        return os.path.join('media', 'uploads', str(self.id), 'extracted')
 
     def get_output_dir(self):
         return os.path.join('media', 'processed', str(self.id))
