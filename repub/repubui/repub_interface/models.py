@@ -77,7 +77,7 @@ class ProcessingJob(models.Model):
         return os.path.join('media', 'processed', str(self.id))
         
     def get_thumbnail_dir(self):
-        return os.path.join('media', 'thumbnails', str(self.id))
+        return os.path.join('processed',  str(self.id), 'thumbnails')
 
 
 class PageImage(models.Model):

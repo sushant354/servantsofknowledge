@@ -724,6 +724,7 @@ def job_output_directory(request, job_id, subpath=''):
                 'modified': None,
                 'mime_type': None,
                 'relative_url': None,
+                'thumbnail_url': None,
                 'subpath': os.path.join(current_subpath, item_name).replace('\\', '/') if current_subpath else item_name
             }
                 
@@ -736,29 +737,33 @@ def job_output_directory(request, job_id, subpath=''):
                     item_info['size'] = "Unknown"
             else:
                 # Get file info
-                try:
-                    stat_info = os.stat(item_path)
-                    item_info['size'] = format_file_size(stat_info.st_size)
-                    item_info['modified'] = timezone.datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.get_current_timezone())
+                stat_info = os.stat(item_path)
+                item_info['size'] = format_file_size(stat_info.st_size)
+                item_info['modified'] = timezone.datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.get_current_timezone())
                         
-                    # Get mime type
-                    mime_type, _ = mimetypes.guess_type(item_path)
-                    item_info['mime_type'] = mime_type
+                # Get mime type
+                mime_type, _ = mimetypes.guess_type(item_path)
+                item_info['mime_type'] = mime_type
                       
-                    # Create relative URL for media files
-                    relative_path = os.path.relpath(item_path, settings.MEDIA_ROOT)
-                    item_info['relative_url'] = f"{settings.MEDIA_URL}{relative_path}"
+                # Create relative URL for media files
+                relative_path = os.path.relpath(item_path, settings.MEDIA_ROOT)
+                item_info['relative_url'] = f"{settings.MEDIA_URL}{relative_path}"
+                    
+                # Check if this is an image and find corresponding thumbnail
+                if mime_type and mime_type.startswith('image/'):
+                    # Look for thumbnail in the thumbnails directory
+                    thumbnails_dir = job.get_thumbnail_dir()
+                    thumbnail_name = None
                         
-                except Exception as e:
-                    logger.error(f"Error getting file info for {item_path}: {e}")
-                
+                        
+                    thumb_path = os.path.join(settings.MEDIA_ROOT, thumbnails_dir, item_name)
+                    if os.path.exists(thumb_path):
+                        thumb_relative_path = os.path.relpath(thumb_path, settings.MEDIA_ROOT)
+                        item_info['thumbnail_url'] = f"{settings.MEDIA_URL}{thumb_relative_path}"
+                        
             items.append(item_info)
     except PermissionError:
         messages.error(request, 'Permission denied accessing directory.')
-        return redirect('job_output_directory', job_id=job_id)
-    except Exception as e:
-        logger.error(f"Error reading directory {current_dir}: {e}")
-        messages.error(request, 'Error reading directory contents.')
         return redirect('job_output_directory', job_id=job_id)
             
     # Separate directories and files

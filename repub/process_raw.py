@@ -157,7 +157,8 @@ def process_images(scandir, args):
             thumbnail = resize_image(img, 0.1) 
 
         if args.thumbnaildir:
-            thumbpath = os.path.join(args.thumbnaildir, '%4d.jpg' % pagenum)
+            fname = os.path.basename(outfile)
+            thumbpath = os.path.join(args.thumbnaildir, fname)
             thumb = resize_image(img, 0.1) 
             cv2.imwrite(thumbpath, thumb)
 

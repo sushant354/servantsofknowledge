@@ -126,7 +126,10 @@
                     {% for file in files %}
                         <div class="d-flex align-items-center p-3 border-bottom">
                             <div class="me-3">
-                                {% if file.mime_type %}
+                                {% if file.mime_type and file.mime_type|slice:":5" == "image" and file.thumbnail_url %}
+                                    <img src="{{ file.thumbnail_url }}" alt="{{ file.name }}" 
+                                         class="img-thumbnail" style="width: 80px; height: 80px; object-fit: cover;">
+                                {% elif file.mime_type %}
                                     {% if file.mime_type|slice:":5" == "image" %}
                                         <i class="bi bi-file-earmark-image text-success display-6"></i>
                                     {% elif file.mime_type == "application/pdf" %}
