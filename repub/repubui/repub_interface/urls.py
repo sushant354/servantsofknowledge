@@ -14,4 +14,5 @@ urlpatterns = [
     path('job/<uuid:job_id>/page/<int:page_number>/update-crop/', views.update_crop, name='update_crop'),
     path('job/<uuid:job_id>/page/<int:page_number>/save-snip/', views.save_snip, name='save_snip'),
     path('job/<uuid:job_id>/status/', views.job_status, name='job_status'),
+    path('job/<uuid:job_id>/stop/', views.stop_job, name='stop_job'),
 ]

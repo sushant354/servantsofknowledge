@@ -361,9 +361,6 @@ document.addEventListener('DOMContentLoaded', function() {
             
             fetch(`/job/{{ job.id }}/page/{{ page.page_number }}/save-snip/`, {
                 method: 'POST',
-                headers: {
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
                 body: formData
             })
             .then(response => response.json())

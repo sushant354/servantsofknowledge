@@ -197,7 +197,6 @@
             
             <div class="mt-4">
                 <form method="post" action="{% url 'job_review' job.id %}">
-                    {% csrf_token %}
                     <div class="d-flex justify-content-between">
                         <a href="{% url 'job_detail' job.id %}" class="btn btn-secondary">Back to Job Details</a>
                         <button type="submit" name="finalize" class="btn btn-primary">Finalize and Create PDF</button>

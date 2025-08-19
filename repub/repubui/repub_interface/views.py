@@ -15,7 +15,7 @@ from django.conf import settings
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import InMemoryUploadedFile
-from django.views.decorators.csrf import csrf_exempt, csrf_protect
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from django.contrib.auth import login
@@ -200,7 +200,7 @@ def page_editor(request, job_id, page_number):
 
 
 @require_http_methods(["POST"])
-@csrf_protect
+@csrf_exempt
 @login_required
 def update_crop(request, job_id, page_number):
     """
@@ -529,7 +529,7 @@ def process_img_files(scandir, job):
         page.save()
 
 @require_http_methods(["POST"])
-@csrf_protect
+@csrf_exempt
 @login_required
 def save_snip(request, job_id, page_number):
     """
@@ -645,6 +645,33 @@ def job_status(request, job_id):
             'status': 'error',
             'message': str(e)
         }, status=500)
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+@login_required
+def stop_job(request, job_id):
+    """
+    View to stop a processing job.
+    """
+    try:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+        
+        # Only allow stopping jobs that are currently processing
+        if job.status in ['processing', 'finalizing']:
+            job.status = 'failed'
+            job.error_message = 'Job stopped by user'
+            job.save()
+            messages.success(request, f'Job "{job.title or "Untitled"}" has been stopped.')
+        else:
+            messages.warning(request, f'Job "{job.title or "Untitled"}" cannot be stopped in its current state.')
+        
+        return redirect('job_detail', job_id=job.id)
+        
+    except Exception as e:
+        logger.error(f"Error stopping job {job_id}: {str(e)}", exc_info=True)
+        messages.error(request, 'An error occurred while stopping the job.')
+        return redirect('job_detail', job_id=job_id)
 
 
 @login_required
