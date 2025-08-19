@@ -6,6 +6,8 @@ import cv2
 import json
 import time
 import logging
+import mimetypes
+from pathlib import Path
 from PIL import Image
 from io import BytesIO
 from django.shortcuts import render, redirect, get_object_or_404
@@ -398,8 +400,8 @@ def process_job(job_id):
 
     # Get the input and output directories/files
     input_file_path = job.input_file.path if job.input_file else None
-    input_dir       = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id), 'extracted')
-    output_dir      = os.path.join(settings.MEDIA_ROOT, 'processed', str(job.id))
+    input_dir       = job.get_input_dir()
+    output_dir      = job.get_output_dir() 
 
     os.makedirs(input_dir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
@@ -639,6 +641,88 @@ def job_status(request, job_id):
             'status': 'error',
             'message': str(e)
         }, status=500)
+
+
+@login_required
+def job_output_directory(request, job_id):
+    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    
+    # Get the output directory path
+    output_dir = job.get_output_dir()
+    
+    if not os.path.exists(output_dir):
+        messages.error(request, 'Output directory does not exist yet.')
+        return redirect('job_detail', job_id=job.id)
+    
+    # Get directory contents
+    items = []
+    for item_name in sorted(os.listdir(output_dir)):
+        item_path = os.path.join(output_dir, item_name)
+        is_dir = os.path.isdir(item_path)
+           
+        item_info = {
+            'name': item_name,
+            'is_directory': is_dir,
+            'size': None,
+            'modified': None,
+            'mime_type': None,
+            'relative_url': None
+        }
+            
+        if is_dir:
+            # Count items in subdirectory
+            try:
+                subitem_count = len(os.listdir(item_path))
+                item_info['size'] = f"{subitem_count} items"
+            except:
+                item_info['size'] = "Unknown"
+        else:
+            # Get file info
+            try:
+                stat_info = os.stat(item_path)
+                item_info['size'] = format_file_size(stat_info.st_size)
+                item_info['modified'] = timezone.datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.get_current_timezone())
+                    
+                # Get mime type
+                mime_type, _ = mimetypes.guess_type(item_path)
+                item_info['mime_type'] = mime_type
+                  
+                # Create relative URL for media files
+                relative_path = os.path.relpath(item_path, settings.MEDIA_ROOT)
+                item_info['relative_url'] = f"{settings.MEDIA_URL}{relative_path}"
+                    
+            except Exception as e:
+                logger.error(f"Error getting file info for {item_path}: {e}")
+            
+        items.append(item_info)
+            
+    # Separate directories and files
+    directories = [item for item in items if item['is_directory']]
+    files = [item for item in items if not item['is_directory']]
+    
+    context = {
+        'job': job,
+        'output_dir': output_dir,
+        'directories': directories,
+        'files': files,
+        'total_items': len(items)
+    }
+    
+    return render(request, 'repub_interface/job_output_directory.html', context)
+
+
+def format_file_size(size_bytes):
+    """Convert bytes to human readable format"""
+    if size_bytes == 0:
+        return "0 B"
+    
+    size_names = ["B", "KB", "MB", "GB"]
+    i = 0
+    while size_bytes >= 1024 and i < len(size_names) - 1:
+        size_bytes /= 1024.0
+        i += 1
+    
+    return f"{size_bytes:.1f} {size_names[i]}"
 
 
 def register(request):

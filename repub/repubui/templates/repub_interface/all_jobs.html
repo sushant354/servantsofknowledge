@@ -126,6 +126,11 @@
                                             <i class="bi bi-pencil"></i> Review
                                         </a>
                                     {% endif %}
+                                    {% if job.status == 'completed' or job.status == 'processing' or job.status == 'reviewing' or job.status == 'finalizing' %}
+                                        <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm" title="View output directory">
+                                            <i class="bi bi-folder"></i> Files
+                                        </a>
+                                    {% endif %}
                                     {% if job.status == 'completed' and job.output_file %}
                                         <a href="{% url 'job_download' job.id %}" class="btn btn-outline-success btn-sm">
                                             <i class="bi bi-download"></i> Download
