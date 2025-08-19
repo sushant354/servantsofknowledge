@@ -56,6 +56,7 @@ def all_jobs(request):
 
 
 @login_required
+@csrf_exempt
 def home(request):
     jobs = ProcessingJob.objects.filter(user=request.user).order_by('-created_at')[:10]
     form = ProcessingJobForm()
