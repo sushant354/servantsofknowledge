@@ -369,11 +369,15 @@ class Args:
         img_dir = os.path.join(output_dir, 'output')
         os.makedirs(img_dir, exist_ok=True)
 
+        thumbnaildir = os.path.join(output_dir, 'thumbnails')
+        os.makedirs(thumbnaildir, exist_ok=True)
+
         self.indir  = input_dir
         self.outdir = img_dir
         self.outpdf = os.path.join(output_dir, "x_final.pdf")
         self.langs  = job.language
 
+        self.thumbnaildir = thumbnaildir
         self.thumbnail    = os.path.join(output_dir, '__ia_thumb.jpg')
         self.outhocr      = os.path.join(output_dir, 'x_hocr.html.gz')
         self.outtxt       = os.path.join(output_dir, 'x_text.txt')

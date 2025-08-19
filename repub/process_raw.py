@@ -21,6 +21,9 @@ def get_arg_parser():
                   required= False, help='Input PDF File')
     parser.add_argument('-o', '--outdir', dest='outdir', action='store', \
                   required= False, help='Filepath to processed directory')
+    parser.add_argument('-n', '--thimbnaildir', dest='thumbnaildir', \
+                       action='store', required= False, \
+                       help='Filepath to generate thumbnails of output files')
     parser.add_argument('-O', '--outpdf', dest='outpdf', action='store', \
                   required= False, help='Output PDF filepath')
     parser.add_argument('-l', '--loglevel', dest='loglevel', action='store', \
@@ -153,6 +156,11 @@ def process_images(scandir, args):
         if args.thumbnail and thumbnail is None and scandir.is_cover_page(pagenum):
             thumbnail = resize_image(img, 0.1) 
 
+        if args.thumbnaildir:
+            thumbpath = os.path.join(args.thumbnaildir, '%4d.jpg' % pagenum)
+            thumb = resize_image(img, 0.1) 
+            cv2.imwrite(thumbpath, thumb)
+
         cv2.imwrite(outfile, img)
         outfiles.append((pagenum, outfile))
 
@@ -164,11 +172,13 @@ def process_images(scandir, args):
 def initialize_iadir(args):
     mk_clean(args.iadir)
     outdir         = os.path.join(args.iadir, 'output')
-    args.thumbnail = os.path.join(args.iadir, '__ia_thumb.jpg')
-    args.outhocr   = os.path.join(args.iadir, 'x_hocr.html.gz')
-    args.outtxt    = os.path.join(args.iadir, 'x_text.txt')
-    args.outpdf    = os.path.join(args.iadir, 'x_final.pdf')
+    args.thumbnaildir = os.path.join(args.iadir, 'thumbnails')
+    args.thumbnail    = os.path.join(args.iadir, '__ia_thumb.jpg')
+    args.outhocr      = os.path.join(args.iadir, 'x_hocr.html.gz')
+    args.outtxt       = os.path.join(args.iadir, 'x_text.txt')
+    args.outpdf       = os.path.join(args.iadir, 'x_final.pdf')
     os.mkdir(outdir)
+    os.mkdir(args.thumbnaildir)
     args.outdir = outdir
     args.crop = True
     args.do_ocr = True
