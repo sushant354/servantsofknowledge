@@ -115,6 +115,17 @@ def resize_image(img, factor):
     dim    = (width, height)
     return cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
 
+def get_thumbnail(img):
+    (h, w) = img.shape[:2]
+    if w < 200:
+        return img
+
+    width  = 200
+    factor = width* 1.0/w 
+    height = int(h * factor)
+    dim    = (width, height)
+    return cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+
 def mk_clean(outdir):
     if os.path.exists(outdir):
         shutil.rmtree(outdir)
@@ -154,12 +165,12 @@ def process_images(scandir, args):
             img = resize_image(img, args.factor)
         
         if args.thumbnail and thumbnail is None and scandir.is_cover_page(pagenum):
-            thumbnail = resize_image(img, 0.1) 
+            thumbnail = get_thumbnail(img) 
 
         if args.thumbnaildir:
             fname = os.path.basename(outfile)
             thumbpath = os.path.join(args.thumbnaildir, fname)
-            thumb = resize_image(img, 0.1) 
+            thumb = get_thumbnail(img) 
             cv2.imwrite(thumbpath, thumb)
 
         cv2.imwrite(outfile, img)

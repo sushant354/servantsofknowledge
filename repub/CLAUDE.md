@@ -26,6 +26,7 @@ REPUB is a document processing system with both a command-line interface and web
   - Thumbnails: `media/thumbnails/{job_id}/`
 
 ## Development Commands
+Try and catch specific exemption. Do not wrap entire code ino a generic try/catch block.
 
 ### Django Web Application
 ```bash
