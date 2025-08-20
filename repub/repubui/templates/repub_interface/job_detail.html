@@ -29,18 +29,26 @@
                     </div>
                     
                     <form method="post" action="{% url 'stop_job' job.id %}" class="d-inline" onsubmit="return confirm('Are you sure you want to stop this job? This action cannot be undone.');">
-                        <button type="submit" class="btn btn-danger btn-sm mb-3">
+                        <button type="submit" class="btn btn-danger btn-sm mb-3 me-3">
                             <i class="bi bi-stop-fill"></i> Stop Processing
                         </button>
                     </form>
+                    
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm mb-3" title="View output directory">
+                        <i class="bi bi-folder"></i> Files
+                    </a>
                 {% elif job.status == 'reviewing' %}
                     <div class="alert alert-warning">
                         <h4 class="alert-heading">Review needed!</h4>
                         <p>Your document has been processed, but some pages may need crop adjustments. Please review the pages before finalizing.</p>
                     </div>
                     
-                    <a href="{% url 'job_review' job.id %}" class="btn btn-primary btn-lg mb-4">
+                    <a href="{% url 'job_review' job.id %}" class="btn btn-primary btn-lg mb-4 me-3">
                         Review Cropped Pages
+                    </a>
+                    
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-lg mb-4" title="View output directory">
+                        <i class="bi bi-folder"></i> Files
                     </a>
                 {% elif job.status == 'finalizing' %}
                     <div class="alert alert-info">
@@ -52,10 +60,14 @@
                     </div>
                     
                     <form method="post" action="{% url 'stop_job' job.id %}" class="d-inline" onsubmit="return confirm('Are you sure you want to stop this job? This action cannot be undone.');">
-                        <button type="submit" class="btn btn-danger btn-sm mb-3">
+                        <button type="submit" class="btn btn-danger btn-sm mb-3 me-3">
                             <i class="bi bi-stop-fill"></i> Stop Finalizing
                         </button>
                     </form>
+                    
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm mb-3" title="View output directory">
+                        <i class="bi bi-folder"></i> Files
+                    </a>
                 {% elif job.status == 'failed' %}
                     <div class="alert alert-danger">
                         <h4 class="alert-heading">Processing failed!</h4>
@@ -73,10 +85,18 @@
                     </div>
 
                     {% if job.output_file %}
-                        <a href="{% url 'job_download' job.id %}" class="btn btn-primary btn-lg mb-4">
+                        <a href="{% url 'job_download' job.id %}" class="btn btn-primary btn-lg mb-4 me-3">
                             <i class="bi bi-download"></i> Download Processed PDF
                         </a>
                     {% endif %}
+                    
+                    <a href="{% url 'job_review' job.id %}" class="btn btn-outline-primary btn-lg mb-4 me-3">
+                        <i class="bi bi-eye"></i> Review Pages
+                    </a>
+                    
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-lg mb-4" title="View output directory">
+                        <i class="bi bi-folder"></i> Files
+                    </a>
                 {% endif %}
 
                 <h4 class="mt-4 mb-3">Job Details</h4>
