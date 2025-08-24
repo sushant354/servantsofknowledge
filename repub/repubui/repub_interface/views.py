@@ -218,13 +218,19 @@ def job_review(request, job_id):
 
 @require_http_methods(["GET"])
 @login_required
-def page_editor(request, job_id, filename):
+def page_editor(request, job_id, pagenum):
     """
     View for editing page crops with optimized loading and error handling.
     """
     job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
-        
+    page = {'page_number': pagenum}    
             
+    reviewdir   = job.get_review_dir()
+    imgdir      = os.path.join(reviewdir, 'images')
+    origimg     = os.path.join(imgdir, f"{pagenum:04d}.jpg")
+
+    relpath     = os.path.relpath(origimg, settings.MEDIA_ROOT)
+    page['original_image'] = f"{settings.MEDIA_URL}{relpath}"
     context = {
         'job': job,
         'page': page,
@@ -233,149 +239,6 @@ def page_editor(request, job_id, filename):
     }
         
     return render(request, 'repub_interface/page_editor.html', context)
-
-
-@require_http_methods(["POST"])
-@csrf_exempt
-@login_required
-def update_crop(request, job_id, page_number):
-    """
-    API endpoint for updating page crops with optimized processing and error handling.
-    """
-    try:
-        # Validate input data
-        try:
-            crop_data = json.loads(request.body)
-            required_fields = ['x1', 'y1', 'x2', 'y2']
-            if not all(field in crop_data for field in required_fields):
-                raise ValueError("Missing required crop coordinates")
-            
-            # Validate coordinate types
-            if not all(isinstance(crop_data[field], (int, float)) for field in required_fields):
-                raise ValueError("Invalid coordinate types")
-            
-        except (json.JSONDecodeError, ValueError) as e:
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Invalid crop data: {str(e)}'
-            }, status=400)
-        
-        # Get job and page objects
-        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
-        page = get_object_or_404(PageImage, job=job, page_number=page_number)
-        
-        # Validate original image
-        original_image_path = os.path.join(settings.MEDIA_ROOT, page.original_image)
-        if not os.path.exists(original_image_path):
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Original image file not found'
-            }, status=404)
-        
-        # Load and validate image
-        img = cv2.imread(original_image_path)
-        if img is None or img.size == 0:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Failed to load image (empty or invalid format)'
-            }, status=400)
-        
-        # Get image dimensions
-        h, w = img.shape[:2]
-        
-        # Validate and fix crop coordinates
-        crop_box = [
-            max(0, min(float(crop_data['x1']), w-1)),  # x1
-            max(0, min(float(crop_data['y1']), h-1)),  # y1
-            max(1, min(float(crop_data['x2']), w)),    # x2
-            max(1, min(float(crop_data['y2']), h)),    # y2
-            None  # No rotation angle
-        ]
-        
-        # Ensure minimum crop size
-        if crop_box[2] - crop_box[0] < 10 or crop_box[3] - crop_box[1] < 10:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Crop area too small (minimum 10x10 pixels)'
-            }, status=400)
-        
-        # Update page with crop box
-        page.set_user_crop_box(crop_box)
-        page.reviewed = True
-        page.needs_review = False
-        
-        # Apply crop
-        try:
-            cropped_img = crop(img, crop_box)
-            if cropped_img is None or cropped_img.size == 0:
-                raise ValueError("Cropping operation failed")
-            
-            # Prepare output paths
-            output_filename = f"{page.page_number:04d}_adjusted.jpg"
-            relative_path = os.path.join(job.get_output_dir(), output_filename)
-            output_path = os.path.join(settings.MEDIA_ROOT, relative_path)
-            
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            
-            # Save cropped image with quality optimization
-            encode_params = [cv2.IMWRITE_JPEG_QUALITY, 95]
-            if not cv2.imwrite(output_path, cropped_img, encode_params):
-                raise IOError("Failed to save cropped image")
-            
-            # Update page with new image paths
-            page.adjusted_image = relative_path
-            page.cropped_image = relative_path
-            
-            # Generate and save thumbnail
-            if page.cropped_thumbnail:
-                page.cropped_thumbnail.delete(save=False)
-            
-            thumbnail = create_thumbnail(output_path)
-            if thumbnail:
-                thumbnail_filename = f"{page.page_number:04d}_cropped_thumb.jpg"
-                thumbnail_io = BytesIO()
-                thumbnail.save(thumbnail_io, format='JPEG', quality=85)
-                
-                thumbnail_file = ContentFile(thumbnail_io.getvalue())
-                page.cropped_thumbnail.save(
-                    thumbnail_filename,
-                    InMemoryUploadedFile(
-                        thumbnail_file,
-                        None,
-                        thumbnail_filename,
-                        'image/jpeg',
-                        len(thumbnail_io.getvalue()),
-                        None
-                    )
-                )
-            
-            # Save all changes
-            page.save()
-            
-            # Create cache buster
-            timestamp = int(time.time())
-            
-            return JsonResponse({
-                'status': 'success',
-                'message': 'Crop updated successfully',
-                'adjusted_url': f"{settings.MEDIA_URL}{relative_path}?t={timestamp}",
-                'thumbnail_url': f"{page.cropped_thumbnail.url}?t={timestamp}" if page.cropped_thumbnail else None
-            })
-            
-        except Exception as e:
-            logger.error(f"Error processing crop: {str(e)}", exc_info=True)
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Error processing image: {str(e)}'
-            }, status=500)
-            
-    except Exception as e:
-        logger.error(f"Unhandled exception in update_crop: {str(e)}", exc_info=True)
-        return JsonResponse({
-            'status': 'error',
-            'message': 'An unexpected error occurred'
-        }, status=500)
 
 
 @login_required
@@ -505,162 +368,8 @@ def process_job(job_id):
                 relative_path = os.path.relpath(args.outpdf, settings.MEDIA_ROOT)
                 job.output_file = relative_path
         
-
         job.status = 'completed'
         job.save()
-
-
-def process_img_files(scandir, job):        
-    for img, infile, outfile, pagenum in scandir.get_scanned_pages():
-        # Save original file reference
-        rel_original_path = os.path.relpath(infile, settings.MEDIA_ROOT)
-            
-        # Create PageImage object
-        page = PageImage(job=job, page_number=pagenum, \
-                         original_image=rel_original_path)
-            
-        # Create thumbnail for original image
-        original_thumbnail = create_thumbnail(infile)
-            
-        if original_thumbnail:
-            # Save the thumbnail
-            fname = f"{pagenum:04d}_original_thumb.jpg"
-            thumbnail_io = BytesIO()
-            original_thumbnail.save(thumbnail_io, format='JPEG')
-                
-            # Create and save thumbnail
-            thumbnail_file = ContentFile(thumbnail_io.getvalue())
-            page.original_thumbnail.save(fname, InMemoryUploadedFile(
-                    thumbnail_file,
-                    None,
-                    fname,
-                    'image/jpeg',
-                    len(thumbnail_io.getvalue()),
-                    None
-                ))
-       
-        # Create thumbnail for final image
-        final_thumbnail = create_thumbnail(outfile)
-                
-        if final_thumbnail:
-            # Save the thumbnail
-            fname = f"{pagenum:04d}_cropped_thumb.jpg"
-            thumbnail_io = BytesIO()
-            final_thumbnail.save(thumbnail_io, format='JPEG')
-                    
-            # Create and save thumbnail
-            thumbnail_file = ContentFile(thumbnail_io.getvalue())
-            page.cropped_thumbnail.save(fname, InMemoryUploadedFile(
-                        thumbnail_file,
-                        None,
-                        fname,
-                        'image/jpeg',
-                        len(thumbnail_io.getvalue()),
-                        None
-                    ))
-                
-        # Save the page object
-        page.save()
-
-@require_http_methods(["POST"])
-@csrf_exempt
-@login_required
-def save_snip(request, job_id, page_number):
-    """
-    API endpoint for saving snipped images.
-    """
-    try:
-        # Get job and page objects
-        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
-        page = get_object_or_404(PageImage, job=job, page_number=page_number)
-        
-        # Validate file upload
-        if 'snipped_image' not in request.FILES:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'No image file provided'
-            }, status=400)
-        
-        snipped_image = request.FILES['snipped_image']
-        
-        try:
-            # Convert uploaded image to OpenCV format
-            image_data = snipped_image.read()
-            nparr = np.frombuffer(image_data, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            
-            if img is None or img.size == 0:
-                raise ValueError("Invalid image data")
-            
-            # Prepare output paths
-            output_filename = f"{page.page_number:04d}_adjusted.jpg"
-            relative_path = os.path.join(job.get_output_dir(), output_filename)
-            output_path = os.path.join(settings.MEDIA_ROOT, relative_path)
-            
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            
-            # Save snipped image with quality optimization
-            encode_params = [cv2.IMWRITE_JPEG_QUALITY, 95]
-            if not cv2.imwrite(output_path, img, encode_params):
-                raise IOError("Failed to save snipped image")
-            
-            # Update page with new image paths
-            page.adjusted_image = relative_path
-            page.cropped_image = relative_path
-            
-            # Generate and save thumbnail
-            if page.cropped_thumbnail:
-                page.cropped_thumbnail.delete(save=False)
-            
-            thumbnail = create_thumbnail(output_path)
-            if thumbnail:
-                thumbnail_filename = f"{page.page_number:04d}_cropped_thumb.jpg"
-                thumbnail_io = BytesIO()
-                thumbnail.save(thumbnail_io, format='JPEG', quality=85)
-                
-                thumbnail_file = ContentFile(thumbnail_io.getvalue())
-                page.cropped_thumbnail.save(
-                    thumbnail_filename,
-                    InMemoryUploadedFile(
-                        thumbnail_file,
-                        None,
-                        thumbnail_filename,
-                        'image/jpeg',
-                        len(thumbnail_io.getvalue()),
-                        None
-                    )
-                )
-            
-            # Mark page as reviewed
-            page.reviewed = True
-            page.needs_review = False
-            page.save()
-            
-            # Create cache buster
-            timestamp = int(time.time())
-            
-            return JsonResponse({
-                'status': 'success',
-                'message': 'Snip saved successfully',
-                'adjusted_url': f"{settings.MEDIA_URL}{relative_path}?t={timestamp}",
-                'thumbnail_url': f"{page.cropped_thumbnail.url}?t={timestamp}" if page.cropped_thumbnail else None
-            })
-            
-        except Exception as e:
-            logger.error(f"Error processing snipped image: {str(e)}", exc_info=True)
-            return JsonResponse({
-                'status': 'error',
-                'message': f'Error processing image: {str(e)}'
-            }, status=500)
-            
-    except Exception as e:
-        logger.error(f"Unhandled exception in save_snip: {str(e)}", exc_info=True)
-        return JsonResponse({
-            'status': 'error',
-            'message': 'An unexpected error occurred'
-        }, status=500)
-
 
 @require_http_methods(["GET"])
 @login_required
@@ -843,3 +552,65 @@ def register(request):
         form = UserRegistrationForm()
     
     return render(request, 'registration/register.html', {'form': form})
+
+
+@login_required
+@require_http_methods(["POST"])
+@csrf_exempt
+def save_snip(request, job_id, page_number):
+    """Save snipped coordinates and modify the output image directly"""
+    # Get the job
+    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+        
+    reviewdir   = job.get_review_dir()
+    outimgdir   = job.get_outimg_dir()
+    outthumbdir = job.get_thumbnail_dir()
+
+    filename   = f"{page_number:04d}.jpg"
+    imgdir     = os.path.join(reviewdir, 'images')
+    reviewimg  = os.path.join(imgdir, filename)
+    outimg     = os.path.join(outimgdir, filename)
+    thumbfile  = os.path.join(outthumbdir, filename)
+
+    # Get coordinates from request
+    x = int(request.POST.get('x', 0))
+    y = int(request.POST.get('y', 0))
+    width = int(request.POST.get('width', 0))
+    height = int(request.POST.get('height', 0))
+        
+    if width <= 0 or height <= 0:
+        return JsonResponse({
+            'status': 'error', 
+            'message': 'Invalid selection dimensions'
+        })
+        
+    image = cv2.imread(reviewimg)
+    if image is None:
+        return JsonResponse({
+            'status': 'error', 
+            'message': 'Could not load image'
+        })
+        
+    # Validate coordinates are within image bounds
+    img_height, img_width = image.shape[:2]
+    if x < 0 or y < 0 or x + width > img_width or y + height > img_height:
+        return JsonResponse({
+            'status': 'error', 
+            'message': f'Selection exceeds image bounds ({img_width}x{img_height})'
+        })
+        
+    # Crop the image using the provided coordinates
+    cropped_image = image[y:y+height, x:x+width]
+    thumb_image   = process_raw.get_thumbnail(cropped_image)
+
+    cv2.imwrite(thumbfile, thumb_image)
+    cv2.imwrite(outimg, cropped_image)
+        
+    logger.info(f"Saved snip for job {job.id}, page {page_number}: {x},{y} {width}x{height} to {{outimg}}")
+        
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Snip saved successfully',
+        'coordinates': {'x': x, 'y': y, 'width': width, 'height': height},
+        'output_path': outimg
+    })

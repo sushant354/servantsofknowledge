@@ -3,11 +3,6 @@
 {% block title %}Edit Page {{ page.page_number }}{% endblock %}
 
 {% block extra_head %}
-<!-- Resource hints for critical assets -->
-<link rel="preload" href="{{ STATIC_URL }}css/bootstrap-icons.css" as="style">
-
-<!-- Stylesheets -->
-<link rel="stylesheet" href="{{ STATIC_URL }}css/bootstrap-icons.css">
 <style>
     .editor-container {
         max-width: 100%;
@@ -209,9 +204,9 @@
 
     <div class="image-container">
         <img id="original-image" 
-             src="{{ media_url }}{{ page.original_image }}?t={{ now.timestamp }}"
+             src="{{ page.original_image }}?t={{ now.timestamp }}"
              alt="Original Page {{ page.page_number }}"
-             style="max-width: 100%;">
+             style="max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain;">
         <canvas id="snip-canvas" class="snip-canvas" style="display: none;"></canvas>
         <div id="snip-overlay" class="snip-overlay" style="display: none;"></div>
         <div id="selection-box" class="selection-box" style="display: none;"></div>
@@ -319,7 +314,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('selection-size').textContent = `Selection: ${Math.round(width)}×${Math.round(height)}px`;
     });
 
-    snipCanvas.addEventListener('mouseup', function() {
+    // Attach mouseup to document to ensure it's always captured
+    document.addEventListener('mouseup', function() {
         if (!isSnipMode) return;
         isSnipping = false;
     });
@@ -329,52 +325,40 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!isSnipMode) return;
         
         const img = document.getElementById('original-image');
-        const tempCanvas = document.createElement('canvas');
-        const ctx = tempCanvas.getContext('2d');
         
         // Get selection dimensions
         const selection = selectionBox.getBoundingClientRect();
         const container = snipCanvas.getBoundingClientRect();
         const scale = img.naturalWidth / img.width;
         
-        // Set canvas size to selection size
-        tempCanvas.width = selection.width * scale;
-        tempCanvas.height = selection.height * scale;
+        // Calculate coordinates in original image scale
+        const x = Math.round((selection.left - container.left) * scale);
+        const y = Math.round((selection.top - container.top) * scale);
+        const width = Math.round(selection.width * scale);
+        const height = Math.round(selection.height * scale);
         
-        // Draw selected portion
-        ctx.drawImage(
-            img,
-            (selection.left - container.left) * scale,
-            (selection.top - container.top) * scale,
-            selection.width * scale,
-            selection.height * scale,
-            0,
-            0,
-            tempCanvas.width,
-            tempCanvas.height
-        );
+        // Send coordinates to server
+        const formData = new FormData();
+        formData.append('x', x);
+        formData.append('y', y);
+        formData.append('width', width);
+        formData.append('height', height);
         
-        // Convert to blob and save
-        tempCanvas.toBlob(function(blob) {
-            const formData = new FormData();
-            formData.append('snipped_image', blob);
-            
-            fetch(`/job/{{ job.id }}/page/{{ page.page_number }}/save-snip/`, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    showNotification('Snip saved successfully', 'success');
-                    window.location.href = `{% url 'job_review' job.id %}?refresh=true&page={{ page.page_number }}`;
-                } else {
-                    showNotification('Error: ' + data.message, 'danger');
-                }
-            })
-            .catch(error => {
-                showNotification('Error saving snip: ' + error, 'danger');
-            });
+        fetch(`/job/{{ job.id }}/page/{{ page.page_number }}/save-snip/`, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showNotification('Snip saved successfully', 'success');
+                window.location.href = `{% url 'job_review' job.id %}?refresh=true&page={{ page.page_number }}`;
+            } else {
+                showNotification('Error: ' + data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            showNotification('Error saving snip: ' + error, 'danger');
         });
     });
 
