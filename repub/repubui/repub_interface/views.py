@@ -7,6 +7,8 @@ import json
 import time
 import logging
 import mimetypes
+import re
+
 from pathlib import Path
 from PIL import Image
 from io import BytesIO
@@ -128,12 +130,72 @@ def job_detail(request, job_id):
         'job': job
     })
 
+def generate_files_for_review(scandir, thumbdir, job):
+    for img, infile, outfile, pagenum in scandir.get_scanned_pages():
+        filename =  os.path.basename(outfile)
+        cv2.imwrite(outfile, img)
+
+        thumbnail = process_raw.get_thumbnail(img)
+        thumbfile = os.path.join(thumbdir, filename)
+        cv2.imwrite(thumbfile, thumbnail)
+
+def get_pagenum(filename):
+    pagenum = None
+    reobj = re.match('(?P<pagenum>\\d{4})\\.', filename)
+    if reobj:
+        groupdict = reobj.groupdict('pagenum')
+        pagenum   = int(groupdict['pagenum'])
+    return pagenum
 
 @login_required
 def job_review(request, job_id):
     job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
-    pages = job.pages.all().order_by('page_number')
-    
+
+    indir       = job.get_input_dir()
+    reviewdir   = job.get_review_dir()
+    outimgdir   = job.get_outimg_dir()
+    outthumbdir = job.get_thumbnail_dir()
+
+    imgdir   = os.path.join(reviewdir, 'images')
+    thumbdir = os.path.join(reviewdir, 'thumbnails')
+
+    if not os.path.exists(reviewdir):
+        os.makedirs(imgdir, exist_ok=True)
+        os.makedirs(thumbdir, exist_ok=True)
+
+        scandir  = Scandir(indir, imgdir, None)
+        generate_files_for_review(scandir, thumbdir, job)
+        job.status = 'reviewing'
+        job.save()
+
+    pages = []
+    for filename in os.listdir(imgdir):
+        page = {}
+
+        origimg = os.path.join(imgdir, filename)
+        thumbfile = os.path.join(thumbdir, filename)
+
+        relpath   = os.path.relpath(thumbfile, settings.MEDIA_ROOT)
+        page['original_thumbnail'] = f"{settings.MEDIA_URL}{relpath}"
+
+        relpath   = os.path.relpath(origimg, settings.MEDIA_ROOT)
+        page['original_image'] = f"{settings.MEDIA_URL}{relpath}"
+
+        croppedimg = os.path.join(outimgdir, filename)
+        thumbfile  = os.path.join(outthumbdir, filename)
+
+        relpath   = os.path.relpath(thumbfile, settings.MEDIA_ROOT)
+        page['cropped_thumbnail'] = f"{settings.MEDIA_URL}{relpath}"
+
+        relpath   = os.path.relpath(croppedimg, settings.MEDIA_ROOT)
+        page['cropped_image'] = f"{settings.MEDIA_URL}{relpath}"
+
+        page['page_number'] = get_pagenum(filename)
+        page['filename']    = filename
+        pages.append(page)
+
+    pages.sort(key = lambda x: x['page_number'])
+
     if request.method == 'POST' and 'finalize' in request.POST:
         # Start finalizing in background thread
         job.status = 'finalizing'
@@ -148,56 +210,29 @@ def job_review(request, job_id):
     
     return render(request, 'repub_interface/job_review.html', {
         'job': job,
-        'pages': pages,
         'now': current_time,
+        'pages': pages,
         'media_url': settings.MEDIA_URL
     })
 
 
 @require_http_methods(["GET"])
 @login_required
-def page_editor(request, job_id, page_number):
+def page_editor(request, job_id, filename):
     """
     View for editing page crops with optimized loading and error handling.
     """
-    try:
-        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
-        page = get_object_or_404(PageImage, job=job, page_number=page_number)
+    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
         
-        # Get adjacent pages for navigation
-        next_page = PageImage.objects.filter(
-            job=job, 
-            page_number__gt=page_number
-        ).order_by('page_number').first()
+            
+    context = {
+        'job': job,
+        'page': page,
+        'media_url': settings.MEDIA_URL,
+        'now': timezone.now()
+    }
         
-        prev_page = PageImage.objects.filter(
-            job=job, 
-            page_number__lt=page_number
-        ).order_by('-page_number').first()
-        
-        # Validate crop box data
-        if page.user_crop_box:
-            try:
-                json.loads(page.user_crop_box)
-            except json.JSONDecodeError:
-                page.user_crop_box = None
-                page.save()
-        
-        context = {
-            'job': job,
-            'page': page,
-            'next_page': next_page,
-            'prev_page': prev_page,
-            'media_url': settings.MEDIA_URL,
-            'now': timezone.now()
-        }
-        
-        return render(request, 'repub_interface/page_editor.html', context)
-        
-    except Exception as e:
-        logger.error(f"Error in page_editor view: {str(e)}", exc_info=True)
-        messages.error(request, "An error occurred while loading the page editor.")
-        return redirect('job_detail', job_id=job_id)
+    return render(request, 'repub_interface/page_editor.html', context)
 
 
 @require_http_methods(["POST"])
@@ -470,8 +505,6 @@ def process_job(job_id):
                 relative_path = os.path.relpath(args.outpdf, settings.MEDIA_ROOT)
                 job.output_file = relative_path
         
-
-        process_img_files(scandir, job)
 
         job.status = 'completed'
         job.save()

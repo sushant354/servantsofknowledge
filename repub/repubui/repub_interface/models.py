@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 import os
 import uuid
 import json
-
+from django.conf import settings
 
 def get_upload_path(instance, filename):
     return f'uploads/{instance.id}/{filename}'
@@ -71,13 +71,19 @@ class ProcessingJob(models.Model):
         return f"Job {self.id} - {self.status}"
 
     def get_input_dir(self):
-        return os.path.join('media', 'uploads', str(self.id), 'extracted')
+        return os.path.join(settings.MEDIA_ROOT, 'uploads', str(self.id), 'extracted')
 
     def get_output_dir(self):
-        return os.path.join('media', 'processed', str(self.id))
+        return os.path.join(settings.MEDIA_ROOT, 'processed', str(self.id))
+        
+    def get_outimg_dir(self):
+        return os.path.join(settings.MEDIA_ROOT, 'processed', str(self.id), 'output')
+        
+    def get_review_dir(self):
+        return os.path.join(settings.MEDIA_ROOT, 'review', str(self.id))
         
     def get_thumbnail_dir(self):
-        return os.path.join('processed',  str(self.id), 'thumbnails')
+        return os.path.join(settings.MEDIA_ROOT, 'processed',  str(self.id), 'thumbnails')
 
 
 class PageImage(models.Model):

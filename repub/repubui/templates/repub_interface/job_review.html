@@ -66,8 +66,11 @@
     .modal-content {
         margin: auto;
         display: block;
-        max-width: 90%;
-        max-height: 90%;
+        max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+        object-fit: contain;
     }
     
     .close-modal {
@@ -126,16 +129,6 @@
                 <p>Pages marked with a <span class="badge bg-warning">Review Needed</span> badge may need your attention.</p>
             </div>
             
-            <div class="criteria-explanation">
-                <h5>Why are some pages marked for review?</h5>
-                <p>The system automatically identifies pages that might need manual adjustment based on the following criteria:</p>
-                <ul>
-                    <li>Unusual crop dimensions (too narrow or too small)</li>
-                    <li>Significant skew or rotation detected in the original image</li>
-                    <li>Auto-correction of inconsistent crop boxes between pages</li>
-                    <li>Potential text or content near the edges that might be cut off</li>
-                </ul>
-            </div>
             
             <h4 class="mb-3">Pages ({{ pages|length }})</h4>
             
@@ -151,7 +144,7 @@
                         <div class="card-header">
                             <div class="d-flex justify-content-between align-items-center">
                                 <h5 class="mb-0">Page {{ page.page_number }}</h5>
-                                <a href="{% url 'page_editor' job.id page.page_number %}" class="btn btn-sm btn-primary">Edit</a>
+                                <a href="{% url 'page_editor' job.id page.filename %}" class="btn btn-sm btn-primary">Edit</a>
                             </div>
                         </div>
                         
@@ -160,10 +153,10 @@
                                 <div class="col">
                                     <div class="comparison-label">Original</div>
                                     {% if page.original_thumbnail %}
-                                        <img src="{{ page.original_thumbnail.url }}?t={{ now.timestamp }}" 
+                                        <img src="{{page.original_thumbnail}}" 
                                             class="img-thumbnail original-thumb" 
                                             alt="Original Page {{ page.page_number }}"
-                                            data-full="{{ media_url }}{{ page.original_image }}"
+                                            data-full="{{ page.original_image }}"
                                             data-page="{{ page.page_number }}"
                                             data-type="original"
                                             data-can-crop="true"
@@ -175,10 +168,10 @@
                                 <div class="col">
                                     <div class="comparison-label">Processed</div>
                                     {% if page.cropped_thumbnail %}
-                                        <img src="{{ page.cropped_thumbnail.url }}?t={{ now.timestamp }}" 
+                                        <img src="{{page.cropped_thumbnail}}" 
                                             class="img-thumbnail cropped-thumb" 
                                             alt="Cropped Page {{ page.page_number }}"
-                                            data-full="{{ media_url }}{{ page.cropped_image }}"
+                                            data-full="{{ page.cropped_image }}"
                                             data-page="{{ page.page_number }}"
                                             data-type="cropped"
                                             data-can-crop="false"
