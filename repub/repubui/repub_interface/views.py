@@ -221,15 +221,26 @@ def page_editor(request, job_id, pagenum):
     imgdir      = os.path.join(reviewdir, 'images')
     origimg     = os.path.join(imgdir, f"{pagenum:04d}.jpg")
 
+    next_page   = pagenum + 1
+    next_img    = os.path.join(imgdir, f"{next_page:04d}.jpg")
+    if not os.path.exists(next_img):
+        next_page = None
+
+    prev_page   = pagenum - 1
+    prev_img    = os.path.join(imgdir, f"{prev_page:04d}.jpg")
+    if not os.path.exists(prev_img):
+        prev_page = None
+
     relpath     = os.path.relpath(origimg, settings.MEDIA_ROOT)
     page['original_image'] = f"{settings.MEDIA_URL}{relpath}"
     context = {
         'job': job,
         'page': page,
+        'prev_page': prev_page,
+        'next_page': next_page,
         'media_url': settings.MEDIA_URL,
         'now': timezone.now()
     }
-        
     return render(request, 'repub_interface/page_editor.html', context)
 
 

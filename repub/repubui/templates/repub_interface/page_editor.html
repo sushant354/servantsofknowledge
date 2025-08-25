@@ -160,16 +160,16 @@
     <div class="toolbar" role="toolbar" aria-label="Image editing tools">
         <div class="toolbar-group">
             {% if prev_page %}
-            <a href="{% url 'page_editor' job.id prev_page.page_number %}" 
+            <a href="{% url 'page_editor' job.id prev_page %}" 
                class="btn btn-outline-primary"
                aria-label="Previous page"
                data-tooltip="Previous page">
-                <i class="bi bi-arrow-left"></i>
+               Previous <i class="bi bi-arrow-left"></i>
             </a>
             {% endif %}
             
             {% if next_page %}
-            <a href="{% url 'page_editor' job.id next_page.page_number %}"
+            <a href="{% url 'page_editor' job.id next_page %}"
                class="btn btn-outline-primary"
                aria-label="Next page"
                data-tooltip="Next page">
