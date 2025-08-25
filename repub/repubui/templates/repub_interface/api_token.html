@@ -1,0 +1,203 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}API Token Management - REPUB{% endblock %}
+
+{% block extra_head %}
+<style>
+.token-display {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 10px;
+    word-break: break-all;
+    user-select: all;
+}
+
+.copy-success {
+    color: #28a745;
+    font-size: 0.9em;
+    display: none;
+}
+
+.token-masked {
+    filter: blur(4px);
+    transition: filter 0.3s ease;
+}
+
+.token-masked:hover {
+    filter: none;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                <li class="breadcrumb-item active" aria-current="page">API Token</li>
+            </ol>
+        </nav>
+
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0">
+                        <i class="bi bi-key-fill"></i> API Token Management
+                    </h3>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+
+                <div class="alert alert-info">
+                    <h5 class="alert-heading">
+                        <i class="bi bi-info-circle"></i> About API Tokens
+                    </h5>
+                    <p>API tokens allow you to authenticate with the REPUB API programmatically. Use your token in the Authorization header:</p>
+                    <code>Authorization: Token YOUR_TOKEN_HERE</code>
+                    <hr>
+                    <p class="mb-0">
+                        <strong>Keep your token secure!</strong> Anyone with your token can access your account via the API.
+                    </p>
+                </div>
+
+                {% if token %}
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Your API Token:</label>
+                        <div class="input-group">
+                            <div class="token-display flex-grow-1 token-masked" id="tokenDisplay">
+                                {{ token.key }}
+                            </div>
+                            <button class="btn btn-outline-secondary" type="button" id="copyTokenBtn" title="Copy to clipboard">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                            <button class="btn btn-outline-info" type="button" id="toggleVisibilityBtn" title="Toggle visibility">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted">
+                            <i class="bi bi-calendar3"></i> Created: {{ token.created|date:"F d, Y H:i" }}
+                            | Hover to reveal token
+                        </small>
+                        <div class="copy-success mt-1" id="copySuccess">
+                            <i class="bi bi-check-circle-fill"></i> Token copied to clipboard!
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <form method="post" action="{% url 'api_token' %}" class="d-inline" 
+                              onsubmit="return confirm('Are you sure you want to regenerate your token? This will invalidate the current token.');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="regenerate">
+                            <button type="submit" class="btn btn-warning">
+                                <i class="bi bi-arrow-clockwise"></i> Regenerate Token
+                            </button>
+                        </form>
+                        
+                        <form method="post" action="{% url 'api_token' %}" class="d-inline"
+                              onsubmit="return confirm('Are you sure you want to delete your token? You will need to regenerate it to use the API.');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash-fill"></i> Delete Token
+                            </button>
+                        </form>
+                    </div>
+                {% else %}
+                    <div class="text-center p-4">
+                        <i class="bi bi-key display-1 text-muted"></i>
+                        <h4 class="mt-3">No API Token</h4>
+                        <p class="text-muted mb-4">You don't have an API token yet. Generate one to access the REPUB API.</p>
+                        
+                        <form method="post" action="{% url 'api_token' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="generate">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-plus-circle"></i> Generate API Token
+                            </button>
+                        </form>
+                    </div>
+                {% endif %}
+
+                <hr>
+                
+                <div class="mt-4">
+                    <h5>API Usage Examples</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Python (requests)</h6>
+                            <pre class="bg-light p-3 rounded"><code>import requests
+
+headers = {
+    'Authorization': 'Token {{ token.key|default:"YOUR_TOKEN_HERE" }}'
+}
+
+response = requests.get('{{ request.build_absolute_uri }}/api/', headers=headers)</code></pre>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>cURL</h6>
+                            <pre class="bg-light p-3 rounded"><code>curl -H "Authorization: Token {{ token.key|default:"YOUR_TOKEN_HERE" }}" \
+     {{ request.build_absolute_uri }}/api/</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tokenDisplay = document.getElementById('tokenDisplay');
+    const copyBtn = document.getElementById('copyTokenBtn');
+    const toggleBtn = document.getElementById('toggleVisibilityBtn');
+    const copySuccess = document.getElementById('copySuccess');
+    
+    if (copyBtn && tokenDisplay) {
+        copyBtn.addEventListener('click', function() {
+            const token = tokenDisplay.textContent.trim();
+            navigator.clipboard.writeText(token).then(function() {
+                copySuccess.style.display = 'block';
+                setTimeout(function() {
+                    copySuccess.style.display = 'none';
+                }, 3000);
+            }).catch(function() {
+                alert('Failed to copy token. Please copy manually.');
+            });
+        });
+    }
+    
+    if (toggleBtn && tokenDisplay) {
+        let isVisible = false;
+        
+        toggleBtn.addEventListener('click', function() {
+            if (isVisible) {
+                tokenDisplay.classList.add('token-masked');
+                toggleBtn.innerHTML = '<i class="bi bi-eye"></i>';
+                toggleBtn.title = 'Show token';
+                isVisible = false;
+            } else {
+                tokenDisplay.classList.remove('token-masked');
+                toggleBtn.innerHTML = '<i class="bi bi-eye-slash"></i>';
+                toggleBtn.title = 'Hide token';
+                isVisible = true;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
