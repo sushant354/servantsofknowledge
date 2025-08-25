@@ -143,9 +143,16 @@
                 <div class="d-flex mt-4">
                     <a href="{% url 'home' %}" class="btn btn-secondary me-2">Back to Home</a>
 
+                    {% if job.status == 'completed' or job.status == 'failed' %}
+                        <form method="post" action="{% url 'retry_job' job.id %}" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-primary me-2">Retry</button>
+                        </form>
+                    {% endif %}
+
                     {% if job.status == 'failed' %}
-                        <form method="post" action="{% url 'home' %}">
-                                <input type="hidden" name="retry_job_id" value="{{ job.id }}">
+                        <form method="post" action="{% url 'retry_job' job.id %}">
+                            {% csrf_token %}
                             <button type="submit" class="btn btn-warning">Retry with Same Settings</button>
                         </form>
                     {% endif %}

@@ -189,12 +189,16 @@
             </div>
             
             <div class="mt-4">
-                <form method="post" action="{% url 'job_review' job.id %}">
-                    <div class="d-flex justify-content-between">
-                        <a href="{% url 'job_detail' job.id %}" class="btn btn-secondary">Back to Job Details</a>
-                        <button type="submit" name="finalize" class="btn btn-primary">Finalize and Rerun</button>
-                    </div>
-                </form>
+                <div class="d-flex justify-content-between">
+                    <form method="post" action="{% url 'reject_review' job.id %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-secondary">Reject the review</button>
+                    </form>
+                    <form method="post" action="{% url 'finalize_job' job.id %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary">Finalize and Rerun</button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

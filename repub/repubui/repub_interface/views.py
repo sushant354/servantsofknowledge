@@ -102,11 +102,7 @@ def home(request):
         job.save()
 
         logger.debug(f"Created job {job.id} with file: {job.input_file}")
-
-        # Start processing in background thread
-        thread = threading.Thread(target=process_job, args=(job.id,))
-        thread.daemon = True
-        thread.start()
+        run_job(job.id)
 
         logger.debug(f"Started processing job {job.id} in background thread")
         messages.success(request, f'Job "{job.title or "Untitled"}" has been submitted and is being processed.')
@@ -117,6 +113,11 @@ def home(request):
         'jobs': jobs
     })
 
+def run_job(job_id):
+    # Start processing in background thread
+    thread = threading.Thread(target=process_job, args=(job_id,))
+    thread.daemon = True
+    thread.start()
 
 @login_required
 def job_detail(request, job_id):
@@ -196,15 +197,6 @@ def job_review(request, job_id):
 
     pages.sort(key = lambda x: x['page_number'])
 
-    if request.method == 'POST' and 'finalize' in request.POST:
-        # Start finalizing in background thread
-        job.status = 'finalizing'
-        job.save()
-        thread = threading.Thread(target=finalize_job, args=(job.id,))
-        thread.daemon = True
-        thread.start()
-        return redirect('job_detail', job_id=job.id)
-    
     # Add current timestamp for cache busting
     current_time = {'timestamp': int(time.time())}
     
@@ -601,10 +593,12 @@ def save_snip(request, job_id, page_number):
         
     # Crop the image using the provided coordinates
     cropped_image = image[y:y+height, x:x+width]
+    img = process_raw.resize_image(cropped_image, job.reduce_factor)
+
     thumb_image   = process_raw.get_thumbnail(cropped_image)
 
     cv2.imwrite(thumbfile, thumb_image)
-    cv2.imwrite(outimg, cropped_image)
+    cv2.imwrite(outimg, img)
         
     logger.info(f"Saved snip for job {job.id}, page {page_number}: {x},{y} {width}x{height} to {{outimg}}")
         
@@ -614,3 +608,82 @@ def save_snip(request, job_id, page_number):
         'coordinates': {'x': x, 'y': y, 'width': width, 'height': height},
         'output_path': outimg
     })
+
+
+@csrf_exempt
+@login_required
+@require_http_methods(["POST"])
+def finalize_job(request, job_id):
+    """Finalize the job after review"""
+    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    input_dir       = job.get_input_dir()
+    output_dir      = job.get_output_dir() 
+    args = Args(job, input_dir, output_dir)
+    scandir = Scandir(args.indir, args.outdir, args.pagenums)
+
+    input_file_path = job.input_file.path
+
+    if job.input_type == 'pdf':
+        metadata = pdfs.get_metadata(input_file_path)
+    else:
+        metadata = scandir.metadata
+
+    outfiles = []
+    imgdir   = job.get_outimg_dir()
+    for filename in os.listdir(imgdir):
+        outfile = os.path.join(imgdir, filename)
+        pagenum = get_pagenum(filename)
+        outfiles.append((pagenum, outfile))
+
+    outfiles.sort(key = lambda x: x[0])
+
+    pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, \
+                              args.do_ocr, args.outhocr, args.outtxt)
+
+    relative_path = os.path.relpath(args.outpdf, settings.MEDIA_ROOT)
+    job.output_file = relative_path
+        
+    job.status = 'completed'
+    job.save()
+
+    reviewdir   = job.get_review_dir()
+    shutil.rmtree(reviewdir)
+    
+    return redirect('job_detail', job_id=job_id)
+
+
+@csrf_exempt
+@login_required
+@require_http_methods(["POST"])
+def reject_review(request, job_id):
+    """Reject the review and go back to job details"""
+    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+
+    job.status = 'completed'
+    job.save()
+
+    reviewdir   = job.get_review_dir()
+    shutil.rmtree(reviewdir)
+   
+    return redirect('job_detail', job_id=job_id)
+
+
+@login_required
+@require_http_methods(["POST"])
+def retry_job(request, job_id):
+    """Retry job with same settings"""
+    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    job.status = 'processing'
+    output_dir = job.get_output_dir()
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+
+        img_dir = os.path.join(output_dir, 'output')
+        os.makedirs(img_dir, exist_ok=True)
+
+        thumbnaildir = os.path.join(output_dir, 'thumbnails')
+        os.makedirs(thumbnaildir, exist_ok=True)
+    run_job(job_id) 
+    job.save()
+    
+    return redirect('job_detail', job_id=job_id)

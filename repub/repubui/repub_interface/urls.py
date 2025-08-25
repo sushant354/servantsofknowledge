@@ -12,6 +12,9 @@ urlpatterns = [
     path('job/<uuid:job_id>/review/', views.job_review, name='job_review'),
     path('job/<uuid:job_id>/page/<int:pagenum>/', views.page_editor, name='page_editor'),
     path('job/<uuid:job_id>/page/<int:page_number>/save-snip/', views.save_snip, name='save_snip'),
+    path('job/<uuid:job_id>/finalize/', views.finalize_job, name='finalize_job'),
+    path('job/<uuid:job_id>/reject-review/', views.reject_review, name='reject_review'),
+    path('job/<uuid:job_id>/retry/', views.retry_job, name='retry_job'),
     path('job/<uuid:job_id>/status/', views.job_status, name='job_status'),
     path('job/<uuid:job_id>/stop/', views.stop_job, name='stop_job'),
 ]
