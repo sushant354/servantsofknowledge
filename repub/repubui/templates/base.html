@@ -86,6 +86,12 @@
                             </button>
                             <ul class="dropdown-menu">
                                 <li>
+                                    <a class="dropdown-item" href="{% url 'api_token' %}">
+                                        <i class="bi bi-key-fill"></i> API Token
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
                                     <form method="post" action="{% url 'logout' %}" class="d-inline">
                                         {% csrf_token %}
                                         <button type="submit" class="dropdown-item border-0 bg-transparent">

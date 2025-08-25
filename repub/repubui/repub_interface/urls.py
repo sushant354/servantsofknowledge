@@ -17,4 +17,5 @@ urlpatterns = [
     path('job/<uuid:job_id>/retry/', views.retry_job, name='retry_job'),
     path('job/<uuid:job_id>/status/', views.job_status, name='job_status'),
     path('job/<uuid:job_id>/stop/', views.stop_job, name='stop_job'),
+    path('api-token/', views.api_token_management, name='api_token'),
 ]

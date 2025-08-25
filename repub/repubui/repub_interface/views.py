@@ -24,6 +24,7 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
+from rest_framework.authtoken.models import Token
 from .models import ProcessingJob, PageImage
 from .forms import ProcessingJobForm, UserRegistrationForm
 import numpy as np
@@ -706,3 +707,44 @@ def retry_job(request, job_id):
     job.save()
     
     return redirect('job_detail', job_id=job_id)
+
+
+@login_required
+def api_token_management(request):
+    """Manage user's API token for REST framework authentication"""
+    token = Token.objects.filter(user=request.user).first()
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        if action == 'generate':
+            if not token:
+                token = Token.objects.create(user=request.user)
+                messages.success(request, 'API token has been generated successfully!')
+                logger.info(f"Generated new API token for user {request.user.username}")
+            else:
+                messages.info(request, 'You already have an API token. Use "Regenerate" to create a new one.')
+        
+        elif action == 'regenerate':
+            if token:
+                token.delete()
+            token = Token.objects.create(user=request.user)
+            messages.success(request, 'API token has been regenerated successfully! Make sure to update any applications using the old token.')
+            logger.info(f"Regenerated API token for user {request.user.username}")
+        
+        elif action == 'delete':
+            if token:
+                token.delete()
+                token = None
+                messages.success(request, 'API token has been deleted successfully.')
+                logger.info(f"Deleted API token for user {request.user.username}")
+            else:
+                messages.info(request, 'No API token to delete.')
+        
+        return redirect('api_token')
+    
+    context = {
+        'token': token,
+    }
+    
+    return render(request, 'repub_interface/api_token.html', context)
