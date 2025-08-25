@@ -2,6 +2,23 @@
 
 {% block title %}All Jobs - REPUB{% endblock %}
 
+{% block extra_head %}
+<style>
+.clickable-card {
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.clickable-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+.filter-active {
+    border: 3px solid #fff;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.5);
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col">
@@ -18,36 +35,44 @@
 <!-- Statistics Cards -->
 <div class="row mb-4">
     <div class="col-md-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <h5 class="card-title">Total Jobs</h5>
-                <h3 class="card-text">{{ total_jobs }}</h3>
+        <a href="?" class="text-decoration-none">
+            <div class="card bg-primary text-white clickable-card{% if not request.GET.status %} filter-active{% endif %}">
+                <div class="card-body">
+                    <h5 class="card-title">Total Jobs</h5>
+                    <h3 class="card-text">{{ total_jobs }}</h3>
+                </div>
             </div>
-        </div>
+        </a>
     </div>
     <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <h5 class="card-title">Completed</h5>
-                <h3 class="card-text">{{ completed_jobs }}</h3>
+        <a href="?status=completed" class="text-decoration-none">
+            <div class="card bg-success text-white clickable-card{% if request.GET.status == 'completed' %} filter-active{% endif %}">
+                <div class="card-body">
+                    <h5 class="card-title">Completed</h5>
+                    <h3 class="card-text">{{ completed_jobs }}</h3>
+                </div>
             </div>
-        </div>
+        </a>
     </div>
     <div class="col-md-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <h5 class="card-title">Processing</h5>
-                <h3 class="card-text">{{ processing_jobs }}</h3>
+        <a href="?status=processing" class="text-decoration-none">
+            <div class="card bg-warning text-white clickable-card{% if request.GET.status == 'processing' %} filter-active{% endif %}">
+                <div class="card-body">
+                    <h5 class="card-title">Processing</h5>
+                    <h3 class="card-text">{{ processing_jobs }}</h3>
+                </div>
             </div>
-        </div>
+        </a>
     </div>
     <div class="col-md-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <h5 class="card-title">Under Review</h5>
-                <h3 class="card-text">{{ reviewing_jobs }}</h3>
+        <a href="?status=reviewing" class="text-decoration-none">
+            <div class="card bg-info text-white clickable-card{% if request.GET.status == 'reviewing' %} filter-active{% endif %}">
+                <div class="card-body">
+                    <h5 class="card-title">Under Review</h5>
+                    <h3 class="card-text">{{ reviewing_jobs }}</h3>
+                </div>
             </div>
-        </div>
+        </a>
     </div>
 </div>
 
@@ -151,10 +176,10 @@
                         <ul class="pagination justify-content-center mb-0">
                             {% if jobs.has_previous %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?page=1">First</a>
+                                    <a class="page-link" href="?page=1{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">First</a>
                                 </li>
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ jobs.previous_page_number }}">Previous</a>
+                                    <a class="page-link" href="?page={{ jobs.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Previous</a>
                                 </li>
                             {% endif %}
 
@@ -165,17 +190,17 @@
                                     </li>
                                 {% elif i > jobs.number|add:'-3' and i < jobs.number|add:'3' %}
                                     <li class="page-item">
-                                        <a class="page-link" href="?page={{ i }}">{{ i }}</a>
+                                        <a class="page-link" href="?page={{ i }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">{{ i }}</a>
                                     </li>
                                 {% endif %}
                             {% endfor %}
 
                             {% if jobs.has_next %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ jobs.next_page_number }}">Next</a>
+                                    <a class="page-link" href="?page={{ jobs.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Next</a>
                                 </li>
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ jobs.paginator.num_pages }}">Last</a>
+                                    <a class="page-link" href="?page={{ jobs.paginator.num_pages }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Last</a>
                                 </li>
                             {% endif %}
                         </ul>

@@ -41,17 +41,25 @@ from repub.utils import pdfs
 def all_jobs(request):
     jobs_list = ProcessingJob.objects.filter(user=request.user).order_by('-created_at')
     
+    # Get status filter from query parameters
+    status_filter = request.GET.get('status')
+    if status_filter and status_filter in ['completed', 'processing', 'reviewing', 'failed', 'finalizing']:
+        jobs_list = jobs_list.filter(status=status_filter)
+    
     paginator = Paginator(jobs_list, 10)  # Show 10 jobs per page
     page_number = request.GET.get('page')
     jobs = paginator.get_page(page_number)
     
+    # Get all jobs for statistics (not filtered)
+    all_jobs_list = ProcessingJob.objects.filter(user=request.user)
+    
     context = {
         'jobs': jobs,
-        'total_jobs': jobs_list.count(),
-        'completed_jobs': jobs_list.filter(status='completed').count(),
-        'processing_jobs': jobs_list.filter(status='processing').count(),
-        'failed_jobs': jobs_list.filter(status='failed').count(),
-        'reviewing_jobs': jobs_list.filter(status='reviewing').count(),
+        'total_jobs': all_jobs_list.count(),
+        'completed_jobs': all_jobs_list.filter(status='completed').count(),
+        'processing_jobs': all_jobs_list.filter(status='processing').count(),
+        'failed_jobs': all_jobs_list.filter(status='failed').count(),
+        'reviewing_jobs': all_jobs_list.filter(status='reviewing').count(),
     }
     
     return render(request, 'repub_interface/all_jobs.html', context)
