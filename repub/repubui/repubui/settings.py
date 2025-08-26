@@ -182,7 +182,7 @@ LOGGING = {
         },
         'file': {
             'class': 'logging.FileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'repubui.log'),
+            'filename': os.getenv('LOGFILE', os.path.join(BASE_DIR, 'logs', 'repubui.log')),
             'formatter': 'verbose',
         },
     },
