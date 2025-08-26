@@ -34,8 +34,12 @@
                         </button>
                     </form>
                     
-                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm mb-3" title="View output directory">
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm mb-3 me-2" title="View output directory">
                         <i class="bi bi-folder"></i> Files
+                    </a>
+                    
+                    <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-sm mb-3" title="View input directory">
+                        <i class="bi bi-folder-plus"></i> Input
                     </a>
                 {% elif job.status == 'reviewing' %}
                     <div class="alert alert-warning">
@@ -47,8 +51,12 @@
                         Review Cropped Pages
                     </a>
                     
-                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-lg mb-4" title="View output directory">
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-lg mb-4 me-3" title="View output directory">
                         <i class="bi bi-folder"></i> Files
+                    </a>
+                    
+                    <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-lg mb-4" title="View input directory">
+                        <i class="bi bi-folder-plus"></i> Input
                     </a>
                 {% elif job.status == 'finalizing' %}
                     <div class="alert alert-info">
@@ -65,8 +73,12 @@
                         </button>
                     </form>
                     
-                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm mb-3" title="View output directory">
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm mb-3 me-2" title="View output directory">
                         <i class="bi bi-folder"></i> Files
+                    </a>
+                    
+                    <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-sm mb-3" title="View input directory">
+                        <i class="bi bi-folder-plus"></i> Input
                     </a>
                 {% elif job.status == 'failed' %}
                     <div class="alert alert-danger">
@@ -94,8 +106,12 @@
                         <i class="bi bi-eye"></i> Review Pages
                     </a>
                     
-                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-lg mb-4" title="View output directory">
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-lg mb-4 me-3" title="View output directory">
                         <i class="bi bi-folder"></i> Files
+                    </a>
+                    
+                    <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-lg mb-4" title="View input directory">
+                        <i class="bi bi-folder-plus"></i> Input
                     </a>
                 {% endif %}
 
@@ -150,12 +166,6 @@
                         </form>
                     {% endif %}
 
-                    {% if job.status == 'failed' %}
-                        <form method="post" action="{% url 'retry_job' job.id %}">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-warning">Retry with Same Settings</button>
-                        </form>
-                    {% endif %}
                 </div>
             </div>
         </div>

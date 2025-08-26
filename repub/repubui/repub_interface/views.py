@@ -25,6 +25,9 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from rest_framework.authtoken.models import Token
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.decorators import authentication_classes, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from .models import ProcessingJob, PageImage
 from .forms import ProcessingJobForm, UserRegistrationForm
 import numpy as np
@@ -37,6 +40,49 @@ from repub import process_raw
 from repub.imgfuncs.cropping import crop
 from repub.utils.scandir import Scandir
 from repub.utils import pdfs
+
+
+def authenticate_user(request):
+    """Custom authentication that supports both session and token auth"""
+    # First try session authentication (for web users)
+    if request.user.is_authenticated:
+        return request.user
+    
+    # Try token authentication (for API clients)
+    auth_header = request.META.get('HTTP_AUTHORIZATION')
+    if auth_header and auth_header.startswith('Token '):
+        token = auth_header.split(' ')[1]
+        try:
+            token_obj = Token.objects.get(key=token)
+            return token_obj.user
+        except Token.DoesNotExist:
+            pass
+    
+    return None
+
+
+def login_or_token_required(view_func):
+    """Decorator that requires either session login or valid token"""
+    def wrapper(request, *args, **kwargs):
+        user = authenticate_user(request)
+        if user:
+            # Set the user on the request for the view
+            if not request.user.is_authenticated:
+                request.user = user
+            return view_func(request, *args, **kwargs)
+        else:
+            from django.contrib.auth import REDIRECT_FIELD_NAME
+            from django.contrib.auth.views import redirect_to_login
+            from django.http import JsonResponse
+            
+            # For API requests, return JSON error
+            if request.META.get('HTTP_AUTHORIZATION'):
+                return JsonResponse({'success': False, 'error': 'Invalid token'}, status=401)
+            
+            # For web requests, redirect to login
+            return redirect_to_login(request.get_full_path())
+    
+    return wrapper
 
 @login_required
 def all_jobs(request):
@@ -66,8 +112,8 @@ def all_jobs(request):
     return render(request, 'repub_interface/all_jobs.html', context)
 
 
-@login_required
 @csrf_exempt
+@login_or_token_required
 def home(request):
     jobs = ProcessingJob.objects.filter(user=request.user).order_by('-created_at')[:10]
     form = ProcessingJobForm()
@@ -253,7 +299,7 @@ def page_editor(request, job_id, pagenum):
     return render(request, 'repub_interface/page_editor.html', context)
 
 
-@login_required
+@login_or_token_required
 def job_download(request, job_id):
     job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
     if job.output_file and job.status == 'completed':
@@ -384,19 +430,35 @@ def process_job(job_id):
         job.save()
 
 @require_http_methods(["GET"])
-@login_required
+@login_or_token_required
 def job_status(request, job_id):
     """
     API endpoint for checking job status via AJAX.
     """
     try:
         job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
-        return JsonResponse({
+        
+        response_data = {
+            'success': True,
             'status': job.status,
-            'needs_review': job.needs_review
-        })
+            'needs_review': getattr(job, 'needs_review', False),
+            'job_id': str(job.id),
+            'title': job.title or 'Untitled Job',
+            'created_at': job.created_at.isoformat(),
+        }
+        
+        # Add updated_at if it exists
+        if hasattr(job, 'updated_at') and job.updated_at:
+            response_data['updated_at'] = job.updated_at.isoformat()
+        else:
+            response_data['updated_at'] = job.created_at.isoformat()
+            
+        return JsonResponse(response_data)
+        
     except Exception as e:
+        logger.error(f"Error getting job status for {job_id}: {str(e)}")
         return JsonResponse({
+            'success': False,
             'status': 'error',
             'message': str(e)
         }, status=500)
@@ -536,6 +598,115 @@ def job_output_directory(request, job_id, subpath=''):
     }
     
     return render(request, 'repub_interface/job_output_directory.html', context)
+
+
+@login_required
+def job_input_directory(request, job_id, subpath=''):
+    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    
+    # Get the base input directory path
+    base_input_dir = job.get_input_dir()
+    
+    # Construct the current directory path
+    if subpath:
+        # Sanitize the subpath to prevent directory traversal
+        subpath = subpath.strip('/')
+        subpath_parts = [part for part in subpath.split('/') if part and part != '..']
+        current_dir = os.path.join(base_input_dir, *subpath_parts)
+        current_subpath = '/'.join(subpath_parts)
+    else:
+        current_dir = base_input_dir
+        current_subpath = ''
+    
+    # Security check: ensure we're still within the job's input directory
+    if not os.path.commonpath([base_input_dir, current_dir]) == base_input_dir:
+        messages.error(request, 'Access denied: Invalid directory path.')
+        return redirect('job_input_directory', job_id=job_id)
+    
+    if not os.path.exists(current_dir):
+        messages.error(request, 'Input directory does not exist.')
+        return redirect('job_detail', job_id=job_id)
+    
+    # Build breadcrumb navigation
+    breadcrumbs = [{'name': 'Input', 'path': ''}]
+    if current_subpath:
+        path_parts = current_subpath.split('/')
+        for i, part in enumerate(path_parts):
+            breadcrumb_path = '/'.join(path_parts[:i+1])
+            breadcrumbs.append({'name': part, 'path': breadcrumb_path})
+    
+    # Get directory contents
+    items = []
+    try:
+        for item_name in sorted(os.listdir(current_dir)):
+            item_path = os.path.join(current_dir, item_name)
+            is_dir = os.path.isdir(item_path)
+               
+            item_info = {
+                'name': item_name,
+                'is_directory': is_dir,
+                'size': None,
+                'modified': None,
+                'mime_type': None,
+                'relative_url': None,
+                'thumbnail_url': None,
+                'subpath': os.path.join(current_subpath, item_name).replace('\\', '/') if current_subpath else item_name
+            }
+                
+            if is_dir:
+                # Count items in subdirectory
+                try:
+                    subitem_count = len(os.listdir(item_path))
+                    item_info['size'] = f"{subitem_count} items"
+                except:
+                    item_info['size'] = "Unknown"
+            else:
+                # Get file info
+                stat_info = os.stat(item_path)
+                item_info['size'] = format_file_size(stat_info.st_size)
+                item_info['modified'] = timezone.datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.get_current_timezone())
+                        
+                # Get mime type
+                mime_type, _ = mimetypes.guess_type(item_path)
+                item_info['mime_type'] = mime_type
+                      
+                # Create relative URL for media files
+                relative_path = os.path.relpath(item_path, settings.MEDIA_ROOT)
+                item_info['relative_url'] = f"{settings.MEDIA_URL}{relative_path}"
+                    
+                # Check if this is an image and find corresponding thumbnail
+                if mime_type and mime_type.startswith('image/'):
+                    # Look for thumbnail in the thumbnails directory
+                    thumbnails_dir = job.get_thumbnail_dir()
+                    thumbnail_name = None
+                        
+                    thumb_path = os.path.join(settings.MEDIA_ROOT, thumbnails_dir, item_name)
+                    if os.path.exists(thumb_path):
+                        thumb_relative_path = os.path.relpath(thumb_path, settings.MEDIA_ROOT)
+                        item_info['thumbnail_url'] = f"{settings.MEDIA_URL}{thumb_relative_path}"
+                        
+            items.append(item_info)
+    except PermissionError:
+        messages.error(request, 'Permission denied accessing input directory.')
+        return redirect('job_input_directory', job_id=job_id)
+            
+    # Separate directories and files
+    directories = [item for item in items if item['is_directory']]
+    files = [item for item in items if not item['is_directory']]
+    
+    context = {
+        'job': job,
+        'current_dir': current_dir,
+        'current_subpath': current_subpath,
+        'breadcrumbs': breadcrumbs,
+        'directories': directories,
+        'files': files,
+        'total_items': len(items),
+        'parent_path': '/'.join(current_subpath.split('/')[:-1]) if current_subpath and '/' in current_subpath else '' if current_subpath else None,
+        'is_input_directory': True  # Flag to differentiate in template
+    }
+    
+    return render(request, 'repub_interface/job_input_directory.html', context)
 
 
 def format_file_size(size_bytes):

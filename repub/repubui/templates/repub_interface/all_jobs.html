@@ -13,8 +13,9 @@
     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
 }
 .filter-active {
-    border: 3px solid #fff;
-    box-shadow: 0 0 0 2px rgba(255,255,255,0.5);
+    border: 3px solid #fff !important;
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.8) !important;
+    transform: translateY(-2px) !important;
 }
 </style>
 {% endblock %}
@@ -33,43 +34,53 @@
 </div>
 
 <!-- Statistics Cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
+<div class="row mb-4 justify-content-center">
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
         <a href="?" class="text-decoration-none">
             <div class="card bg-primary text-white clickable-card{% if not request.GET.status %} filter-active{% endif %}">
-                <div class="card-body">
-                    <h5 class="card-title">Total Jobs</h5>
-                    <h3 class="card-text">{{ total_jobs }}</h3>
+                <div class="card-body text-center">
+                    <h6 class="card-title">Total Jobs</h6>
+                    <h4 class="card-text">{{ total_jobs }}</h4>
                 </div>
             </div>
         </a>
     </div>
-    <div class="col-md-3">
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
         <a href="?status=completed" class="text-decoration-none">
             <div class="card bg-success text-white clickable-card{% if request.GET.status == 'completed' %} filter-active{% endif %}">
-                <div class="card-body">
-                    <h5 class="card-title">Completed</h5>
-                    <h3 class="card-text">{{ completed_jobs }}</h3>
+                <div class="card-body text-center">
+                    <h6 class="card-title">Completed</h6>
+                    <h4 class="card-text">{{ completed_jobs }}</h4>
                 </div>
             </div>
         </a>
     </div>
-    <div class="col-md-3">
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
         <a href="?status=processing" class="text-decoration-none">
             <div class="card bg-warning text-white clickable-card{% if request.GET.status == 'processing' %} filter-active{% endif %}">
-                <div class="card-body">
-                    <h5 class="card-title">Processing</h5>
-                    <h3 class="card-text">{{ processing_jobs }}</h3>
+                <div class="card-body text-center">
+                    <h6 class="card-title">Processing</h6>
+                    <h4 class="card-text">{{ processing_jobs }}</h4>
                 </div>
             </div>
         </a>
     </div>
-    <div class="col-md-3">
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
         <a href="?status=reviewing" class="text-decoration-none">
             <div class="card bg-info text-white clickable-card{% if request.GET.status == 'reviewing' %} filter-active{% endif %}">
-                <div class="card-body">
-                    <h5 class="card-title">Under Review</h5>
-                    <h3 class="card-text">{{ reviewing_jobs }}</h3>
+                <div class="card-body text-center">
+                    <h6 class="card-title">Under Review</h6>
+                    <h4 class="card-text">{{ reviewing_jobs }}</h4>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+        <a href="?status=failed" class="text-decoration-none">
+            <div class="card bg-danger text-white clickable-card{% if request.GET.status == 'failed' %} filter-active{% endif %}">
+                <div class="card-body text-center">
+                    <h6 class="card-title">Failed</h6>
+                    <h4 class="card-text">{{ failed_jobs }}</h4>
                 </div>
             </div>
         </a>
