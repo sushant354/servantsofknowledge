@@ -28,7 +28,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import authentication_classes, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from .models import ProcessingJob, PageImage
+from .models import ProcessingJob
 from .forms import ProcessingJobForm, UserRegistrationForm
 import numpy as np
 
