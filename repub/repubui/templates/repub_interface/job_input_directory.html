@@ -1,0 +1,241 @@
+{% extends 'base.html' %}
+
+{% block title %}Input Directory - {{ job.title|default:"Untitled Job" }} - REPUB{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'all_jobs' %}">All Jobs</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'job_detail' job.id %}">{{ job.title|default:"Untitled Job" }}</a></li>
+                {% for breadcrumb in breadcrumbs %}
+                    {% if forloop.last %}
+                        <li class="breadcrumb-item active">{{ breadcrumb.name }}</li>
+                    {% else %}
+                        <li class="breadcrumb-item">
+                            <a href="{% if breadcrumb.path %}{% url 'job_input_directory_subpath' job.id breadcrumb.path %}{% else %}{% url 'job_input_directory' job.id %}{% endif %}">
+                                {{ breadcrumb.name }}
+                            </a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ol>
+        </nav>
+        
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h1>Input Directory</h1>
+                <p class="text-muted mb-1">Job: <strong>{{ job.title|default:"Untitled Job" }}</strong></p>
+                <p class="text-muted">
+                    <i class="bi bi-folder-plus"></i> 
+                    <code>{{ current_dir }}</code>
+                </p>
+            </div>
+            <div>
+                {% if parent_path is not None %}
+                    <a href="{% if parent_path %}{% url 'job_input_directory_subpath' job.id parent_path %}{% else %}{% url 'job_input_directory' job.id %}{% endif %}" 
+                       class="btn btn-outline-secondary me-2">
+                        <i class="bi bi-arrow-up"></i> Up
+                    </a>
+                {% endif %}
+                <a href="{% url 'job_detail' job.id %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Job
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Directory Stats -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h5 class="card-title mb-0">{{ total_items }}</h5>
+                <small class="text-muted">Total Items</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h5 class="card-title mb-0">{{ directories|length }}</h5>
+                <small class="text-muted">Directories</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h5 class="card-title mb-0">{{ files|length }}</h5>
+                <small class="text-muted">Files</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Directory Contents -->
+<div class="card">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="bi bi-folder-plus"></i>
+            Directory Contents
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        {% if directories or files %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Size</th>
+                            <th>Modified</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Directories first -->
+                        {% for directory in directories %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-folder-fill text-warning me-2"></i>
+                                    <span>{{ directory.name }}</span>
+                                </div>
+                            </td>
+                            <td><span class="badge bg-light text-dark">Directory</span></td>
+                            <td><small class="text-muted">{{ directory.size }}</small></td>
+                            <td>
+                                {% if directory.modified %}
+                                    <small class="text-muted">{{ directory.modified|date:"M d, Y H:i" }}</small>
+                                {% else %}
+                                    <small class="text-muted">-</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'job_input_directory_subpath' job.id directory.subpath %}" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-folder-open"></i> Open
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        
+                        <!-- Files -->
+                        {% for file in files %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    {% if file.mime_type %}
+                                        {% if file.mime_type|slice:":6" == "image/" %}
+                                            <i class="bi bi-file-earmark-image text-success me-2"></i>
+                                        {% elif file.mime_type == "application/pdf" %}
+                                            <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
+                                        {% elif file.mime_type|slice:":5" == "text/" %}
+                                            <i class="bi bi-file-earmark-text text-info me-2"></i>
+                                        {% else %}
+                                            <i class="bi bi-file-earmark text-secondary me-2"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        <i class="bi bi-file-earmark text-secondary me-2"></i>
+                                    {% endif %}
+                                    <span>{{ file.name }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                {% if file.mime_type %}
+                                    <span class="badge bg-light text-dark">{{ file.mime_type }}</span>
+                                {% else %}
+                                    <span class="badge bg-light text-dark">Unknown</span>
+                                {% endif %}
+                            </td>
+                            <td><small class="text-muted">{{ file.size }}</small></td>
+                            <td>
+                                {% if file.modified %}
+                                    <small class="text-muted">{{ file.modified|date:"M d, Y H:i" }}</small>
+                                {% else %}
+                                    <small class="text-muted">-</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if file.relative_url %}
+                                    <a href="{{ file.relative_url }}" target="_blank" 
+                                       class="btn btn-sm btn-outline-success">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center p-5">
+                <i class="bi bi-folder text-muted" style="font-size: 3rem;"></i>
+                <h4 class="mt-3">Directory is empty</h4>
+                <p class="text-muted">No files or subdirectories found in this location.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Image Gallery (if images are present) -->
+{% if files %}
+    {% with image_files=files|dictsort:"name" %}
+        {% if image_files %}
+            {% for file in image_files %}
+                {% if file.mime_type|slice:":6" == "image/" %}
+                    {% if forloop.first %}
+                        <div class="card mt-4">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-images"></i>
+                                    Image Preview
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2">
+                    {% endif %}
+                                    <div class="col-md-3 col-sm-4 col-6">
+                                        <div class="card">
+                                            <div class="position-relative">
+                                                {% if file.thumbnail_url %}
+                                                    <img src="{{ file.thumbnail_url }}" 
+                                                         class="card-img-top" 
+                                                         alt="{{ file.name }}"
+                                                         style="height: 150px; object-fit: cover;">
+                                                {% else %}
+                                                    <img src="{{ file.relative_url }}" 
+                                                         class="card-img-top" 
+                                                         alt="{{ file.name }}"
+                                                         style="height: 150px; object-fit: cover;">
+                                                {% endif %}
+                                                <div class="position-absolute top-0 end-0 p-1">
+                                                    <a href="{{ file.relative_url }}" target="_blank" 
+                                                       class="btn btn-sm btn-light">
+                                                        <i class="bi bi-arrows-fullscreen"></i>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                            <div class="card-body p-2">
+                                                <h6 class="card-title mb-1" style="font-size: 0.8rem;">{{ file.name|truncatechars:20 }}</h6>
+                                                <small class="text-muted">{{ file.size }}</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                    {% if forloop.last %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+{% endif %}
+{% endblock %}
