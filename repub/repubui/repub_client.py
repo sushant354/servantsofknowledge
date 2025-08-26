@@ -4,6 +4,9 @@ REPUB Python Client
 
 A Python client for submitting document processing jobs to REPUB UI
 using Django REST Framework token authentication.
+
+Supports both single file processing and batch processing with parallel execution
+using concurrent.futures for improved performance when processing multiple files.
 """
 
 import requests
@@ -11,8 +14,11 @@ import json
 import os
 import time
 import logging
-from typing import Optional, Dict, Any, Union
+import csv
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional, Dict, Any, Union, List
 from pathlib import Path
+import threading
 
 
 class REPUBClient:
@@ -288,6 +294,235 @@ class REPUBClient:
         
         return result
 
+    def process_batch_from_file(self, 
+                                batch_file: Union[str, Path], 
+                                output_dir: Optional[Union[str, Path]] = None,
+                                max_workers: int = 4,
+                                wait_for_completion: bool = True,
+                                auto_download: bool = False,
+                                **kwargs) -> Dict[str, Any]:
+        """
+        Process multiple files specified in a batch file using parallel processing
+        
+        Supports two file formats:
+        1. Text file with file paths (one per line)
+        2. CSV file with 'title', 'file_path', and optional 'language' columns
+        
+        Args:
+            batch_file: Path to text or CSV file containing file information
+            output_dir: Directory to save results (optional)
+            max_workers: Maximum number of parallel workers (default: 4)
+            wait_for_completion: Whether to wait for all jobs to complete (default: True)
+            auto_download: Whether to automatically download results (default: False)
+            **kwargs: Additional arguments for submit_job()
+            
+        Returns:
+            Dict containing batch processing results
+        """
+        batch_file = Path(batch_file)
+        
+        if not batch_file.exists():
+            raise FileNotFoundError(f"Batch file not found: {batch_file}")
+        
+        # Determine file format and read file data
+        file_data = []
+        try:
+            if batch_file.suffix.lower() == '.csv':
+                # CSV format with title and file_path columns
+                with open(batch_file, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    
+                    # Check for required columns
+                    if 'file_path' not in reader.fieldnames:
+                        raise ValueError("CSV file must contain a 'file_path' column")
+                    
+                    for row_num, row in enumerate(reader, 2):  # Start at 2 (header is row 1)
+                        file_path_str = row.get('file_path', '').strip()
+                        if not file_path_str:
+                            self.logger.warning(f"Row {row_num}: Empty file_path, skipping")
+                            continue
+                            
+                        file_path = Path(file_path_str)
+                        if file_path.exists():
+                            title = row.get('title', '').strip() or file_path.stem
+                            language = row.get('language', '').strip() or None  # Use None if empty/missing
+                            file_data.append({
+                                'file_path': file_path,
+                                'title': title,
+                                'language': language
+                            })
+                        else:
+                            self.logger.warning(f"Row {row_num}: File not found: {file_path_str}")
+            else:
+                # Text format with file paths (one per line)
+                with open(batch_file, 'r', encoding='utf-8') as f:
+                    for line_num, line in enumerate(f, 1):
+                        line = line.strip()
+                        if line and not line.startswith('#'):  # Skip empty lines and comments
+                            file_path = Path(line)
+                            if file_path.exists():
+                                file_data.append({
+                                    'file_path': file_path,
+                                    'title': file_path.stem,  # Use filename as title
+                                    'language': None  # No language specified in text format
+                                })
+                            else:
+                                self.logger.warning(f"Line {line_num}: File not found: {line}")
+        except Exception as e:
+            raise Exception(f"Failed to read batch file: {str(e)}")
+        
+        if not file_data:
+            raise ValueError("No valid file paths found in batch file")
+        
+        self.logger.info(f"Processing {len(file_data)} files from batch with {max_workers} workers")
+        
+        # Create output directory if specified
+        if output_dir:
+            output_dir = Path(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+        
+        results = {
+            'total_files': len(file_data),
+            'successful_submissions': 0,
+            'failed_submissions': 0,
+            'completed_jobs': 0,
+            'failed_jobs': 0,
+            'results': [],
+            'errors': []
+        }
+        
+        # Process files in parallel using ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all jobs
+            future_to_data = {}
+            for file_info in file_data:
+                file_path = file_info['file_path']
+                title = file_info['title']
+                language = file_info['language']
+                
+                # Generate output path if output_dir is specified
+                file_output_path = None
+                if output_dir and auto_download:
+                    safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).strip()
+                    if not safe_title:
+                        safe_title = file_path.stem
+                    file_output_path = output_dir / f"{safe_title}_processed.pdf"
+                
+                # Add title and language to kwargs for this specific file
+                file_kwargs = kwargs.copy()
+                file_kwargs['title'] = title
+                if language:  # Only set language if it's specified in CSV
+                    file_kwargs['language'] = language
+                
+                future = executor.submit(
+                    self._process_single_file,
+                    file_path,
+                    file_output_path,
+                    wait_for_completion,
+                    auto_download,
+                    **file_kwargs
+                )
+                future_to_data[future] = file_info
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_data):
+                file_info = future_to_data[future]
+                file_path = file_info['file_path']
+                title = file_info['title']
+                language = file_info['language']
+                
+                try:
+                    result = future.result()
+                    result_entry = {
+                        'file_path': str(file_path),
+                        'title': title,
+                        'result': result
+                    }
+                    if language:
+                        result_entry['language'] = language
+                    results['results'].append(result_entry)
+                    
+                    if result.get('success'):
+                        results['successful_submissions'] += 1
+                        if result.get('status') == 'completed':
+                            results['completed_jobs'] += 1
+                        elif result.get('status') == 'failed':
+                            results['failed_jobs'] += 1
+                    else:
+                        results['failed_submissions'] += 1
+                        
+                except Exception as e:
+                    lang_info = f" (language: {language})" if language else ""
+                    error_msg = f"Error processing {file_path} (title: {title}{lang_info}): {str(e)}"
+                    self.logger.error(error_msg)
+                    error_entry = {
+                        'file_path': str(file_path),
+                        'title': title,
+                        'error': str(e)
+                    }
+                    if language:
+                        error_entry['language'] = language
+                    results['errors'].append(error_entry)
+                    results['failed_submissions'] += 1
+        
+        # Summary
+        self.logger.info(f"Batch processing complete:")
+        self.logger.info(f"  Total files: {results['total_files']}")
+        self.logger.info(f"  Successful submissions: {results['successful_submissions']}")
+        self.logger.info(f"  Failed submissions: {results['failed_submissions']}")
+        if wait_for_completion:
+            self.logger.info(f"  Completed jobs: {results['completed_jobs']}")
+            self.logger.info(f"  Failed jobs: {results['failed_jobs']}")
+        
+        return results
+    
+    def _process_single_file(self, 
+                            file_path: Path, 
+                            output_path: Optional[Path], 
+                            wait_for_completion: bool,
+                            auto_download: bool,
+                            **kwargs) -> Dict[str, Any]:
+        """
+        Process a single file (internal method for parallel execution)
+        
+        Args:
+            file_path: Path to the file to process
+            output_path: Path to save the result (optional)
+            wait_for_completion: Whether to wait for job completion
+            auto_download: Whether to automatically download the result
+            **kwargs: Additional arguments for submit_job()
+            
+        Returns:
+            Dict containing the processing result
+        """
+        thread_id = threading.current_thread().ident
+        self.logger.info(f"[Thread-{thread_id}] Processing: {file_path}")
+        
+        try:
+            result = self.process_document(
+                file_path=file_path,
+                output_path=output_path,
+                wait_for_completion=wait_for_completion,
+                auto_download=auto_download,
+                **kwargs
+            )
+            
+            if result.get('success'):
+                self.logger.info(f"[Thread-{thread_id}] Successfully submitted: {file_path} (Job ID: {result.get('job_id')})")
+            else:
+                self.logger.error(f"[Thread-{thread_id}] Failed to submit: {file_path} - {result.get('message', 'Unknown error')}")
+            
+            return result
+            
+        except Exception as e:
+            error_msg = f"Exception processing {file_path}: {str(e)}"
+            self.logger.error(f"[Thread-{thread_id}] {error_msg}")
+            return {
+                'success': False,
+                'message': error_msg,
+                'file_path': str(file_path)
+            }
+
 
 def main():
     """Example usage of the REPUB client"""
@@ -298,10 +533,17 @@ def main():
                        help='REPUB server URL (default: http://localhost:8000)')
     parser.add_argument('--token', required=True, 
                        help='REST framework authentication token')
-    parser.add_argument('--file', required=True, 
-                       help='Path to file to process')
+    # File processing options (mutually exclusive)
+    file_group = parser.add_mutually_exclusive_group(required=True)
+    file_group.add_argument('--file', 
+                           help='Path to single file to process')
+    file_group.add_argument('--batch-file',
+                           help='Path to text file (one file path per line) or CSV file (with title, file_path, and optional language columns)')
+    
     parser.add_argument('--output', 
-                       help='Output file path (optional)')
+                       help='Output file path (single file) or output directory (batch)')
+    parser.add_argument('--max-workers', type=int, default=4,
+                       help='Maximum number of parallel workers for batch processing (default: 4)')
     parser.add_argument('--title', 
                        help='Job title (optional)')
     parser.add_argument('--no-wait', action='store_true',
@@ -340,16 +582,52 @@ def main():
     # Create client with custom logger
     client = REPUBClient(args.url, args.token, logger=logger)
     
-    # Process document
-    result = client.process_document(
-        file_path=args.file,
-        output_path=args.output,
-        title=args.title,
-        wait_for_completion=not args.no_wait,
-        auto_download=args.download
-    )
-    
-    print(f"\nResult: {json.dumps(result, indent=2)}")
+    # Process document(s)
+    if args.file:
+        # Single file processing
+        result = client.process_document(
+            file_path=args.file,
+            output_path=args.output,
+            title=args.title,
+            wait_for_completion=not args.no_wait,
+            auto_download=args.download
+        )
+        print(f"\nResult: {json.dumps(result, indent=2)}")
+        
+    elif args.batch_file:
+        # Batch processing
+        result = client.process_batch_from_file(
+            batch_file=args.batch_file,
+            output_dir=args.output,
+            max_workers=args.max_workers,
+            wait_for_completion=not args.no_wait,
+            auto_download=args.download
+            # Note: For CSV files, titles come from the CSV. For text files, filenames are used as titles.
+            # The --title argument only applies to single file processing.
+        )
+        
+        # Print summary
+        print(f"\nBatch Processing Results:")
+        print(f"  Total files: {result['total_files']}")
+        print(f"  Successful submissions: {result['successful_submissions']}")
+        print(f"  Failed submissions: {result['failed_submissions']}")
+        
+        if not args.no_wait:
+            print(f"  Completed jobs: {result['completed_jobs']}")
+            print(f"  Failed jobs: {result['failed_jobs']}")
+        
+        if result['errors']:
+            print(f"\nErrors ({len(result['errors'])}):")
+            for error in result['errors']:
+                print(f"  {error['file_path']}: {error['error']}")
+        
+        # Optionally print detailed results
+        if args.log_level == 'DEBUG':
+            print(f"\nDetailed Results: {json.dumps(result, indent=2, default=str)}")
+        
+        # Exit with error code if there were failures
+        if result['failed_submissions'] > 0 or (not args.no_wait and result['failed_jobs'] > 0):
+            exit(1)
 
 
 if __name__ == '__main__':

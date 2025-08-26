@@ -865,6 +865,7 @@ def retry_job(request, job_id):
     """Retry job with same settings"""
     job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
     job.status = 'processing'
+    job.save()
     output_dir = job.get_output_dir()
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
@@ -875,7 +876,6 @@ def retry_job(request, job_id):
         thumbnaildir = os.path.join(output_dir, 'thumbnails')
         os.makedirs(thumbnaildir, exist_ok=True)
     run_job(job_id) 
-    job.save()
     
     return redirect('job_detail', job_id=job_id)
 

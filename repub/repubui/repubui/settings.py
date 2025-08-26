@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -117,6 +118,7 @@ POSTMARK = {
 EMAIL_BACKEND = 'postmarker.django.EmailBackend'
 # Internationalization
 LANGUAGE_CODE = 'en-us'
+TIME_ZONE = 'Asia/Kolkata'
 USE_I18N = True
 USE_TZ = True
 
@@ -166,6 +168,7 @@ LOGGING = {
         'verbose': {
             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
             'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
         },
         'simple': {
             'format': '{levelname} {message}',
