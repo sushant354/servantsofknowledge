@@ -102,9 +102,9 @@
                         </a>
                     {% endif %}
                     
-                    <a href="{% url 'job_review' job.id %}" class="btn btn-outline-primary btn-lg mb-4 me-3">
+                    <button type="button" class="btn btn-outline-primary btn-lg mb-4 me-3" data-bs-toggle="modal" data-bs-target="#reviewPagesModal">
                         <i class="bi bi-eye"></i> Review Pages
-                    </a>
+                    </button>
                     
                     <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-lg mb-4 me-3" title="View output directory">
                         <i class="bi bi-folder"></i> Files
@@ -167,6 +167,39 @@
                     {% endif %}
 
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Review Pages Modal -->
+<div class="modal fade" id="reviewPagesModal" tabindex="-1" aria-labelledby="reviewPagesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="reviewPagesModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Review Pages Mode
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>What happens when you click "Review Pages"?</h6>
+                    <ul class="mb-0">
+                        <li><strong>Job Status Change:</strong> The job will be put into <span class="badge bg-warning text-dark">review</span> mode</li>
+                        <li><strong>New Directory:</strong> A new review directory will be generated with cropped page images</li>
+                        <li><strong>Page Editor:</strong> You'll be able to adjust crop boundaries for individual pages</li>
+                        <li><strong>Reprocessing:</strong> After making changes, you can finalize to generate the final PDF</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <a href="{% url 'job_review' job.id %}" class="btn btn-primary">
+                    <i class="bi bi-eye"></i> Continue to Review Pages
+                </a>
             </div>
         </div>
     </div>
