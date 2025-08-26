@@ -546,6 +546,8 @@ def main():
                        help='Maximum number of parallel workers for batch processing (default: 4)')
     parser.add_argument('--title', 
                        help='Job title (optional)')
+    parser.add_argument('--language', default='eng',
+                       help='OCR language code (default: eng). Examples: eng, fra, deu, spa, ita, etc.')
     parser.add_argument('--no-wait', action='store_true',
                        help='Don\'t wait for job completion')
     parser.add_argument('--download', action='store_true',
@@ -589,6 +591,7 @@ def main():
             file_path=args.file,
             output_path=args.output,
             title=args.title,
+            language=args.language,
             wait_for_completion=not args.no_wait,
             auto_download=args.download
         )

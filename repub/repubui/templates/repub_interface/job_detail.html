@@ -28,11 +28,9 @@
                         </div>
                     </div>
                     
-                    <form method="post" action="{% url 'stop_job' job.id %}" class="d-inline" onsubmit="return confirm('Are you sure you want to stop this job? This action cannot be undone.');">
-                        <button type="submit" class="btn btn-danger btn-sm mb-3 me-3">
-                            <i class="bi bi-stop-fill"></i> Stop Processing
-                        </button>
-                    </form>
+                    <button type="button" class="btn btn-danger btn-sm mb-3 me-3" data-bs-toggle="modal" data-bs-target="#stopJobModal">
+                        <i class="bi bi-stop-fill"></i> Stop Processing
+                    </button>
                     
                     <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm mb-3 me-2" title="View output directory">
                         <i class="bi bi-folder"></i> Files
@@ -67,11 +65,9 @@
                         </div>
                     </div>
                     
-                    <form method="post" action="{% url 'stop_job' job.id %}" class="d-inline" onsubmit="return confirm('Are you sure you want to stop this job? This action cannot be undone.');">
-                        <button type="submit" class="btn btn-danger btn-sm mb-3 me-3">
-                            <i class="bi bi-stop-fill"></i> Stop Finalizing
-                        </button>
-                    </form>
+                    <button type="button" class="btn btn-danger btn-sm mb-3 me-3" data-bs-toggle="modal" data-bs-target="#stopJobModal">
+                        <i class="bi bi-stop-fill"></i> Stop Finalizing
+                    </button>
                     
                     <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm mb-3 me-2" title="View output directory">
                         <i class="bi bi-folder"></i> Files
@@ -233,6 +229,51 @@
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger">
                         <i class="bi bi-arrow-clockwise"></i> Confirm Retry
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stop Job Modal -->
+<div class="modal fade" id="stopJobModal" tabindex="-1" aria-labelledby="stopJobModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="stopJobModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Stop Job Processing
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Important: How "Stop" Actually Works</h6>
+                    <ul class="mb-3">
+                        <li><strong>Background Process:</strong> The actual processing cannot be immediately stopped</li>
+                        <li><strong>Job Status Change:</strong> The job will be marked as <span class="badge bg-danger">failed</span></li>
+                        <li><strong>Processing Continues:</strong> Background processing may continue for a short time</li>
+                        <li><strong>Results Lost:</strong> Any partial progress will be discarded</li>
+                    </ul>
+                </div>
+                <div class="alert alert-info">
+                    <h6 class="alert-heading"><i class="bi bi-arrow-clockwise me-2"></i>After Stopping, You Can:</h6>
+                    <ul class="mb-0">
+                        <li>Retry the job with the same settings</li>
+                        <li>Modify processing parameters and resubmit</li>
+                        <li>Access input files to process elsewhere</li>
+                        <li>Delete the job if no longer needed</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <form method="post" action="{% url 'stop_job' job.id %}" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-stop-fill"></i> Mark as Failed
                     </button>
                 </form>
             </div>
