@@ -160,10 +160,9 @@
                     <a href="{% url 'home' %}" class="btn btn-secondary me-2">Back to Home</a>
 
                     {% if job.status == 'completed' or job.status == 'failed' %}
-                        <form method="post" action="{% url 'retry_job' job.id %}" style="display: inline;">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-primary me-2">Retry</button>
-                        </form>
+                        <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#retryJobModal">
+                            <i class="bi bi-arrow-clockwise"></i> Retry
+                        </button>
                     {% endif %}
 
                 </div>
@@ -200,6 +199,42 @@
                 <a href="{% url 'job_review' job.id %}" class="btn btn-primary">
                     <i class="bi bi-eye"></i> Continue to Review Pages
                 </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Retry Job Modal -->
+<div class="modal fade" id="retryJobModal" tabindex="-1" aria-labelledby="retryJobModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="retryJobModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Retry Job
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <h6 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i>Are you sure you want to retry this job?</h6>
+                    <ul class="mb-0">
+                        <li><strong>Fresh Processing:</strong> The job will be reprocessed from scratch with the same settings</li>
+                        <li><strong>Status Reset:</strong> Job status will change to <span class="badge bg-warning text-dark">processing</span></li>
+                        <li><strong>File Replacement:</strong> Previous output files will be replaced with new results</li>
+                        <li><strong>Time Required:</strong> Processing may take several minutes depending on document size</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <form method="post" action="{% url 'retry_job' job.id %}" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-arrow-clockwise"></i> Confirm Retry
+                    </button>
+                </form>
             </div>
         </div>
     </div>
