@@ -89,6 +89,59 @@ class ProcessingJobForm(forms.ModelForm):
         return cleaned_data
 
 
+class ProcessingOptionsForm(forms.ModelForm):
+    class Meta:
+        model = ProcessingJob
+        fields = [
+            'language', 'crop', 'deskew', 'ocr', 'dewarp', 'draw_contours', 'gray',
+            'rotate_type', 'reduce_factor', 'xmaximum', 'ymax', 'maxcontours'
+        ]
+        widgets = {
+            'language': forms.TextInput(attrs={'class': 'form-control'}),
+            'crop': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'deskew': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'ocr': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'dewarp': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'draw_contours': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'gray': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'rotate_type': forms.Select(attrs={'class': 'form-select'}),
+            'reduce_factor': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'}),
+            'xmaximum': forms.NumberInput(attrs={'class': 'form-control'}),
+            'ymax': forms.NumberInput(attrs={'class': 'form-control'}),
+            'maxcontours': forms.NumberInput(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'language': 'OCR Language(s) (e.g., eng+fra)',
+            'crop': 'Crop images',
+            'deskew': 'Deskew images',
+            'ocr': 'Apply OCR',
+            'dewarp': 'Dewarp images',
+            'draw_contours': 'Draw contours (for debugging)',
+            'gray': 'Convert to grayscale',
+            'rotate_type': 'Rotation calculation method',
+            'reduce_factor': 'Reduce image size by factor (optional)',
+            'xmaximum': 'Max horizontal line distance (pixels)',
+            'ymax': 'Max vertical line distance (pixels)',
+            'maxcontours': 'Maximum contours to examine',
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        
+        # Validate that only one of these options can be enabled at a time
+        draw_contours = cleaned_data.get('draw_contours')
+        gray = cleaned_data.get('gray')
+        crop = cleaned_data.get('crop')
+        
+        if draw_contours and (gray or crop):
+            self.add_error('draw_contours', 'Draw contours cannot be used with other processing options.')
+            
+        if gray and (draw_contours or crop):
+            self.add_error('gray', 'Grayscale conversion cannot be used with other processing options.')
+
+        return cleaned_data
+
+
 class UserRegistrationForm(UserCreationForm):
     email = forms.EmailField(required=True)
     first_name = forms.CharField(max_length=30, required=False)

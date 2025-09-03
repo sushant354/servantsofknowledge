@@ -29,7 +29,7 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import authentication_classes, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from .models import ProcessingJob
-from .forms import ProcessingJobForm, UserRegistrationForm
+from .forms import ProcessingJobForm, UserRegistrationForm, ProcessingOptionsForm
 import numpy as np
 
 # Set up logger for this module
@@ -181,9 +181,20 @@ def job_detail(request, job_id):
     # If the job is in reviewing status, redirect to the review page
     if job.status == 'reviewing':
         return redirect('job_review', job_id=job.id)
+    
+    # Handle processing options form submission
+    if request.method == 'POST':
+        form = ProcessingOptionsForm(request.POST, instance=job)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Processing options updated successfully.')
+            return redirect('job_detail', job_id=job.id)
+    else:
+        form = ProcessingOptionsForm(instance=job)
         
     return render(request, 'repub_interface/job_detail.html', {
-        'job': job
+        'job': job,
+        'form': form
     })
 
 def generate_files_for_review(scandir, thumbdir, job):

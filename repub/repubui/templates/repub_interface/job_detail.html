@@ -152,6 +152,128 @@
                     </tbody>
                 </table>
 
+                <!-- Processing Options Edit Section -->
+                {% if job.status == 'pending' or job.status == 'failed' or job.status == 'completed' %}
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#processingOptionsForm" aria-expanded="false" aria-controls="processingOptionsForm">
+                                <i class="bi bi-gear-fill me-2"></i>Edit Processing Options
+                            </button>
+                        </h5>
+                    </div>
+                    <div id="processingOptionsForm" class="collapse">
+                        <div class="card-body">
+                            {% if messages %}
+                                {% for message in messages %}
+                                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                        {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                            
+                            <form method="post">
+                                {% csrf_token %}
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="{{ form.language.id_for_label }}" class="form-label">{{ form.language.label }}</label>
+                                            {{ form.language }}
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Processing Options</label>
+                                            <div class="form-check">
+                                                {{ form.crop }}
+                                                <label class="form-check-label" for="{{ form.crop.id_for_label }}">
+                                                    {{ form.crop.label }}
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                {{ form.deskew }}
+                                                <label class="form-check-label" for="{{ form.deskew.id_for_label }}">
+                                                    {{ form.deskew.label }}
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                {{ form.ocr }}
+                                                <label class="form-check-label" for="{{ form.ocr.id_for_label }}">
+                                                    {{ form.ocr.label }}
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                {{ form.dewarp }}
+                                                <label class="form-check-label" for="{{ form.dewarp.id_for_label }}">
+                                                    {{ form.dewarp.label }}
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                {{ form.draw_contours }}
+                                                <label class="form-check-label" for="{{ form.draw_contours.id_for_label }}">
+                                                    {{ form.draw_contours.label }}
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                {{ form.gray }}
+                                                <label class="form-check-label" for="{{ form.gray.id_for_label }}">
+                                                    {{ form.gray.label }}
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="{{ form.rotate_type.id_for_label }}" class="form-label">{{ form.rotate_type.label }}</label>
+                                            {{ form.rotate_type }}
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="{{ form.reduce_factor.id_for_label }}" class="form-label">{{ form.reduce_factor.label }}</label>
+                                            {{ form.reduce_factor }}
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="{{ form.xmaximum.id_for_label }}" class="form-label">{{ form.xmaximum.label }}</label>
+                                            {{ form.xmaximum }}
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="{{ form.ymax.id_for_label }}" class="form-label">{{ form.ymax.label }}</label>
+                                            {{ form.ymax }}
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="{{ form.maxcontours.id_for_label }}" class="form-label">{{ form.maxcontours.label }}</label>
+                                            {{ form.maxcontours }}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {% if form.errors %}
+                                    <div class="alert alert-danger">
+                                        <strong>Please correct the following errors:</strong>
+                                        <ul>
+                                            {% for field, errors in form.errors.items %}
+                                                {% for error in errors %}
+                                                    <li>{{ error }}</li>
+                                                {% endfor %}
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                {% endif %}
+                                
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-save"></i> Update Processing Options
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="d-flex mt-4">
                     <a href="{% url 'home' %}" class="btn btn-secondary me-2">Back to Home</a>
 
