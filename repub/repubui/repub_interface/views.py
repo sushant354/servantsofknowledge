@@ -157,7 +157,7 @@ def home(request):
         job.save()
 
         logger.debug(f"Created job {job.id} with file: {job.input_file}")
-        run_job(job.id)
+        run_and_monitor_job(job)
 
         logger.debug(f"Started processing job {job.id} in background thread")
         messages.success(request, f'Job "{job.title or "Untitled"}" has been submitted and is being processed.')
@@ -168,11 +168,17 @@ def home(request):
         'jobs': jobs
     })
 
-def run_job(job_id):
+def run_and_monitor_job(job):
     # Start processing in background thread
-    thread = threading.Thread(target=process_job, args=(job_id,))
-    thread.daemon = True
+    thread = threading.Thread(target=run_job, args=(job,))
     thread.start()
+
+def run_job(job):
+    try:
+        process_job(job)
+    except Exception as e:
+        job.status = 'failed'
+        job.save()
 
 @login_required
 def job_detail(request, job_id):
@@ -364,8 +370,7 @@ class Args:
         self.factor       = job.reduce_factor
         self.pagenums     = None
 
-def process_job(job_id):
-    job = ProcessingJob.objects.get(id=job_id)
+def process_job(job):
     job.status = 'processing'
     job.output_file = None 
     job.save()
@@ -886,7 +891,7 @@ def retry_job(request, job_id):
 
         thumbnaildir = os.path.join(output_dir, 'thumbnails')
         os.makedirs(thumbnaildir, exist_ok=True)
-    run_job(job_id) 
+    run_and_monitor_job(job) 
     
     return redirect('job_detail', job_id=job_id)
 
