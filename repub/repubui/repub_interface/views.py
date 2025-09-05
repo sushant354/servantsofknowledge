@@ -232,7 +232,11 @@ def get_pagenum(filename):
 
 @login_required
 def job_review(request, job_id):
-    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    # Allow admin users to start/view review for any job, regular users can only review their own jobs
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
 
     indir       = job.get_input_dir()
     reviewdir   = job.get_review_dir()
@@ -498,7 +502,11 @@ def stop_job(request, job_id):
     View to stop a processing job.
     """
     try:
-        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+        # Allow admin users to stop any job, regular users can only stop their own jobs
+        if request.user.is_staff:
+            job = get_object_or_404(ProcessingJob, id=job_id)
+        else:
+            job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
         
         # Only allow stopping jobs that are currently processing
         if job.status in ['processing', 'finalizing']:
@@ -938,7 +946,11 @@ def finalize_job(request, job_id):
 @require_http_methods(["POST"])
 def reject_review(request, job_id):
     """Reject the review and go back to job details"""
-    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    # Allow admin users to reject any job's review, regular users can only reject their own jobs
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
 
     job.status = 'completed'
     job.save()
@@ -953,7 +965,11 @@ def reject_review(request, job_id):
 @require_http_methods(["POST"])
 def retry_job(request, job_id):
     """Retry job with same settings"""
-    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    # Allow admin users to retry any job, regular users can only retry their own jobs
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
     job.status = 'processing'
     job.save()
     output_dir = job.get_output_dir()
