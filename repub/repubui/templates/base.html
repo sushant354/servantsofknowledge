@@ -85,6 +85,14 @@
                                 {% if user.first_name %}{{ user.first_name }}{% else %}{{ user.username }}{% endif %}
                             </button>
                             <ul class="dropdown-menu">
+                                {% if user.is_staff %}
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'admin:index' %}">
+                                        <i class="bi bi-gear-fill"></i> Admin
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                {% endif %}
                                 <li>
                                     <a class="dropdown-item" href="{% url 'api_token' %}">
                                         <i class="bi bi-key-fill"></i> API Token

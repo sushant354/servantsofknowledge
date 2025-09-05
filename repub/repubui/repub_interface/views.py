@@ -188,7 +188,11 @@ def run_job(job):
 
 @login_required
 def job_detail(request, job_id):
-    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    # Allow admin users to view any job, regular users can only view their own jobs
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
     
     # If the job is in reviewing status, redirect to the review page
     if job.status == 'reviewing':
