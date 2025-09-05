@@ -519,7 +519,11 @@ def stop_job(request, job_id):
 
 @login_required
 def job_output_directory(request, job_id, subpath=''):
-    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    # Allow admin users to view any job, regular users can only view their own jobs
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
     
     # Get the base output directory path
     base_output_dir = job.get_output_dir()
@@ -628,7 +632,11 @@ def job_output_directory(request, job_id, subpath=''):
 
 @login_required
 def job_input_directory(request, job_id, subpath=''):
-    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    # Allow admin users to view any job, regular users can only view their own jobs
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
     
     # Get the base input directory path
     base_input_dir = job.get_input_dir()
