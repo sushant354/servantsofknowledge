@@ -466,7 +466,11 @@ def job_status(request, job_id):
     API endpoint for checking job status via AJAX.
     """
     try:
-        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+        # Allow admin users to check status of any job, regular users can only check their own jobs
+        if request.user.is_staff:
+            job = get_object_or_404(ProcessingJob, id=job_id)
+        else:
+            job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
         
         response_data = {
             'success': True,
