@@ -110,12 +110,20 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
-POSTMARK = {
-    'TOKEN': os.getenv('POSTMARK_TOKEN'),
-    'TEST_MODE': False,
-    'VERBOSITY': 0,
-}
-EMAIL_BACKEND = 'postmarker.django.EmailBackend'
+# Email configuration
+# For development, using console backend to see emails in console
+# For production, configure your preferred email service
+if os.getenv('POSTMARK_TOKEN'):
+    # Use Postmark in production if token is available
+    EMAIL_BACKEND = 'postmarker.django.EmailBackend'
+    POSTMARK = {
+        'TOKEN': os.getenv('POSTMARK_TOKEN'),
+        'TEST_MODE': False,
+        'VERBOSITY': 0,
+    }
+else:
+    # Use console backend for development
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 # Internationalization
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Kolkata'
@@ -141,8 +149,6 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
-# Email backend for password reset (console for development)
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = 'noreply@repubui.local'
 
 # Session security settings
