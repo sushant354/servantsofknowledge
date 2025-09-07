@@ -1,179 +1,181 @@
-For REPUB project
-==================
-First install the dependencies ..
+# Servants of Knowledge 
 
-symlink repub in your site packages
-```
-ln -s <maindirectory>/servantsofknowledge/repub <python_site_package_dir/repub
+Servants of Knowledge is an effort to digitize books in libraries for archival reasons, search purposes and all use cases permitted by the copyright laws. The aim is to provide full stack solution for scanning books that includes hardware for scanning books and the software to process the images into a PDF. Also to enable a full text search on these books and the management of these books in a library. 
 
-```
-Install dependencies
-```
-pip install -r requirements.txt 
-```
-Install tesseract. On debian systems:
-```
-apt install tesseract-ocr tesseract-ocr-all
-```
-process_raw.py is the main program to transform scanned images to a PDF with text layer
-For full Repub of Internet Archive images:
-```
-python process_raw.py -i <ia_scan_dir> -A <repub-dir> -c --ocr  -L <langs>
-```
+For details on how to build your own scanners or buy a scanner from us, please message us. The current software repository only provides the necessary software to process the scans and then organize the books for a full text search or running a library management system. 
 
+This repository contains work for the Servants modifications to InvenioILS (Integrated Library System) and the REPUB document processing system for digitizing and managing scanned books and documents.
 
-To convert Internet Archive images to PDF with text layer with cropping and language "eng+asm"
-```
-python process_raw.py -i <ia_scan_dir> -O <output_file_path.pdf> -c -L eng+asm
-```
-To convert a PDF file to a PDF file with text layer with cropping and language "eng+kan". Remove "-c" if no need to crop.
-```
-python process_raw.py -I <input_file_path.pdf> -O <output_file_path.pdf> -c -L eng+kan
-```
+### REPUB Features
 
-Options
-```
-usage: process_raw.py [-h] [-i INDIR] [-I INPDF] [-o OUTDIR] [-O OUTPDF]
-                      [-l LOGLEVEL] [-L LANGS] [-f LOGFILE] [-m MAXCONTOURS]
-                      [-x XMAX] [-y YMAX] [-d] [-p [PAGENUMS ...]] [-g] [-c]
-                      [-D] [-r FACTOR] [-t] [-w] [-H OUTHOCR] [-T OUTTXT]
-                      [-N THUMBNAIL] [-A IADIR] [-R ROTATE_TYPE]
+REPUB is a comprehensive document processing pipeline that converts scanned book pages into high-quality, searchable digital documents. Key features include:
 
-For processing scanned book pages
+- **Image Processing**: Auto-cropping, deskewing and dewarping for scanned images
+- **OCR Integration**: Multi-language text recognition using Tesseract
+- **PDF Generation**: Creates searchable PDFs with embedded text layers
+- **Command-line Tool**: For directly processing the scanned images into PDF, HOCR file and thumbnails 
+- **Web Interface**: Django-based UI for job management and processing workflows along with a client that can submit jobs
 
-options:
-  -h, --help            show this help message and exit
-  -i INDIR, --indir INDIR
-                        Filepath to scanned images directory
-  -I INPDF, --inpdf INPDF
-                        Input PDF File
-  -o OUTDIR, --outdir OUTDIR
-                        Filepath to processed directory
-  -O OUTPDF, --outpdf OUTPDF
-                        Output PDF filepath
-  -l LOGLEVEL, --loglevel LOGLEVEL
-                        debug level
-  -L LANGS, --language LANGS
-                        language for tesseract
-  -f LOGFILE, --logfile LOGFILE
-                        log file
-  -m MAXCONTOURS, --maxcontours MAXCONTOURS
-                        max number of contours to be examined
-  -x XMAX, --xmax XMAX  horizontal line limits in pixels
-  -y YMAX, --ymax YMAX  vertical line limits in pixels
-  -d, --drawcontours    draw contours only on the image
-  -p [PAGENUMS ...], --pagenums [PAGENUMS ...]
-                        pagenums that should only be processed
-  -g, --gray            only gray the image and threshold it
-  -c, --crop            crop the scanned image
-  -D, --deskew          detect the skew and deskew
-  -r FACTOR, --reduce FACTOR
-                        reduce the image to factor
-  -t, --ocr             do ocr while making the PDF
-  -w, --dewarp          dewarp the images
-  -H OUTHOCR, --outhocr OUTHOCR
-                        Output HOCR filepath
-  -T OUTTXT, --outtxt OUTTXT
-                        Output TEXT filepath
-  -N THUMBNAIL, --thumbnail THUMBNAIL
-                        Output Thumbnail filepath
-  -A IADIR, --iadir IADIR
-                        Directory for Internet Archive Full Repub
-  -R ROTATE_TYPE, --rotate ROTATE_TYPE
-                        rotate by average of (horizontal|vertical|overall)
-                        lines
-```
+## Quick Start
 
-RepuBUI - Web Interface
-======================
+### Prerequisites
 
-RepuBUI is a web-based interface for the REPUB project that provides a user-friendly way to process documents. It offers all the functionality of the command-line tool through an intuitive web interface.
+- Python 3.8+
+- OpenCV
+- Tesseract OCR
+- Django 5.2
+- PostgreSQL (for production)
 
-Installation & Setup
-------------------
+### Installation
 
-1. Make sure you have completed the REPUB installation steps above first.
-
-2. Navigate to the RepuBUI directory and create a virtual environment:
+1. Clone the repository:
 ```bash
-cd repub/repubui
-python -m venv .venv
-source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
+git clone <repository-url>
+cd servantsofknowledge
 ```
 
-3. Install additional dependencies for RepuBUI:
+2. Install Python dependencies:
 ```bash
-pip install -r requirements.txt
+pip install -r repub/requirements.txt
 ```
 
-4. Set up the database:
+3. Install system dependencies:
 ```bash
-# Create initial migrations for the repub_interface app
-python manage.py makemigrations repub_interface
+# Ubuntu/Debian
+sudo apt-get install tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-deu
+sudo apt-get install poppler-utils
 
-# Apply all migrations (both Django's default and repub_interface)
+# macOS
+brew install tesseract poppler
+```
+
+## REPUB Usage
+
+### Command Line Processing
+
+The `process_raw.py` tool provides direct command-line access to the document processing pipeline:
+
+#### Basic Usage
+
+```bash
+cd repub/
+
+# Process images from a directory
+python process_raw.py -i input_directory -o output_directory --crop --deskew --ocr
+
+# Process a PDF file
+python process_raw.py -I input.pdf -O output.pdf --crop --deskew --ocr
+
+# Create Internet Archive compatible output
+python process_raw.py -i input_directory -A ia_output_directory
+```
+
+#### Common Options
+
+| Option | Description |
+|--------|-------------|
+| `-i, --indir` | Input directory containing scanned images |
+| `-I, --inpdf` | Input PDF file to process |
+| `-o, --outdir` | Output directory for processed images |
+| `-O, --outpdf` | Output PDF file path |
+| `-A, --iadir` | Internet Archive format output directory |
+| `-c, --crop` | Auto-crop page boundaries |
+| `-D, --deskew` | Detect and correct page skew |
+| `-t, --ocr` | Perform OCR and create searchable PDF |
+| `-L, --language` | OCR language (default: eng) |
+| `-r, --reduce` | Scale images by factor (e.g., 0.5 for 50%) |
+| `-w, --dewarp` | Apply dewarping to curved pages |
+| `-m, --maxcontours` | Max contours for cropping analysis (default: 5) |
+
+
+### Web Interface (RepubUI)
+
+The Django-based web interface provides a user-friendly way to manage document processing jobs:
+
+#### Setup
+
+1. Navigate to the web application directory:
+```bash
+cd repub/repubui/
+```
+
+2. Configure environment variables:
+```bash
+# Create .env file
+cp .env.example .env
+# Edit .env with your settings
+```
+
+3. Set up the database:
+```bash
+python manage.py makemigrations
 python manage.py migrate
 ```
 
-5. Create a superuser (optional, for admin access):
+4. Create a superuser account:
 ```bash
 python manage.py createsuperuser
 ```
 
-6. Start the development server:
+5. Start the development server:
 ```bash
 python manage.py runserver
 ```
 
-The web interface will be available at http://127.0.0.1:8000
+#### Web Interface Features
 
-Note: If you encounter any database errors when running the server, make sure you've:
-1. Created the migrations for repub_interface using `python manage.py makemigrations repub_interface`
-2. Applied all migrations using `python manage.py migrate`
-3. Have proper write permissions in the project directory
+- **Job Management**: Upload, monitor, and manage processing jobs
+- **Page-by-Page Review**: Individual page editing and adjustment
+- **Batch Processing**: Handle multiple documents simultaneously
+- **Admin Interface**: User management and system configuration
+- **API Access**: RESTful API for programmatic access
 
-Features
---------
+#### Access Points
 
-- Upload PDF files or ZIP files containing images
-- Configure processing options through a user-friendly interface:
-  - OCR language selection
-  - Cropping
-  - Deskewing
-  - OCR processing
-  - Dewarping
-  - Rotation options
-  - Image reduction
-- Real-time processing status updates
-- Download processed PDFs
-- Review and adjust page processing results
-- Admin interface for job management
+- **Main Interface**: http://localhost:8000/
+- **Admin Panel**: http://localhost:8000/admin/
+- **API Documentation**: http://localhost:8000/api/
 
-Directory Structure
------------------
+## InvenioILS Integration
+
+The `invenioils/` directory contains a modified InvenioILS installation that integrates with the REPUB processing system:
+
+## Project Structure
 
 ```
-repub/repubui/
-├── manage.py              # Django management script
-├── repubui/              # Main project directory
-│   ├── settings.py       # Project settings
-│   ├── urls.py           # Main URL configuration
-│   └── wsgi.py          # WSGI configuration
-├── repub_interface/      # Main application
-│   ├── models.py         # Database models
-│   ├── views.py          # View functions
-│   ├── urls.py          # URL patterns
-│   └── templates/       # HTML templates
-└── templates/           # Global templates
+servantsofknowledge/
+├── invenioils/              # Modified InvenioILS system
+│   ├── iarchive/           # Internet Archive integration
+│   ├── ILS/                # Core InvenioILS application
+│   └── reactjs/            # React components
+├── repub/                   # Document processing system
+│   ├── imgfuncs/           # Image processing functions
+│   │   ├── cropping.py     # Auto-cropping algorithms
+│   │   ├── deskew.py       # Skew detection and correction
+│   │   ├── dewarp.py       # Page dewarping
+│   │   └── utils.py        # Image utilities
+│   ├── utils/              # Processing utilities
+│   │   ├── pdfs.py         # PDF operations
+│   │   ├── hocrproc.py     # HOCR processing
+│   │   └── scandir.py      # Directory scanning
+│   ├── repubui/            # Django web application
+│   │   ├── repub_interface/# Main Django app
+│   │   ├── templates/      # HTML templates
+│   │   └── static/         # Static assets
+│   ├── process_raw.py      # Command-line interface
+│   └── requirements.txt    # Python dependencies
+└── README.md               # This file
 ```
 
-Media Storage
-------------
+## Configuration
 
-The application stores files in the following directories under `repub/repubui/media/`:
+### Environment Variables (.env)
 
-- `uploads/`: Original uploaded files
-- `processed/`: Processed output files
-- `thumbnails/`: Generated thumbnails for preview
+For the RepubUI Django application:
 
-These directories are automatically created when needed.
+```bash
+SECRET_KEY=your-secret-key
+DEBUG=True
+DEPLOYMENT=local  # or 'prod' for PostgreSQL
+ALLOWED_HOSTS=localhost,127.0.0.1
+```
