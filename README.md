@@ -42,11 +42,16 @@ pip install -r repub/requirements.txt
 3. Install system dependencies:
 ```bash
 # Ubuntu/Debian
-sudo apt-get install tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-deu
+sudo apt-get install tesseract-ocr tesseract-ocr-all
 sudo apt-get install poppler-utils
 
 # macOS
 brew install tesseract poppler
+```
+symlink repub in your site packages
+
+```
+ln -s <maindirectory>/servantsofknowledge/repub <python_site_package_dir/repub
 ```
 
 ## REPUB Usage
