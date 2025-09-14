@@ -47,6 +47,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
 }
+AUTHENTICATION_BACKENDS = ['django.contrib.auth.backends.AllowAllUsersModelBackend']
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -149,7 +150,10 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
-DEFAULT_FROM_EMAIL = 'noreply@repubui.local'
+DEFAULT_FROM_EMAIL = os.getenv('FROM_EMAIL') 
+SERVER_EMAIL = DEFAULT_FROM_EMAIL 
+EMAIL_HOST_USER = DEFAULT_FROM_EMAIL
+EMAIL_SUBJECT_PREFIX = '[repub]'
 
 # Session security settings
 SESSION_COOKIE_AGE = 24*30*3600  # 30 days 
