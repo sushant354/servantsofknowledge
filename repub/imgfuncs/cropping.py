@@ -33,8 +33,9 @@ def minmax_y (line):
             maxy = y
     return miny, maxy
 
-def get_min_max_x(vline0, vline1, columns):
-    logger = logging.getLogger('repub.crop')
+def get_min_max_x(vline0, vline1, columns, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.crop')
     minx1, maxx1 = minmax_x( vline0)
     minx2, maxx2 = minmax_x( vline1)
 
@@ -70,18 +71,19 @@ def get_min_max_y(hline0, hline1):
 
     return miny, maxy
 
-def get_crop_box(img, xmax, ymax, maxcontours):
-    logger = logging.getLogger('repub.crop')
+def get_crop_box(img, xmax, ymax, maxcontours, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.crop')
     contours = find_contour(img)
 
     contours = contours[:maxcontours]
 
-    hlines, vlines = get_hvlines(contours, xmax, ymax, img.shape)
+    hlines, vlines = get_hvlines(contours, xmax, ymax, img.shape, logger)
 
     minx = maxx = miny = maxy = None
 
     if len(vlines) >= 2:
-        minx, maxx = get_min_max_x(vlines[0], vlines[1], img.shape[1])
+        minx, maxx = get_min_max_x(vlines[0], vlines[1], img.shape[1], logger)
 
     if len(hlines) >= 2:
         miny, maxy = get_min_max_y(hlines[0], hlines[1])
@@ -90,9 +92,11 @@ def get_crop_box(img, xmax, ymax, maxcontours):
     
     return [minx, miny, maxx, maxy]
 
-def fix_wrong_boxes(boxes, maxdiff, maxfirst):
-    logger = logging.getLogger('repub.crop')
+def fix_wrong_boxes(boxes, maxdiff, maxfirst, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.crop')
 
+    logger.info(f'Fixing wrong boxes for {len(boxes)} pages (maxdiff={maxdiff}, maxfirst={maxfirst})')
     pagenums = list(boxes.keys())
     pagenums.sort()
 
@@ -174,9 +178,11 @@ def fix_wrong_boxes(boxes, maxdiff, maxfirst):
                 logger.warning('Cropping box replaced for page %d from %s to %s', pagenum, prev, box)
                 box[4] = stats[4]
         if pagenum % 2 == 0:
-            preveven = box    
+            preveven = box
         else:
             prevodd  = box
+
+    logger.info('Completed fixing wrong boxes')
 
 def crop(img, box):
     minx = box[0]

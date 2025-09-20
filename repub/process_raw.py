@@ -10,6 +10,7 @@ from repub.imgfuncs.cropping import crop, get_crop_box, fix_wrong_boxes
 from repub.imgfuncs.utils import find_contour, threshold_gray
 from repub.utils import pdfs
 from repub.imgfuncs.deskew import deskew, rotate
+from repub.imgfuncs.dewarp import dewarp
 from repub.utils import utils
 from repub.utils.scandir import Scandir
 
@@ -74,38 +75,53 @@ def get_arg_parser():
     return parser
 
 
-def draw_contours(scandir, args):        
+def draw_contours(scandir, args, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.main')
+    logger.info('Starting contour drawing process')
     outfiles = []
     for img, infile, outfile, pagenum in scandir.get_scanned_pages():
         if args.deskew:
             img, hangle = deskew(img, args.xmax, args.ymax, \
-                                 args.maxcontours, args.rotate_type)
+                                 args.maxcontours, args.rotate_type, logger)
         contours = find_contour(img)
         contours = contours[:args.maxcontours]
 
         img = cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
 
         cv2.imwrite(outfile, img)
+        logger.debug(f'Processed page {pagenum}: {outfile}')
         outfiles.append((pagenum, outfile))
+    logger.info(f'Completed contour drawing for {len(outfiles)} pages')
     return outfiles
 
-def gray_images(scandir, args):
+def gray_images(scandir, args, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.main')
+    logger.info('Starting grayscale conversion process')
     outfiles = []
     for img, infile, outfile, pagenum in scandir.get_scanned_pages():
         if args.deskew:
-            img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type)
+            img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type, logger)
         gray = threshold_gray(img, 125, 255)
         cv2.imwrite(outfile, gray)
+        logger.debug(f'Processed page {pagenum}: {outfile}')
         outfiles.append((pagenum, outfile))
+    logger.info(f'Completed grayscale conversion for {len(outfiles)} pages')
     return outfiles
 
-def deskew_images(scandir,  args):
+def deskew_images(scandir, args, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.main')
+    logger.info('Starting deskew process')
     outfiles = []
     for img, infile, outfile, pagenum in scandir.get_scanned_pages():
-        deskewed, angle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type)
+        deskewed, angle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type, logger)
         cv2.imwrite(outfile, deskewed)
+        logger.debug(f'Deskewed page {pagenum} by {angle} degrees: {outfile}')
         outfiles.append((pagenum, outfile))
 
+    logger.info(f'Completed deskewing for {len(outfiles)} pages')
     return outfiles
 
 def resize_image(img, factor):
@@ -131,22 +147,30 @@ def mk_clean(outdir):
         shutil.rmtree(outdir)
     os.mkdir(outdir)
 
-def get_cropping_boxes(scandir, args):
+def get_cropping_boxes(scandir, args, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.main')
+    logger.info('Computing cropping boxes for all pages')
     boxes = {}
     for img, infile, outfile, pagenum in scandir.get_scanned_pages():
-        img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type)
-        box = get_crop_box(img, args.xmax, args.ymax, args.maxcontours)
+        img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type, logger)
+        box = get_crop_box(img, args.xmax, args.ymax, args.maxcontours, logger)
         box.append(hangle)
         #box.append(0.0)
         boxes[pagenum] = box
 
-    fix_wrong_boxes(boxes, 200, 250)
+    fix_wrong_boxes(boxes, 200, 250, logger)
+    logger.info(f'Computed cropping boxes for {len(boxes)} pages')
     return boxes
 
-def process_images(scandir, args):
-    logger = logging.getLogger('repub.main')
+def process_images(scandir, args, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.main')
+
+    logger.info('Starting image processing')
     if args.crop:
-        boxes = get_cropping_boxes(scandir, args)
+        logger.info('Getting cropping boxes for all pages')
+        boxes = get_cropping_boxes(scandir, args, logger)
 
     outfiles = []
     thumbnail = None
@@ -174,11 +198,14 @@ def process_images(scandir, args):
             cv2.imwrite(thumbpath, thumb)
 
         cv2.imwrite(outfile, img)
+        logger.info(f'Processed page {pagenum}: {outfile}')
         outfiles.append((pagenum, outfile))
 
     if thumbnail is not None:
         cv2.imwrite(args.thumbnail, thumbnail)
+        logger.info(f'Generated thumbnail: {args.thumbnail}')
 
+    logger.info(f'Completed image processing for {len(outfiles)} pages')
     return outfiles
 
 def initialize_iadir(args):
@@ -236,7 +263,7 @@ if __name__ == '__main__':
     else:
         outdir = tempfile.mkdtemp()
 
-    scandir = Scandir(indir, outdir, args.pagenums)
+    scandir = Scandir(indir, outdir, args.pagenums, logger)
     if not args.inpdf:
         metadata = scandir.metadata
 

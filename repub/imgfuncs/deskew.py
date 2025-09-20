@@ -5,17 +5,18 @@ import logging
 
 from .utils import  find_contour, get_hvlines
 
-def deskew(img, xmax, ymax, maxcontours, rotate_type):
-    logger = logging.getLogger('repub.deskew')
+def deskew(img, xmax, ymax, maxcontours, rotate_type, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.deskew')
     contours = find_contour(img)
 
     contours = contours[:maxcontours]
 
-    hlines, vlines = get_hvlines(contours, xmax, ymax, img.shape)
+    hlines, vlines = get_hvlines(contours, xmax, ymax, img.shape, logger)
 
-    hangle = get_hlines_angle(hlines)
+    hangle = get_hlines_angle(hlines, logger)
     logger.warning('Hangle: %s', hangle)
-    vangle = get_vlines_angle(vlines)
+    vangle = get_vlines_angle(vlines, logger)
     logger.warning('Vangle: %s', vangle)
 
     angle = merge_angles(hangle, vangle, rotate_type) 
@@ -49,8 +50,9 @@ def rotate(img, angle_deg):
     img = cv2.warpAffine(img, M, (width, height))
     return img
 
-def get_angle(line):
-    logger = logging.getLogger('repub.deskew')
+def get_angle(line, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.deskew')
     [vx,vy,x,y] = cv2.fitLine(np.array(line), cv2.DIST_L2,0,0.01,0.01)
     x_axis      = np.array([1, 0])    # unit vector in the same direction as the x axis
     your_line   = np.array([vx, vy])  # unit vector in the same direction as your line
@@ -62,12 +64,13 @@ def get_angle(line):
         ang = -1 * ang
     return math.degrees(ang)
 
-def get_vlines_angle(lines):
-    logger = logging.getLogger('repub.deskew')
+def get_vlines_angle(lines, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.deskew')
     angles = []
 
     for line in lines:
-        deg = get_angle(line)
+        deg = get_angle(line, logger)
         if deg < 0:
             deg = 90+deg
         else:
@@ -77,12 +80,13 @@ def get_vlines_angle(lines):
     degrees = sum(angles)/len(angles)
     return degrees
 
-def get_hlines_angle(lines):
-    logger = logging.getLogger('repub.deskew')
+def get_hlines_angle(lines, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.deskew')
     angles = []
 
     for line in lines:
-        deg = get_angle(line)
+        deg = get_angle(line, logger)
         angles.append(deg)
     logger.warning('Angles: %s', angles)
     degrees = sum(angles)/len(angles)

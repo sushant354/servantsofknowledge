@@ -40,7 +40,7 @@ from .forms import ProcessingJobForm, UserRegistrationForm, ProcessingOptionsFor
 import numpy as np
 
 # Set up logger for this module
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('repubui.views')
 
 # Import functions from the original repub package
 from repub import process_raw 
@@ -387,13 +387,13 @@ class Args:
 
 def process_job(job):
     job.status = 'processing'
-    job.output_file = None 
+    job.output_file = None
     job.save()
 
     # Get the input and output directories/files
     input_file_path = job.input_file.path if job.input_file else None
     input_dir       = job.get_input_dir()
-    output_dir      = job.get_output_dir() 
+    output_dir      = job.get_output_dir()
 
     os.makedirs(input_dir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
@@ -401,64 +401,79 @@ def process_job(job):
     logfile   = os.path.join(output_dir, 'processing.log')
     loghandle = open(logfile, 'a', encoding='utf-8')
 
-    loghandle.write(f"Processing job ID: {job.id}\n")
-    loghandle.write(f"Input file: {input_file_path}\n")
-    loghandle.write(f"Input file exists: {os.path.exists(input_file_path) if input_file_path else False}\n")
-    loghandle.write(f"Input directory: {input_dir}\n")
+    # Create a logger that writes to the log file
+    job_logger = logging.getLogger(f'repub.job.{job.id}')
+
+    # Clear any existing handlers
+    job_logger.handlers.clear()
+
+    # Create file handler
+    file_handler = logging.StreamHandler(loghandle)
+
+    # Add handler to logger
+    job_logger.addHandler(file_handler)
+
+    job_logger.info(f"Processing job ID: {job.id}")
+    job_logger.info(f"Input file: {input_file_path}")
+    job_logger.info(f"Input file exists: {os.path.exists(input_file_path) if input_file_path else False}")
+    job_logger.info(f"Input directory: {input_dir}")
 
     # Process based on input type
     if job.input_type == 'pdf':
-        loghandle.write("Input type: PDF")
+        job_logger.info("Input type: PDF")
         if not input_file_path or not os.path.exists(input_file_path):
             raise ValueError(f"PDF file not found at: {input_file_path}")
         # Extract images from PDF
         pdfs.pdf_to_images(input_file_path, input_dir)
     elif job.input_type == 'images':
-        loghandle.write("Input type: Images\n")
+        job_logger.info("Input type: Images")
         if not input_file_path or not os.path.exists(input_file_path):
-            raise ValueError(f"Image file not found at: {input_file_path}\n")
+            raise ValueError(f"Image file not found at: {input_file_path}")
         # If it's a ZIP file, extract it
         if input_file_path.lower().endswith('.zip'):
-            loghandle.write("Extracting ZIP file\n")
+            job_logger.info("Extracting ZIP file")
             with zipfile.ZipFile(input_file_path, 'r') as zip_ref:
                 zip_ref.extractall(input_dir)
 
             # List all extracted files for debugging
-            n = 0 
+            n = 0
             for root, dirs, files in os.walk(input_dir):
                 for file in files:
                     n += 1
-            loghandle.write(f"Extracted {n} files from ZIP\n")
+            job_logger.info(f"Extracted {n} files from ZIP")
 
             # If it's a single image, copy it to the input directory
         elif input_file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
-            loghandle.write("Processing single image file")
+            job_logger.info("Processing single image file")
             filename = os.path.basename(input_file_path)
             destination = os.path.join(input_dir, filename)
             shutil.copy(input_file_path, destination)
 
         args = Args(job, input_dir, output_dir)
-        scandir = Scandir(args.indir, args.outdir, args.pagenums)
+        scandir = Scandir(args.indir, args.outdir, args.pagenums, job_logger)
         if job.input_type == 'pdf':
             metadata = pdfs.get_metadata(input_file_path)
         else:
             metadata = scandir.metadata
         if args.drawcontours:
-            outfiles = process_raw.draw_contours(scandir, args)
+            outfiles = process_raw.draw_contours(scandir, args, job_logger)
         elif args.gray:
-            outfiles = process_raw.gray_images(scandir, args)
+            outfiles = process_raw.gray_images(scandir, args, job_logger)
         elif args.deskew and not args.crop:
-            outfiles = process_raw.deskew_images(scandir, args)
+            outfiles = process_raw.deskew_images(scandir, args, job_logger)
         else:
-            outfiles = process_raw.process_images(scandir, args)
+            outfiles = process_raw.process_images(scandir, args, job_logger)
             if args.outpdf:
                 pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, \
-                              args.do_ocr, args.outhocr, args.outtxt)
+                              args.do_ocr, args.outhocr, args.outtxt, job_logger)
                 relative_path = os.path.relpath(args.outpdf, settings.MEDIA_ROOT)
                 job.output_file = relative_path
-        
+
         job.status = 'completed'
         job.save()
+
+        # Close the log file handle
+        loghandle.close()
 
 @require_http_methods(["GET"])
 @login_or_token_required
@@ -910,10 +925,15 @@ def save_snip(request, job_id, page_number):
 def finalize_job(request, job_id):
     """Finalize the job after review"""
     job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+
+    # Create a logger for the finalization process
+    finalize_logger = logging.getLogger(f'repub.finalize.{job.id}')
+    finalize_logger.info(f"Starting finalization for job {job.id}")
+
     input_dir       = job.get_input_dir()
-    output_dir      = job.get_output_dir() 
+    output_dir      = job.get_output_dir()
     args = Args(job, input_dir, output_dir)
-    scandir = Scandir(args.indir, args.outdir, args.pagenums)
+    scandir = Scandir(args.indir, args.outdir, args.pagenums, finalize_logger)
 
     input_file_path = job.input_file.path
 
@@ -930,9 +950,10 @@ def finalize_job(request, job_id):
         outfiles.append((pagenum, outfile))
 
     outfiles.sort(key = lambda x: x[0])
+    finalize_logger.info(f"Finalizing PDF with {len(outfiles)} pages")
 
     pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, \
-                              args.do_ocr, args.outhocr, args.outtxt)
+                              args.do_ocr, args.outhocr, args.outtxt, finalize_logger)
 
     relative_path = os.path.relpath(args.outpdf, settings.MEDIA_ROOT)
     job.output_file = relative_path

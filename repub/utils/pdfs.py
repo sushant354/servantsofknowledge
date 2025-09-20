@@ -37,13 +37,20 @@ def multiple_formats(imgpath, langs, outhocr, outtxt):
                                                      extensions = extensions)
     return result
 
-def save_pdf(outfiles, metadata, langs, outpdf, do_ocr, outhocr, outtxt):
-    logger = logging.getLogger('repub.utils.pdfs')
+def save_pdf(outfiles, metadata, langs, outpdf, do_ocr, outhocr, outtxt, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.utils.pdfs')
+
+    logger.info(f'Starting PDF creation with {len(outfiles)} pages')
+    logger.info(f'Output PDF: {outpdf}')
+    logger.info(f'OCR enabled: {do_ocr}, Language: {langs}')
+
     outfiles.sort(key = lambda x: x[0])
 
     pdf_writer = PdfWriter()
     if metadata:
         pdf_writer.add_metadata(metadata)
+        logger.debug('Added metadata to PDF')
 
     # export the searchable PDF to searchable.pdf
     hocrstitch = HocrStitch()
@@ -79,6 +86,7 @@ def save_pdf(outfiles, metadata, langs, outpdf, do_ocr, outhocr, outtxt):
         f = open(outtxt, 'w', encoding = 'utf-8')
         f.write(txtstr)
         f.close()
+        logger.info(f'Text output saved to: {outtxt}')
 
     if outhocr:
         hocrstr = hocrstitch.get_combined() 
@@ -86,6 +94,9 @@ def save_pdf(outfiles, metadata, langs, outpdf, do_ocr, outhocr, outtxt):
         f = gzip.open(outhocr, 'wb')
         f.write(hocrbytes)
         f.close()
+        logger.info(f'HOCR output saved to: {outhocr}')   
 
     with open(outpdf, 'wb') as f:
-        pdf_writer.write(f)   
+        pdf_writer.write(f)
+
+    logger.info(f'Successfully created PDF: {outpdf}')

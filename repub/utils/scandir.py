@@ -38,8 +38,9 @@ def get_metadata(indir):
         m['/%s' % k.title()] = v
     return m    
 
-def get_scanned_pages(pagedata, indir, outdir, pagenums):
-    logger = logging.getLogger('repub.scandir')
+def get_scanned_pages(pagedata, indir, outdir, pagenums, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.scandir')
     fnames = []
     for filename in os.listdir(indir):
         reobj = re.match('(?P<pagenum>\\d{4}).(jpg|jp2)$', filename)
@@ -70,8 +71,11 @@ def get_scanned_pages(pagedata, indir, outdir, pagenums):
             yield (img, infile, outfile, pagenum)
 
 class Scandir:
-    def __init__(self, indir, outdir, pagenums):
-        self.logger   = logging.getLogger('repub.scandir')
+    def __init__(self, indir, outdir, pagenums, logger=None):
+        if logger is None:
+            self.logger = logging.getLogger('repub.scandir')
+        else:
+            self.logger = logger
         self.indir    = self.find_input_dir(indir)
         self.outdir   = outdir
         self.pagenums = pagenums
@@ -98,7 +102,7 @@ class Scandir:
 
     def get_scanned_pages(self):
         for d in get_scanned_pages(self.pagedata, self.indir, self.outdir, \
-                                   self.pagenums):
+                                   self.pagenums, self.logger):
             yield d
 
     def is_cover_page(self, pagenum):            

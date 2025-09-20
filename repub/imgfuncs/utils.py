@@ -14,8 +14,11 @@ def find_contour(img):
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
     return contours
 
-def get_hvlines(contours, xmax, ymax, shape):
-    logger = logging.getLogger('repub.hvlines')
+def get_hvlines(contours, xmax, ymax, shape, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.hvlines')
+
+    logger.info(f'Extracting horizontal and vertical lines from {len(contours)} contours')
     hlines = []
     vlines = []
 
@@ -75,14 +78,15 @@ def get_hvlines(contours, xmax, ymax, shape):
 
     vlines = vlines[:5]
 
-    vlines = remove_close_vlines(vlines, shape[1])
+    vlines = remove_close_vlines(vlines, shape[1], logger)
 
     for hline in hlines[:5]:
-        logger.debug('HLINES %d %s', abs(hline[-1][0] - hline[0][0]), hline)
+        logger.info('HLINES %d %s', abs(hline[-1][0] - hline[0][0]), hline)
 
     for vline in vlines[:5]:
-        logger.debug('VLINES %d %s', abs(vline[-1][1] - vline[0][1]), vline)
+        logger.info('VLINES %d %s', abs(vline[-1][1] - vline[0][1]), vline)
 
+    logger.debug(f'Returning {len(hlines[:2])} horizontal and {len(vlines[:2])} vertical lines')
     return hlines[:2], vlines[:2]
 
 def get_xavg(vline):
@@ -94,7 +98,9 @@ def get_xavg(vline):
 
     return total/count
 
-def remove_close_vlines(vlines, columns):
+def remove_close_vlines(vlines, columns, logger=None):
+    if logger is None:
+        logger = logging.getLogger('repub.hvlines')
     lines   = []
     uniques = []
 
@@ -103,7 +109,6 @@ def remove_close_vlines(vlines, columns):
 
     if len(lines) >= 2 and abs(lines[1][1] - lines[0][1]) < 200:
         # pick vline that is farthest from the edge
-        logger = logging.getLogger('repub.hvlines')
         x0    = lines[0][1]
         size0 = lines[0][2]
         logger.info('Duplicates at the edge x0: %d, size0: %d', x0, size0) 
@@ -129,7 +134,8 @@ def remove_close_vlines(vlines, columns):
         for vline, xavg, size in uniques:
             vlines.append(vline)
         vlines.sort(key = lambda t: abs(t[-1][1] - t[0][1]), reverse = True)
-                           
+        logger.debug(f'Removed duplicate vertical lines, returning {len(vlines)} lines')
+
     return vlines
 
 def is_horizontal(havg, p1, p2, ymax):

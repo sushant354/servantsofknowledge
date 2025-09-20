@@ -171,6 +171,15 @@ if not DEBUG:
     SECURE_REFERRER_POLICY = 'same-origin'
 
 # Logging configuration
+# Configure handlers based on deployment environment
+LOG_LEVEL =  os.getenv('LOG_LEVEL', 'INFO')
+if DEPLOYMENT == 'local':
+    # Use stream logging for local development
+    DEFAULT_HANDLERS = ['console']
+else:
+    # Use file logging for production
+    DEFAULT_HANDLERS = ['file']
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -184,6 +193,11 @@ LOGGING = {
             'format': '{levelname} {message}',
             'style': '{',
         },
+        'repub_format': {
+            'format': '{asctime} {name} {levelname} {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
     },
     'handlers': {
         'console': {
@@ -196,24 +210,20 @@ LOGGING = {
             'formatter': 'verbose',
         },
     },
-    'root': {
-        'handlers': ['console', 'file'],
-        'level': 'INFO',
-    },
     'loggers': {
         'repub_interface': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG' if DEBUG else 'INFO',
+            'handlers': DEFAULT_HANDLERS,
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+        'repubui': {
+            'handlers': DEFAULT_HANDLERS,
+            'level': LOG_LEVEL,
             'propagate': False,
         },
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': DEFAULT_HANDLERS,
             'level': 'INFO',
-            'propagate': False,
-        },
-        'django.request': {
-            'handlers': ['console', 'file'],
-            'level': 'ERROR',
             'propagate': False,
         },
     },
