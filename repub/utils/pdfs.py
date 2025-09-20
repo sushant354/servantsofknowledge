@@ -50,7 +50,7 @@ def save_pdf(outfiles, metadata, langs, outpdf, do_ocr, outhocr, outtxt, logger=
     pdf_writer = PdfWriter()
     if metadata:
         pdf_writer.add_metadata(metadata)
-        logger.debug('Added metadata to PDF')
+        logger.info('Added metadata to PDF')
 
     # export the searchable PDF to searchable.pdf
     hocrstitch = HocrStitch()

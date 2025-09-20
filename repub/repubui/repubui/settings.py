@@ -221,6 +221,12 @@ LOGGING = {
             'level': LOG_LEVEL,
             'propagate': False,
         },
+        'repub': {
+            'handlers': DEFAULT_HANDLERS,
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+
         'django': {
             'handlers': DEFAULT_HANDLERS,
             'level': 'INFO',

@@ -163,10 +163,10 @@ def home(request):
         job.user = request.user
         job.save()
 
-        logger.debug(f"Created job {job.id} with file: {job.input_file}")
+        logger.info(f"Created job {job.id} with file: {job.input_file}")
         run_and_monitor_job(job)
 
-        logger.debug(f"Started processing job {job.id} in background thread")
+        logger.info(f"Started processing job {job.id} in background thread")
         messages.success(request, f'Job "{job.title or "Untitled"}" has been submitted and is being processed.')
         return redirect('job_detail', job_id=job.id)
 
@@ -402,7 +402,7 @@ def process_job(job):
     loghandle = open(logfile, 'a', encoding='utf-8')
 
     # Create a logger that writes to the log file
-    job_logger = logging.getLogger(f'repub.job.{job.id}')
+    job_logger = logging.getLogger(f'repub.job')
 
     # Clear any existing handlers
     job_logger.handlers.clear()
@@ -927,8 +927,21 @@ def finalize_job(request, job_id):
     job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
 
     # Create a logger for the finalization process
+    logfile   = os.path.join(output_dir, 'processing.log')
+    loghandle = open(logfile, 'a', encoding='utf-8')
+
+
     finalize_logger = logging.getLogger(f'repub.finalize.{job.id}')
     finalize_logger.info(f"Starting finalization for job {job.id}")
+    # Clear any existing handlers
+    finalize_logger.handlers.clear()
+
+    # Create file handler
+    file_handler = logging.StreamHandler(loghandle)
+
+    # Add handler to logger
+    finalize_logger.addHandler(file_handler)
+
 
     input_dir       = job.get_input_dir()
     output_dir      = job.get_output_dir()
@@ -963,7 +976,7 @@ def finalize_job(request, job_id):
 
     reviewdir   = job.get_review_dir()
     shutil.rmtree(reviewdir)
-    
+    loghandle.close() 
     return redirect('job_detail', job_id=job_id)
 
 

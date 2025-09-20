@@ -81,10 +81,10 @@ def get_hvlines(contours, xmax, ymax, shape, logger=None):
     vlines = remove_close_vlines(vlines, shape[1], logger)
 
     for hline in hlines[:5]:
-        logger.info('HLINES %d %s', abs(hline[-1][0] - hline[0][0]), hline)
+        logger.debug('HLINES %d %s', abs(hline[-1][0] - hline[0][0]), hline)
 
     for vline in vlines[:5]:
-        logger.info('VLINES %d %s', abs(vline[-1][1] - vline[0][1]), vline)
+        logger.debug('VLINES %d %s', abs(vline[-1][1] - vline[0][1]), vline)
 
     logger.debug(f'Returning {len(hlines[:2])} horizontal and {len(vlines[:2])} vertical lines')
     return hlines[:2], vlines[:2]
