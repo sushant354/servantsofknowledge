@@ -182,11 +182,17 @@ def process_images(scandir, args, logger=None):
             if hangle != None:
                 img = rotate(img, hangle)
             img = crop(img, box)
-            if args.dewarp:
-                img = dewarp(img)
 
         if args.factor:
             img = resize_image(img, args.factor)
+
+        if args.dewarp:
+            dewarp_img = dewarp(img, logger = logger)
+            if dewarp_img is not None:
+                img = dewarp_img
+            else:
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
         
         if args.thumbnail and thumbnail is None and scandir.is_cover_page(pagenum):
             thumbnail = get_thumbnail(img) 

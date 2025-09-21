@@ -11,3 +11,4 @@ beautifulsoup4
 djangorestframework
 psycopg2-binary
 postmarker
+page_dewarp
