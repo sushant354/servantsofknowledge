@@ -940,6 +940,65 @@ def save_snip(request, job_id, page_number):
     })
 
 
+def run_finalize_job(job):
+    """Background thread function to finalize the job"""
+    try:
+        # Create a logger for the finalization process
+        output_dir = job.get_output_dir()
+        logfile = os.path.join(output_dir, 'processing.log')
+        loghandle = open(logfile, 'a', encoding='utf-8')
+
+        finalize_logger = logging.getLogger(f'repub.finalize.{job.id}')
+        finalize_logger.info(f"Starting finalization for job {job.id}")
+        # Clear any existing handlers
+        finalize_logger.handlers.clear()
+
+        # Create file handler
+        file_handler = logging.StreamHandler(loghandle)
+
+        # Add handler to logger
+        finalize_logger.addHandler(file_handler)
+
+        input_dir = job.get_input_dir()
+        args = Args(job, input_dir, output_dir)
+        scandir = Scandir(args.indir, args.outdir, args.pagenums, finalize_logger)
+
+        input_file_path = job.input_file.path
+
+        if job.input_type == 'pdf':
+            metadata = pdfs.get_metadata(input_file_path)
+        else:
+            metadata = scandir.metadata
+
+        outfiles = []
+        imgdir = job.get_outimg_dir()
+        for filename in os.listdir(imgdir):
+            outfile = os.path.join(imgdir, filename)
+            pagenum = get_pagenum(filename)
+            outfiles.append((pagenum, outfile))
+
+        outfiles.sort(key=lambda x: x[0])
+        finalize_logger.info(f"Finalizing PDF with {len(outfiles)} pages")
+
+        pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf,
+                      args.do_ocr, args.outhocr, args.outtxt, finalize_logger)
+
+        relative_path = os.path.relpath(args.outpdf, settings.MEDIA_ROOT)
+        job.output_file = relative_path
+        job.status = 'completed'
+        job.save()
+
+        reviewdir = job.get_review_dir()
+        shutil.rmtree(reviewdir)
+        loghandle.close()
+
+    except Exception as e:
+        logger.error(f"Error finalizing job {job.id}: {str(e)}")
+        job.status = 'failed'
+        job.error_message = str(e)
+        job.save()
+
+
 @csrf_exempt
 @login_required
 @require_http_methods(["POST"])
@@ -947,58 +1006,17 @@ def finalize_job(request, job_id):
     """Finalize the job after review"""
     job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
 
-    # Create a logger for the finalization process
-    output_dir= job.get_output_dir()
-    logfile   = os.path.join(output_dir, 'processing.log')
-    loghandle = open(logfile, 'a', encoding='utf-8')
-
-
-    finalize_logger = logging.getLogger(f'repub.finalize.{job.id}')
-    finalize_logger.info(f"Starting finalization for job {job.id}")
-    # Clear any existing handlers
-    finalize_logger.handlers.clear()
-
-    # Create file handler
-    file_handler = logging.StreamHandler(loghandle)
-
-    # Add handler to logger
-    finalize_logger.addHandler(file_handler)
-
-
-    input_dir       = job.get_input_dir()
-    output_dir      = job.get_output_dir()
-    args = Args(job, input_dir, output_dir)
-    scandir = Scandir(args.indir, args.outdir, args.pagenums, finalize_logger)
-
-    input_file_path = job.input_file.path
-
-    if job.input_type == 'pdf':
-        metadata = pdfs.get_metadata(input_file_path)
-    else:
-        metadata = scandir.metadata
-
-    outfiles = []
-    imgdir   = job.get_outimg_dir()
-    for filename in os.listdir(imgdir):
-        outfile = os.path.join(imgdir, filename)
-        pagenum = get_pagenum(filename)
-        outfiles.append((pagenum, outfile))
-
-    outfiles.sort(key = lambda x: x[0])
-    finalize_logger.info(f"Finalizing PDF with {len(outfiles)} pages")
-
-    pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, \
-                              args.do_ocr, args.outhocr, args.outtxt, finalize_logger)
-
-    relative_path = os.path.relpath(args.outpdf, settings.MEDIA_ROOT)
-    job.output_file = relative_path
-        
-    job.status = 'completed'
+    # Set job status to finalizing
+    job.status = 'finalizing'
     job.save()
 
-    reviewdir   = job.get_review_dir()
-    shutil.rmtree(reviewdir)
-    loghandle.close() 
+    # Start finalization in background thread
+    thread = threading.Thread(target=run_finalize_job, args=(job,))
+    thread.start()
+
+    logger.info(f"Started finalization for job {job.id} in background thread")
+    messages.success(request, f'Job "{job.title or "Untitled"}" is being finalized.')
+
     return redirect('job_detail', job_id=job_id)
 
 
