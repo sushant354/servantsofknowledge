@@ -972,6 +972,24 @@ def run_finalize_job(job):
 
         outfiles = []
         imgdir = job.get_outimg_dir()
+
+        width = 0
+        num = 0
+
+        for filename in os.listdir(imgdir):
+            outfile = os.path.join(imgdir, filename)
+            img     = cv2.imread(outfile)
+            (h, w)  = img.shape[:2]
+            width  += w 
+            num    += 1
+        if num > 0:
+            avg_width = int(width/num)
+            for filename in os.listdir(imgdir):
+                outfile = os.path.join(imgdir, filename)
+                img     = cv2.imread(outfile)
+                img     = adjust_width(img, avg_width)
+                cv2.imwrite(outfile, img)
+
         for filename in os.listdir(imgdir):
             outfile = os.path.join(imgdir, filename)
             pagenum = get_pagenum(filename)
@@ -998,6 +1016,13 @@ def run_finalize_job(job):
         job.error_message = str(e)
         job.save()
 
+def adjust_width(img, avg_width):
+    (h, w) = img.shape[:2]
+
+    height = int (avg_width/w * h)
+    dim    = (avg_width, height)
+    logger.error('dim: %s', dim)
+    return cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
 
 @csrf_exempt
 @login_required
