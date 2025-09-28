@@ -1012,8 +1012,7 @@ def run_finalize_job(job):
 
     except Exception as e:
         logger.error(f"Error finalizing job {job.id}: {str(e)}")
-        job.status = 'failed'
-        job.error_message = str(e)
+        job.status = 'reviewing'
         job.save()
 
 def adjust_width(img, avg_width):
@@ -1021,7 +1020,6 @@ def adjust_width(img, avg_width):
 
     height = int (avg_width/w * h)
     dim    = (avg_width, height)
-    logger.error('dim: %s', dim)
     return cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
 
 @csrf_exempt
