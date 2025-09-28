@@ -43,8 +43,9 @@ import numpy as np
 logger = logging.getLogger('repubui.views')
 
 # Import functions from the original repub package
-from repub import process_raw 
+from repub import process_raw
 from repub.imgfuncs.cropping import crop
+from repub.imgfuncs.dewarp import dewarp
 from repub.utils.scandir import Scandir
 from repub.utils import pdfs
 
@@ -303,6 +304,7 @@ def page_editor(request, job_id, pagenum):
     """
     job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
     page = {'page_number': pagenum}    
+    logger.warning ('page_editor: %s', page)
             
     reviewdir   = job.get_review_dir()
     imgdir      = os.path.join(reviewdir, 'images')
@@ -878,6 +880,7 @@ def save_snip(request, job_id, page_number):
     y = int(request.POST.get('y', 0))
     width = int(request.POST.get('width', 0))
     height = int(request.POST.get('height', 0))
+    dewarp_enabled = request.POST.get('dewarp', 'false').lower() == 'true'
         
     if width <= 0 or height <= 0:
         return JsonResponse({
@@ -902,9 +905,17 @@ def save_snip(request, job_id, page_number):
         
     # Crop the image using the provided coordinates
     cropped_image = image[y:y+height, x:x+width]
-    img = process_raw.resize_image(cropped_image, job.reduce_factor)
 
-    thumb_image   = process_raw.get_thumbnail(cropped_image)
+    # Apply dewarping if enabled
+    if dewarp_enabled:
+        try:
+            cropped_image = dewarp(cropped_image, logger=logger)
+            logger.info(f"Applied dewarping to snip for job {job.id}, page {page_number}")
+        except Exception as e:
+            logger.warning(f"Dewarping failed for job {job.id}, page {page_number}: {str(e)}")
+
+    img = process_raw.resize_image(cropped_image, job.reduce_factor)
+    thumb_image = process_raw.get_thumbnail(cropped_image)
 
     cv2.imwrite(thumbfile, thumb_image)
     cv2.imwrite(outimg, img)
