@@ -948,6 +948,7 @@ def finalize_job(request, job_id):
     job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
 
     # Create a logger for the finalization process
+    output_dir= job.get_output_dir()
     logfile   = os.path.join(output_dir, 'processing.log')
     loghandle = open(logfile, 'a', encoding='utf-8')
 
