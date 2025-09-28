@@ -124,10 +124,14 @@ def deskew_images(scandir, args, logger=None):
     logger.info(f'Completed deskewing for {len(outfiles)} pages')
     return outfiles
 
-def resize_image(img, factor):
+def resize_image(img, factor, avg_width = None):
     (h, w) = img.shape[:2]
-    width  = int(w * factor)
-    height = int(h * factor)
+    if avg_width == None:
+        width  = int(w * factor)
+        height = int(h * factor)
+    else:
+        height = int (avg_width/w * h)
+        width = avg_width
     dim    = (width, height)
     return cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
 
@@ -172,8 +176,21 @@ def process_images(scandir, args, logger=None):
         logger.info('Getting cropping boxes for all pages')
         boxes = get_cropping_boxes(scandir, args, logger)
 
+    width = 0
+    num = 0
+    for pagenum, box in boxes.items():
+        width += box[3] - box[1] 
+        num += 1
+
+    avg_width = None
+    if num > 0:    
+        avg_width = width/num
+        if args.factor:
+            avg_width = int(avg_width * args.factor)
+    
     outfiles = []
     thumbnail = None
+
     for img, infile, outfile, pagenum in scandir.get_scanned_pages(): 
         if args.crop:
             box = boxes[pagenum]
@@ -183,15 +200,13 @@ def process_images(scandir, args, logger=None):
                 img = rotate(img, hangle)
             img = crop(img, box)
 
-        if args.factor:
-            img = resize_image(img, args.factor)
-
         if args.dewarp:
             dewarp_img = dewarp(img, logger = logger)
             if dewarp_img is not None:
                 img = dewarp_img
-            else:
-                img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+        if args.factor:
+            img = resize_image(img, args.factor, avg_width = avg_width)
 
         
         if args.thumbnail and thumbnail is None and scandir.is_cover_page(pagenum):

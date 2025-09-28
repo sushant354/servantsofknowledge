@@ -1,0 +1,21 @@
+diff --git a/src/page_dewarp/dewarp.py b/src/page_dewarp/dewarp.py
+index e663e60..28c0ea9 100644
+--- a/src/page_dewarp/dewarp.py
++++ b/src/page_dewarp/dewarp.py
+@@ -11,6 +11,7 @@ from cv2 import (
+     ADAPTIVE_THRESH_MEAN_C,
+     BORDER_REPLICATE,
+     COLOR_RGB2GRAY,
++    COLOR_RGB2BGR,
+     INTER_AREA,
+     INTER_CUBIC,
+     THRESH_BINARY,
+@@ -112,7 +113,7 @@ class RemappedImage:
+             interpolation=INTER_CUBIC,
+         ).astype(np.float32)
+ 
+-        img_gray = cvtColor(img, COLOR_RGB2GRAY)
++        img_gray = cvtColor(img, COLOR_RGB2BGR)
+         # Ensure image_x_coords and image_y_coords are of the correct type
+         remapped = remap(
+             img_gray,
