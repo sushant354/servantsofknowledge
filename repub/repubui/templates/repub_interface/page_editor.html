@@ -213,13 +213,32 @@
                 </label>
             </div>
         </div>
+
+        <div class="toolbar-group">
+            <button id="show-original"
+                    class="btn btn-outline-info active"
+                    aria-label="Show original image"
+                    data-tooltip="Show original image">
+                <i class="bi bi-image"></i> Original
+            </button>
+            <button id="show-output"
+                    class="btn btn-outline-success"
+                    aria-label="Show output image"
+                    data-tooltip="Show processed output image"
+                    style="display: none;">
+                <i class="bi bi-image-fill"></i> Output
+            </button>
+        </div>
     </div>
 
     <div class="image-container">
-        <img id="original-image" 
+        <img id="original-image"
              src="{{ page.original_image }}?t={{ now.timestamp }}"
              alt="Original Page {{ page.page_number }}"
              style="max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain;">
+        <img id="output-image"
+             alt="Output Image"
+             style="max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: none;">
         <canvas id="snip-canvas" class="snip-canvas" style="display: none;"></canvas>
         <div id="snip-overlay" class="snip-overlay" style="display: none;"></div>
         <div id="selection-box" class="selection-box" style="display: none;"></div>
@@ -366,7 +385,8 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.status === 'success') {
                 showNotification('Snip saved successfully', 'success');
-                window.location.href = `{% url 'job_review' job.id %}?refresh=true&page={{ page.page_number }}`;
+                showOutputImage(data.output_image_url);
+                exitSnipMode();
             } else {
                 showNotification('Error: ' + data.message, 'danger');
             }
@@ -396,6 +416,36 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('cancel-snip').click();
         }
     });
+
+    // Image switching functionality
+    document.getElementById('show-original').addEventListener('click', function() {
+        showOriginalImage();
+    });
+
+    document.getElementById('show-output').addEventListener('click', function() {
+        showOutputImageView();
+    });
+
+    function showOriginalImage() {
+        document.getElementById('original-image').style.display = 'block';
+        document.getElementById('output-image').style.display = 'none';
+        document.getElementById('show-original').classList.add('active');
+        document.getElementById('show-output').classList.remove('active');
+    }
+
+    function showOutputImageView() {
+        document.getElementById('original-image').style.display = 'none';
+        document.getElementById('output-image').style.display = 'block';
+        document.getElementById('show-original').classList.remove('active');
+        document.getElementById('show-output').classList.add('active');
+    }
+
+    function showOutputImage(imageUrl) {
+        const outputImage = document.getElementById('output-image');
+        outputImage.src = imageUrl + '?t=' + new Date().getTime(); // Cache busting
+        document.getElementById('show-output').style.display = 'inline-block';
+        showOutputImageView();
+    }
 
     // Notification helper
     function showNotification(message, type = 'success') {

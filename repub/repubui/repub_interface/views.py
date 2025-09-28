@@ -919,14 +919,24 @@ def save_snip(request, job_id, page_number):
 
     cv2.imwrite(thumbfile, thumb_image)
     cv2.imwrite(outimg, img)
-        
-    logger.info(f"Saved snip for job {job.id}, page {page_number}: {x},{y} {width}x{height} to {{outimg}}")
-        
+
+    logger.info(f"Saved snip for job {job.id}, page {page_number}: {x},{y} {width}x{height} to {outimg}")
+
+    # Generate URL for the output image
+    outimg_relpath = os.path.relpath(outimg, settings.MEDIA_ROOT)
+    outimg_url = f"{settings.MEDIA_URL}{outimg_relpath}"
+
+    # Generate URL for the thumbnail
+    thumbfile_relpath = os.path.relpath(thumbfile, settings.MEDIA_ROOT)
+    thumb_url = f"{settings.MEDIA_URL}{thumbfile_relpath}"
+
     return JsonResponse({
         'status': 'success',
         'message': 'Snip saved successfully',
         'coordinates': {'x': x, 'y': y, 'width': width, 'height': height},
-        'output_path': outimg
+        'output_path': outimg,
+        'output_image_url': outimg_url,
+        'thumbnail_url': thumb_url
     })
 
 
