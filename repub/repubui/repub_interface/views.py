@@ -888,29 +888,40 @@ def save_snip(request, job_id, page_number):
     y = int(request.POST.get('y', 0))
     width = int(request.POST.get('width', 0))
     height = int(request.POST.get('height', 0))
+    rotation = int(request.POST.get('rotation', 0))
     dewarp_enabled = request.POST.get('dewarp', 'false').lower() == 'true'
-        
+
     if width <= 0 or height <= 0:
         return JsonResponse({
-            'status': 'error', 
+            'status': 'error',
             'message': 'Invalid selection dimensions'
         })
-        
+
     image = cv2.imread(reviewimg)
     if image is None:
         return JsonResponse({
-            'status': 'error', 
+            'status': 'error',
             'message': 'Could not load image'
         })
-        
-    # Validate coordinates are within image bounds
+
+    # Apply rotation if needed
+    if rotation != 0:
+        if rotation == 90:
+            image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        elif rotation == 180:
+            image = cv2.rotate(image, cv2.ROTATE_180)
+        elif rotation == 270:
+            image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        logger.info(f"Rotated image by {rotation}° for job {job.id}, page {page_number}")
+
+    # Validate coordinates are within image bounds (after rotation)
     img_height, img_width = image.shape[:2]
     if x < 0 or y < 0 or x + width > img_width or y + height > img_height:
         return JsonResponse({
-            'status': 'error', 
+            'status': 'error',
             'message': f'Selection exceeds image bounds ({img_width}x{img_height})'
         })
-        
+
     # Crop the image using the provided coordinates
     cropped_image = image[y:y+height, x:x+width]
 
@@ -928,7 +939,8 @@ def save_snip(request, job_id, page_number):
     cv2.imwrite(thumbfile, thumb_image)
     cv2.imwrite(outimg, img)
 
-    logger.info(f"Saved snip for job {job.id}, page {page_number}: {x},{y} {width}x{height} to {outimg}")
+    rotation_info = f", rotation={rotation}°" if rotation != 0 else ""
+    logger.info(f"Saved snip for job {job.id}, page {page_number}: {x},{y} {width}x{height}{rotation_info} to {outimg}")
 
     # Generate URL for the output image
     outimg_relpath = os.path.relpath(outimg, settings.MEDIA_ROOT)

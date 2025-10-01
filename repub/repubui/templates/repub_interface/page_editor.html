@@ -19,6 +19,13 @@
         position: relative;
         border: 1px solid #dee2e6;
         border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .image-container img {
+        transition: transform 0.3s ease;
     }
 
     .toolbar {
@@ -100,12 +107,9 @@
 
     .snip-overlay {
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
         background: rgba(0, 0, 0, 0.5);
         z-index: 999;
+        pointer-events: none;
     }
 
     .selection-box {
@@ -179,6 +183,34 @@
         </div>
 
         <div class="toolbar-group">
+            <button id="rotate-left"
+                    class="btn btn-outline-secondary"
+                    aria-label="Rotate left 90°"
+                    data-tooltip="Rotate left 90° (Q)">
+                <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+            <button id="rotate-right"
+                    class="btn btn-outline-secondary"
+                    aria-label="Rotate right 90°"
+                    data-tooltip="Rotate right 90° (E)">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+            <button id="rotate-180"
+                    class="btn btn-outline-secondary"
+                    aria-label="Rotate 180°"
+                    data-tooltip="Rotate 180° (R)">
+                <i class="bi bi-arrow-repeat"></i>
+            </button>
+            <button id="reset-rotation"
+                    class="btn btn-outline-warning"
+                    aria-label="Reset rotation"
+                    data-tooltip="Reset rotation (0)"
+                    style="display: none;">
+                <i class="bi bi-arrow-clockwise-square"></i> Reset
+            </button>
+        </div>
+
+        <div class="toolbar-group">
             <button id="snip-mode"
                     class="btn btn-outline-secondary"
                     aria-label="Snip mode"
@@ -248,6 +280,7 @@
     <div class="status-bar">
         <div class="dimensions">
             <span id="selection-size">No selection</span>
+            <span id="rotation-display" style="margin-left: 20px; display: none;">Rotation: <strong>0°</strong></span>
         </div>
     </div>
 
@@ -267,14 +300,26 @@ document.addEventListener('DOMContentLoaded', function() {
     let snipOverlay = document.getElementById('snip-overlay');
     let selectionBox = document.getElementById('selection-box');
     let selectionDimensions = document.getElementById('selection-dimensions');
+    let currentRotation = 0; // Track rotation angle in degrees
 
     // Initialize snip canvas
     function initSnipCanvas() {
         const img = document.getElementById('original-image');
-        snipCanvas.width = img.width;
-        snipCanvas.height = img.height;
-        snipCanvas.style.width = img.width + 'px';
-        snipCanvas.style.height = img.height + 'px';
+        const imgRect = img.getBoundingClientRect();
+        const containerRect = img.parentElement.getBoundingClientRect();
+
+        // Use the rendered dimensions (which accounts for rotation)
+        const renderedWidth = imgRect.width;
+        const renderedHeight = imgRect.height;
+
+        snipCanvas.width = renderedWidth;
+        snipCanvas.height = renderedHeight;
+        snipCanvas.style.width = renderedWidth + 'px';
+        snipCanvas.style.height = renderedHeight + 'px';
+
+        // Position canvas over the image (which may be centered and rotated)
+        snipCanvas.style.left = (imgRect.left - containerRect.left) + 'px';
+        snipCanvas.style.top = (imgRect.top - containerRect.top) + 'px';
     }
 
     // Snip mode controls
@@ -290,6 +335,16 @@ document.addEventListener('DOMContentLoaded', function() {
         isSnipMode = true;
         document.getElementById('snip-mode').classList.add('active');
         initSnipCanvas();
+
+        // Position overlay to match canvas (using rendered dimensions)
+        const img = document.getElementById('original-image');
+        const imgRect = img.getBoundingClientRect();
+        const containerRect = img.parentElement.getBoundingClientRect();
+        snipOverlay.style.left = (imgRect.left - containerRect.left) + 'px';
+        snipOverlay.style.top = (imgRect.top - containerRect.top) + 'px';
+        snipOverlay.style.width = imgRect.width + 'px';
+        snipOverlay.style.height = imgRect.height + 'px';
+
         snipCanvas.style.display = 'block';
         snipOverlay.style.display = 'block';
         document.getElementById('save-snip').style.display = 'inline-block';
@@ -312,11 +367,17 @@ document.addEventListener('DOMContentLoaded', function() {
     snipCanvas.addEventListener('mousedown', function(e) {
         if (!isSnipMode) return;
         isSnipping = true;
-        const rect = snipCanvas.getBoundingClientRect();
-        startX = e.clientX - rect.left;
-        startY = e.clientY - rect.top;
-        selectionBox.style.left = startX + 'px';
-        selectionBox.style.top = startY + 'px';
+        const canvasRect = snipCanvas.getBoundingClientRect();
+        const containerRect = snipCanvas.parentElement.getBoundingClientRect();
+
+        startX = e.clientX - canvasRect.left;
+        startY = e.clientY - canvasRect.top;
+
+        const offsetX = canvasRect.left - containerRect.left;
+        const offsetY = canvasRect.top - containerRect.top;
+
+        selectionBox.style.left = (offsetX + startX) + 'px';
+        selectionBox.style.top = (offsetY + startY) + 'px';
         selectionBox.style.width = '0';
         selectionBox.style.height = '0';
         selectionBox.style.display = 'block';
@@ -325,24 +386,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     snipCanvas.addEventListener('mousemove', function(e) {
         if (!isSnipMode || !isSnipping) return;
-        const rect = snipCanvas.getBoundingClientRect();
-        const currentX = e.clientX - rect.left;
-        const currentY = e.clientY - rect.top;
-        
+        const canvasRect = snipCanvas.getBoundingClientRect();
+        const containerRect = snipCanvas.parentElement.getBoundingClientRect();
+        const currentX = e.clientX - canvasRect.left;
+        const currentY = e.clientY - canvasRect.top;
+
         const width = Math.abs(currentX - startX);
         const height = Math.abs(currentY - startY);
         const left = Math.min(currentX, startX);
         const top = Math.min(currentY, startY);
-        
-        selectionBox.style.left = left + 'px';
-        selectionBox.style.top = top + 'px';
+
+        const offsetX = canvasRect.left - containerRect.left;
+        const offsetY = canvasRect.top - containerRect.top;
+
+        selectionBox.style.left = (offsetX + left) + 'px';
+        selectionBox.style.top = (offsetY + top) + 'px';
         selectionBox.style.width = width + 'px';
         selectionBox.style.height = height + 'px';
-        
+
         selectionDimensions.textContent = `${Math.round(width)} × ${Math.round(height)}`;
-        selectionDimensions.style.left = (left + width/2 - selectionDimensions.offsetWidth/2) + 'px';
-        selectionDimensions.style.top = (top - 25) + 'px';
-        
+        selectionDimensions.style.left = (offsetX + left + width/2 - selectionDimensions.offsetWidth/2) + 'px';
+        selectionDimensions.style.top = (offsetY + top - 25) + 'px';
+
         document.getElementById('selection-size').textContent = `Selection: ${Math.round(width)}×${Math.round(height)}px`;
     });
 
@@ -355,26 +420,37 @@ document.addEventListener('DOMContentLoaded', function() {
     // Save snip
     document.getElementById('save-snip').addEventListener('click', function() {
         if (!isSnipMode) return;
-        
+
         const img = document.getElementById('original-image');
-        
-        // Get selection dimensions
+
+        // Get selection dimensions relative to canvas
         const selection = selectionBox.getBoundingClientRect();
-        const container = snipCanvas.getBoundingClientRect();
-        const scale = img.naturalWidth / img.width;
-        
+        const canvas = snipCanvas.getBoundingClientRect();
+
+        // Calculate scale factor based on rotation
+        // For 90/270 degree rotations, width and height are swapped
+        let scaleX, scaleY;
+        if (currentRotation === 90 || currentRotation === 270) {
+            scaleX = img.naturalHeight / canvas.width;
+            scaleY = img.naturalWidth / canvas.height;
+        } else {
+            scaleX = img.naturalWidth / canvas.width;
+            scaleY = img.naturalHeight / canvas.height;
+        }
+
         // Calculate coordinates in original image scale
-        const x = Math.round((selection.left - container.left) * scale);
-        const y = Math.round((selection.top - container.top) * scale);
-        const width = Math.round(selection.width * scale);
-        const height = Math.round(selection.height * scale);
-        
+        const x = Math.round((selection.left - canvas.left) * scaleX);
+        const y = Math.round((selection.top - canvas.top) * scaleY);
+        const width = Math.round(selection.width * scaleX);
+        const height = Math.round(selection.height * scaleY);
+
         // Send coordinates to server
         const formData = new FormData();
         formData.append('x', x);
         formData.append('y', y);
         formData.append('width', width);
         formData.append('height', height);
+        formData.append('rotation', currentRotation);
         formData.append('dewarp', document.getElementById('dewarp-checkbox').checked);
         
         fetch(`/job/{{ job.id }}/page/{{ page.page_number }}/save-snip/`, {
@@ -399,8 +475,81 @@ document.addEventListener('DOMContentLoaded', function() {
     // Cancel snip
     document.getElementById('cancel-snip').addEventListener('click', exitSnipMode);
 
+    // Rotation controls
+    function applyRotation(angle) {
+        currentRotation = (currentRotation + angle) % 360;
+        if (currentRotation < 0) currentRotation += 360;
+
+        const img = document.getElementById('original-image');
+
+        // Only apply rotation to the original image, not the output
+        img.style.transform = `rotate(${currentRotation}deg)`;
+
+        // Update status display
+        const rotationDisplay = document.getElementById('rotation-display');
+        if (currentRotation !== 0) {
+            rotationDisplay.style.display = 'inline';
+            rotationDisplay.innerHTML = `Rotation: <strong>${currentRotation}°</strong>`;
+            document.getElementById('reset-rotation').style.display = 'inline-block';
+        } else {
+            rotationDisplay.style.display = 'none';
+            document.getElementById('reset-rotation').style.display = 'none';
+        }
+
+        // If in snip mode, reinitialize canvas and overlay to match new image position
+        if (isSnipMode) {
+            // Exit and re-enter snip mode to recalculate positions
+            const wasInSnipMode = isSnipMode;
+            exitSnipMode();
+            if (wasInSnipMode) {
+                // Small delay to allow DOM to update
+                setTimeout(function() {
+                    enterSnipMode();
+                }, 50);
+            }
+        }
+    }
+
+    document.getElementById('rotate-left').addEventListener('click', function() {
+        applyRotation(-90);
+    });
+
+    document.getElementById('rotate-right').addEventListener('click', function() {
+        applyRotation(90);
+    });
+
+    document.getElementById('rotate-180').addEventListener('click', function() {
+        applyRotation(180);
+    });
+
+    document.getElementById('reset-rotation').addEventListener('click', function() {
+        currentRotation = 0;
+        applyRotation(0);
+    });
+
     // Keyboard shortcuts
     document.addEventListener('keydown', function(e) {
+        // Rotation shortcuts (only when not in snip mode)
+        if (!isSnipMode) {
+            if (e.key === 'q' || e.key === 'Q') {
+                e.preventDefault();
+                document.getElementById('rotate-left').click();
+            }
+            if (e.key === 'e' || e.key === 'E') {
+                e.preventDefault();
+                document.getElementById('rotate-right').click();
+            }
+            if (e.key === 'r' || e.key === 'R') {
+                e.preventDefault();
+                document.getElementById('rotate-180').click();
+            }
+            if (e.key === '0') {
+                e.preventDefault();
+                document.getElementById('reset-rotation').click();
+            }
+        }
+
+        // Snip mode shortcuts
         if (e.key === 's' || e.key === 'S') {
             if (!e.ctrlKey && !isSnipMode) {
                 e.preventDefault();
@@ -427,8 +576,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function showOriginalImage() {
-        document.getElementById('original-image').style.display = 'block';
-        document.getElementById('output-image').style.display = 'none';
+        const originalImage = document.getElementById('original-image');
+        const outputImage = document.getElementById('output-image');
+
+        originalImage.style.display = 'block';
+        outputImage.style.display = 'none';
+
+        // Reapply rotation to original image
+        originalImage.style.transform = `rotate(${currentRotation}deg)`;
+
         document.getElementById('show-original').classList.add('active');
         document.getElementById('show-output').classList.remove('active');
     }
@@ -443,6 +599,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function showOutputImage(imageUrl) {
         const outputImage = document.getElementById('output-image');
         outputImage.src = imageUrl + '?t=' + new Date().getTime(); // Cache busting
+        // Remove rotation from output image since backend has already rotated and cropped it
+        outputImage.style.transform = 'none';
         document.getElementById('show-output').style.display = 'inline-block';
         showOutputImageView();
     }
