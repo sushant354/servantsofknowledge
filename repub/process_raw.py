@@ -39,6 +39,8 @@ def get_arg_parser():
                         help='horizontal line limits  in pixels')
     parser.add_argument('-y', '--ymax', type=int, dest='ymax', default=60, \
                         help='vertical line limits in pixels')
+    parser.add_argument('-M', '--mingray', type=int, dest='mingray', default=100, \
+                        help='minimum gray threshold for contour detection')
     parser.add_argument('-d', '--drawcontours', action='store_true', \
                         dest='drawcontours', \
                         help='draw contours only on the image')
@@ -83,13 +85,14 @@ def draw_contours(scandir, args, logger=None):
     for img, infile, outfile, pagenum in scandir.get_scanned_pages():
         if args.deskew:
             img, hangle = deskew(img, args.xmax, args.ymax, \
-                                 args.maxcontours, args.rotate_type, logger)
-        contours = find_contour(img)
+                                 args.maxcontours, args.rotate_type, args.mingray, logger)
+        contours = find_contour(img, args.mingray)
         contours = contours[:args.maxcontours]
 
         img = cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
 
         cv2.imwrite(outfile, img)
+        save_thumbnails(img, args, outfile)
         logger.debug(f'Processed page {pagenum}: {outfile}')
         outfiles.append((pagenum, outfile))
     logger.info(f'Completed contour drawing for {len(outfiles)} pages')
@@ -102,9 +105,10 @@ def gray_images(scandir, args, logger=None):
     outfiles = []
     for img, infile, outfile, pagenum in scandir.get_scanned_pages():
         if args.deskew:
-            img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type, logger)
-        gray = threshold_gray(img, 125, 255)
+            img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type, args.mingray, logger)
+        gray = threshold_gray(img, args.mingray, 255)
         cv2.imwrite(outfile, gray)
+        save_thumbnails(gray, args, outfile)
         logger.debug(f'Processed page {pagenum}: {outfile}')
         outfiles.append((pagenum, outfile))
     logger.info(f'Completed grayscale conversion for {len(outfiles)} pages')
@@ -116,7 +120,7 @@ def deskew_images(scandir, args, logger=None):
     logger.info('Starting deskew process')
     outfiles = []
     for img, infile, outfile, pagenum in scandir.get_scanned_pages():
-        deskewed, angle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type, logger)
+        deskewed, angle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type, args.mingray, logger)
         cv2.imwrite(outfile, deskewed)
         logger.debug(f'Deskewed page {pagenum} by {angle} degrees: {outfile}')
         outfiles.append((pagenum, outfile))
@@ -157,8 +161,8 @@ def get_cropping_boxes(scandir, args, logger=None):
     logger.info('Computing cropping boxes for all pages')
     boxes = {}
     for img, infile, outfile, pagenum in scandir.get_scanned_pages():
-        img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type, logger)
-        box = get_crop_box(img, args.xmax, args.ymax, args.maxcontours, logger)
+        img, hangle = deskew(img, args.xmax, args.ymax, args.maxcontours, args.rotate_type, args.mingray, logger)
+        box = get_crop_box(img, args.xmax, args.ymax, args.maxcontours, args.mingray, logger)
         box.append(hangle)
         #box.append(0.0)
         boxes[pagenum] = box
@@ -198,7 +202,11 @@ def process_images(scandir, args, logger=None):
             hangle = box[4]
             if hangle != None:
                 img = rotate(img, hangle)
-            img = crop(img, box)
+            try:    
+                img = crop(img, box)
+            except Exception as e:
+                logger.exception('Error in cropping page %d: %s', pagenum, e)
+
 
         if args.dewarp:
             dewarp_img = dewarp(img, logger = logger)
@@ -206,28 +214,35 @@ def process_images(scandir, args, logger=None):
                 img = dewarp_img
 
         if args.factor:
-            img = resize_image(img, args.factor, avg_width = avg_width)
-
+            try:
+                img = resize_image(img, args.factor, avg_width = avg_width)
+            except Exception as e:
+                logger.exception('Error in resizing image page: %d: %s', pagenum, e)
         
         if args.thumbnail and thumbnail is None and scandir.is_cover_page(pagenum):
-            thumbnail = get_thumbnail(img) 
+            try:
+                thumbnail = get_thumbnail(img)
+            except Exception as e:
+                logger.exception('Error in generating thumbnail for book page: %d: %s', pagenum, e)
 
-        if args.thumbnaildir:
-            fname = os.path.basename(outfile)
-            thumbpath = os.path.join(args.thumbnaildir, fname)
-            thumb = get_thumbnail(img) 
-            cv2.imwrite(thumbpath, thumb)
+            if thumbnail is not None: 
+                cv2.imwrite(args.thumbnail, thumbnail)
+                logger.info(f'Generated thumbnail: {args.thumbnail}')
 
+        save_thumbnails(img, args, outfile)
         cv2.imwrite(outfile, img)
         logger.info(f'Processed page {pagenum}: {outfile}')
         outfiles.append((pagenum, outfile))
 
-    if thumbnail is not None:
-        cv2.imwrite(args.thumbnail, thumbnail)
-        logger.info(f'Generated thumbnail: {args.thumbnail}')
-
     logger.info(f'Completed image processing for {len(outfiles)} pages')
     return outfiles
+
+def save_thumbnails(img, args, outfile):    
+    if args.thumbnaildir:
+        fname = os.path.basename(outfile)
+        thumbpath = os.path.join(args.thumbnaildir, fname)
+        thumb = get_thumbnail(img) 
+        cv2.imwrite(thumbpath, thumb)
 
 def initialize_iadir(args):
     mk_clean(args.iadir)

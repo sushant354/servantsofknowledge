@@ -86,6 +86,18 @@
                             <pre class="mt-2">{{ job.error_message }}</pre>
                         {% endif %}
                     </div>
+
+                    <button type="button" class="btn btn-outline-primary btn-lg mb-4 me-3" data-bs-toggle="modal" data-bs-target="#reviewPagesModal">
+                        <i class="bi bi-eye"></i> Review Pages
+                    </button>
+
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-lg mb-4 me-3" title="View output directory">
+                        <i class="bi bi-folder"></i> Files
+                    </a>
+
+                    <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-lg mb-4" title="View input directory">
+                        <i class="bi bi-folder-plus"></i> Input
+                    </a>
                 {% elif job.status == 'completed' %}
                     <div class="alert alert-success">
                         <h4 class="alert-heading">Processing complete!</h4>
@@ -149,6 +161,17 @@
                             <td>{{ job.reduce_factor }}</td>
                         </tr>
                         {% endif %}
+                        <tr>
+                            <th>Advanced Parameters</th>
+                            <td>
+                                <ul class="list-unstyled mb-0">
+                                    <li><strong>X Maximum:</strong> {{ job.xmaximum }} px</li>
+                                    <li><strong>Y Maximum:</strong> {{ job.ymax }} px</li>
+                                    <li><strong>Max Contours:</strong> {{ job.maxcontours }}</li>
+                                    <li><strong>Min Gray Threshold:</strong> {{ job.mingray }}</li>
+                                </ul>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
 
@@ -248,6 +271,11 @@
                                         <div class="mb-3">
                                             <label for="{{ form.maxcontours.id_for_label }}" class="form-label">{{ form.maxcontours.label }}</label>
                                             {{ form.maxcontours }}
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="{{ form.mingray.id_for_label }}" class="form-label">{{ form.mingray.label }}</label>
+                                            {{ form.mingray }}
                                         </div>
                                     </div>
                                 </div>

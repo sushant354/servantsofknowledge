@@ -5,10 +5,10 @@ import logging
 
 from .utils import  find_contour, get_hvlines
 
-def deskew(img, xmax, ymax, maxcontours, rotate_type, logger=None):
+def deskew(img, xmax, ymax, maxcontours, rotate_type, mingray, logger=None):
     if logger is None:
         logger = logging.getLogger('repub.deskew')
-    contours = find_contour(img)
+    contours = find_contour(img, mingray)
 
     contours = contours[:maxcontours]
 

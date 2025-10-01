@@ -11,7 +11,7 @@ class ProcessingJobForm(forms.ModelForm):
         fields = [
             'title', 'input_file', 'input_type', 'language',
             'crop', 'deskew', 'ocr', 'dewarp', 'draw_contours', 'gray',
-            'rotate_type', 'reduce_factor', 'xmaximum', 'ymax', 'maxcontours'
+            'rotate_type', 'reduce_factor', 'xmaximum', 'ymax', 'maxcontours', 'mingray'
         ]
         widgets = {
             'title': forms.TextInput(attrs={'class': 'form-control'}),
@@ -29,6 +29,7 @@ class ProcessingJobForm(forms.ModelForm):
             'xmaximum': forms.NumberInput(attrs={'class': 'form-control'}),
             'ymax': forms.NumberInput(attrs={'class': 'form-control'}),
             'maxcontours': forms.NumberInput(attrs={'class': 'form-control'}),
+            'mingray': forms.NumberInput(attrs={'class': 'form-control'}),
         }
         labels = {
             'input_file': 'Upload File',
@@ -45,6 +46,7 @@ class ProcessingJobForm(forms.ModelForm):
             'xmaximum': 'Max horizontal line distance (pixels)',
             'ymax': 'Max vertical line distance (pixels)',
             'maxcontours': 'Maximum contours to examine',
+            'mingray': 'Minimum gray threshold for contours',
         }
         help_texts = {
             'input_file': 'For PDF input type: upload a PDF file. For Images input type: upload a ZIP file with images or a single image file.',
@@ -94,7 +96,7 @@ class ProcessingOptionsForm(forms.ModelForm):
         model = ProcessingJob
         fields = [
             'language', 'crop', 'deskew', 'ocr', 'dewarp', 'draw_contours', 'gray',
-            'rotate_type', 'reduce_factor', 'xmaximum', 'ymax', 'maxcontours'
+            'rotate_type', 'reduce_factor', 'xmaximum', 'ymax', 'maxcontours', 'mingray'
         ]
         widgets = {
             'language': forms.TextInput(attrs={'class': 'form-control'}),
@@ -109,6 +111,7 @@ class ProcessingOptionsForm(forms.ModelForm):
             'xmaximum': forms.NumberInput(attrs={'class': 'form-control'}),
             'ymax': forms.NumberInput(attrs={'class': 'form-control'}),
             'maxcontours': forms.NumberInput(attrs={'class': 'form-control'}),
+            'mingray': forms.NumberInput(attrs={'class': 'form-control'}),
         }
         labels = {
             'language': 'OCR Language(s) (e.g., eng+fra)',
@@ -123,6 +126,7 @@ class ProcessingOptionsForm(forms.ModelForm):
             'xmaximum': 'Max horizontal line distance (pixels)',
             'ymax': 'Max vertical line distance (pixels)',
             'maxcontours': 'Maximum contours to examine',
+            'mingray': 'Minimum gray threshold for contours',
         }
 
     def clean(self):

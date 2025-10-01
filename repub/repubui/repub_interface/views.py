@@ -376,6 +376,7 @@ class Args:
         self.maxcontours  = job.maxcontours
         self.xmax         = job.xmaximum
         self.ymax         = job.ymax
+        self.mingray      = job.mingray
         self.crop         = job.crop
         self.deskew       = job.deskew
         self.do_ocr       = job.ocr
@@ -458,8 +459,10 @@ def process_job(job):
         else:
             metadata = scandir.metadata
         if args.drawcontours:
+            args.thumbnaildir = job.get_thumbnail_dir()
             outfiles = process_raw.draw_contours(scandir, args, job_logger)
         elif args.gray:
+            args.thumbnaildir = job.get_thumbnail_dir()
             outfiles = process_raw.gray_images(scandir, args, job_logger)
         elif args.deskew and not args.crop:
             outfiles = process_raw.deskew_images(scandir, args, job_logger)

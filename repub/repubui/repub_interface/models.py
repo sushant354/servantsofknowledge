@@ -66,6 +66,7 @@ class ProcessingJob(models.Model):
     xmaximum = models.IntegerField(default=30)
     ymax = models.IntegerField(default=60)
     maxcontours = models.IntegerField(default=5)
+    mingray = models.IntegerField(default=100)
 
     # Output
     output_file = models.FileField(upload_to=get_output_path, blank=True, null=True)

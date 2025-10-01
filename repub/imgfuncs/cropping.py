@@ -71,10 +71,10 @@ def get_min_max_y(hline0, hline1):
 
     return miny, maxy
 
-def get_crop_box(img, xmax, ymax, maxcontours, logger=None):
+def get_crop_box(img, xmax, ymax, maxcontours, mingray, logger=None):
     if logger is None:
         logger = logging.getLogger('repub.crop')
-    contours = find_contour(img)
+    contours = find_contour(img, mingray)
 
     contours = contours[:maxcontours]
 
