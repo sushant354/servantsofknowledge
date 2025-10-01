@@ -335,7 +335,12 @@ def page_editor(request, job_id, pagenum):
 
 @login_or_token_required
 def job_download(request, job_id):
-    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    # Allow admin to access any job, regular users only their own
+    if request.user.is_staff or request.user.is_superuser:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+
     if job.output_file and job.status == 'completed':
         file_path = job.output_file.path
         response = FileResponse(open(file_path, 'rb'))
