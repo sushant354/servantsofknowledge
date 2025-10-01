@@ -422,6 +422,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!isSnipMode) return;
 
         const img = document.getElementById('original-image');
+        const saveButton = document.getElementById('save-snip');
 
         // Get selection dimensions relative to canvas
         const selection = selectionBox.getBoundingClientRect();
@@ -444,6 +445,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const width = Math.round(selection.width * scaleX);
         const height = Math.round(selection.height * scaleY);
 
+        // Show loading state
+        saveButton.disabled = true;
+        const originalHTML = saveButton.innerHTML;
+        saveButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+
         // Send coordinates to server
         const formData = new FormData();
         formData.append('x', x);
@@ -452,7 +458,7 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('height', height);
         formData.append('rotation', currentRotation);
         formData.append('dewarp', document.getElementById('dewarp-checkbox').checked);
-        
+
         fetch(`/job/{{ job.id }}/page/{{ page.page_number }}/save-snip/`, {
             method: 'POST',
             body: formData
@@ -465,10 +471,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 exitSnipMode();
             } else {
                 showNotification('Error: ' + data.message, 'danger');
+                // Restore button state on error
+                saveButton.disabled = false;
+                saveButton.innerHTML = originalHTML;
             }
         })
         .catch(error => {
             showNotification('Error saving snip: ' + error, 'danger');
+            // Restore button state on error
+            saveButton.disabled = false;
+            saveButton.innerHTML = originalHTML;
         });
     });
 
