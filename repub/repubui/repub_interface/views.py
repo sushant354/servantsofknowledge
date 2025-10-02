@@ -303,7 +303,11 @@ def page_editor(request, job_id, pagenum):
     """
     View for editing page crops with optimized loading and error handling.
     """
-    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    if request.user.is_staff or request.user.is_superuser:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+
     page = {'page_number': pagenum}    
     logger.warning ('page_editor: %s', page)
             
