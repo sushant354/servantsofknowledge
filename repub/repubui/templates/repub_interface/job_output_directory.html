@@ -127,8 +127,13 @@
                         <div class="d-flex align-items-center p-3 border-bottom">
                             <div class="me-3">
                                 {% if file.mime_type and file.mime_type|slice:":5" == "image" and file.thumbnail_url %}
-                                    <img src="{{ file.thumbnail_url }}" alt="{{ file.name }}" 
-                                         class="img-thumbnail" style="width: 150px; height: 150px; object-fit: cover;">
+                                    <img src="{{ file.thumbnail_url }}" alt="{{ file.name }}"
+                                         class="img-thumbnail"
+                                         style="max-width: 150px; max-height: 150px; object-fit: contain; cursor: pointer;"
+                                         data-bs-toggle="modal"
+                                         data-bs-target="#imageModal"
+                                         data-image-url="{{ file.relative_url }}"
+                                         data-image-name="{{ file.name }}">
                                 {% elif file.mime_type %}
                                     {% if file.mime_type|slice:":5" == "image" %}
                                         <i class="bi bi-file-earmark-image text-success display-6"></i>
@@ -204,8 +209,16 @@
                 <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body text-center">
+            <div class="modal-body text-center position-relative">
+                <button type="button" class="btn btn-primary position-absolute top-50 start-0 translate-middle-y ms-2"
+                        id="prevImageBtn" style="z-index: 1000;">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
                 <img id="previewImage" src="" alt="Preview" class="img-fluid" style="max-height: 70vh;">
+                <button type="button" class="btn btn-primary position-absolute top-50 end-0 translate-middle-y me-2"
+                        id="nextImageBtn" style="z-index: 1000;">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
             </div>
             <div class="modal-footer">
                 <a id="downloadImageBtn" href="" download="" class="btn btn-success">
@@ -226,16 +239,78 @@ document.addEventListener('DOMContentLoaded', function() {
     const previewImage = document.getElementById('previewImage');
     const modalTitle = document.getElementById('imageModalLabel');
     const downloadBtn = document.getElementById('downloadImageBtn');
+    const prevBtn = document.getElementById('prevImageBtn');
+    const nextBtn = document.getElementById('nextImageBtn');
+
+    // Build array of all image files
+    let imageFiles = [];
+    let currentImageIndex = 0;
+
+    // Collect all image files from the page
+    function buildImageList() {
+        imageFiles = [];
+        const imageElements = document.querySelectorAll('img[data-image-url][data-image-name]');
+        imageElements.forEach(function(elem) {
+            imageFiles.push({
+                url: elem.getAttribute('data-image-url'),
+                name: elem.getAttribute('data-image-name')
+            });
+        });
+    }
+
+    // Update the modal with the current image
+    function showImage(index) {
+        if (index < 0 || index >= imageFiles.length) return;
+
+        currentImageIndex = index;
+        const image = imageFiles[index];
+
+        previewImage.src = image.url;
+        modalTitle.textContent = `Preview: ${image.name} (${index + 1}/${imageFiles.length})`;
+        downloadBtn.href = image.url;
+        downloadBtn.download = image.name;
+
+        // Update button states
+        prevBtn.disabled = (index === 0);
+        nextBtn.disabled = (index === imageFiles.length - 1);
+    }
 
     imageModal.addEventListener('show.bs.modal', function(event) {
+        buildImageList();
+
         const button = event.relatedTarget;
         const imageUrl = button.getAttribute('data-image-url');
-        const imageName = button.getAttribute('data-image-name');
-        
-        previewImage.src = imageUrl;
-        modalTitle.textContent = `Preview: ${imageName}`;
-        downloadBtn.href = imageUrl;
-        downloadBtn.download = imageName;
+
+        // Find the index of the clicked image
+        const index = imageFiles.findIndex(img => img.url === imageUrl);
+        if (index !== -1) {
+            showImage(index);
+        }
+    });
+
+    // Previous button
+    prevBtn.addEventListener('click', function() {
+        if (currentImageIndex > 0) {
+            showImage(currentImageIndex - 1);
+        }
+    });
+
+    // Next button
+    nextBtn.addEventListener('click', function() {
+        if (currentImageIndex < imageFiles.length - 1) {
+            showImage(currentImageIndex + 1);
+        }
+    });
+
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+        if (imageModal.classList.contains('show')) {
+            if (e.key === 'ArrowLeft') {
+                prevBtn.click();
+            } else if (e.key === 'ArrowRight') {
+                nextBtn.click();
+            }
+        }
     });
 
     // Clear image src when modal is hidden to avoid memory leaks

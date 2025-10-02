@@ -205,15 +205,15 @@
                                         <div class="card">
                                             <div class="position-relative">
                                                 {% if file.thumbnail_url %}
-                                                    <img src="{{ file.thumbnail_url }}" 
-                                                         class="card-img-top" 
+                                                    <img src="{{ file.thumbnail_url }}"
+                                                         class="card-img-top"
                                                          alt="{{ file.name }}"
-                                                         style="height: 150px; object-fit: cover;">
+                                                         style="height: 150px; object-fit: contain;">
                                                 {% else %}
-                                                    <img src="{{ file.relative_url }}" 
-                                                         class="card-img-top" 
+                                                    <img src="{{ file.relative_url }}"
+                                                         class="card-img-top"
                                                          alt="{{ file.name }}"
-                                                         style="height: 150px; object-fit: cover;">
+                                                         style="height: 150px; object-fit: contain;">
                                                 {% endif %}
                                                 <div class="position-absolute top-0 end-0 p-1">
                                                     <a href="{{ file.relative_url }}" target="_blank" 
