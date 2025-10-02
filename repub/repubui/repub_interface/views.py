@@ -3,24 +3,18 @@ import zipfile
 import shutil
 import threading
 import cv2
-import json
 import time
 import logging
 import mimetypes
 import re
 
-from pathlib import Path
 from PIL import Image
-from io import BytesIO
 from django.shortcuts import render, redirect, get_object_or_404
 from django.conf import settings
 from django.http import FileResponse, HttpResponse, JsonResponse
-from django.core.files.base import ContentFile
-from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
-from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
@@ -32,19 +26,14 @@ from django.utils.encoding import force_bytes, force_str
 from django.template.loader import render_to_string
 from django.urls import reverse
 from rest_framework.authtoken.models import Token
-from rest_framework.authentication import TokenAuthentication
-from rest_framework.decorators import authentication_classes, permission_classes
-from rest_framework.permissions import IsAuthenticated
 from .models import ProcessingJob, UserProfile
 from .forms import ProcessingJobForm, UserRegistrationForm, ProcessingOptionsForm
-import numpy as np
 
 # Set up logger for this module
 logger = logging.getLogger('repubui.views')
 
 # Import functions from the original repub package
 from repub import process_raw
-from repub.imgfuncs.cropping import crop
 from repub.imgfuncs.dewarp import dewarp
 from repub.utils.scandir import Scandir
 from repub.utils import pdfs
@@ -79,7 +68,6 @@ def login_or_token_required(view_func):
                 request.user = user
             return view_func(request, *args, **kwargs)
         else:
-            from django.contrib.auth import REDIRECT_FIELD_NAME
             from django.contrib.auth.views import redirect_to_login
             from django.http import JsonResponse
             
@@ -415,7 +403,7 @@ def process_job(job):
     loghandle = open(logfile, 'a', encoding='utf-8')
 
     # Create a logger that writes to the log file
-    job_logger = logging.getLogger(f'repub.job')
+    job_logger = logging.getLogger('repub.job')
 
     # Clear any existing handlers
     job_logger.handlers.clear()
@@ -647,8 +635,6 @@ def job_output_directory(request, job_id, subpath=''):
                 if mime_type and mime_type.startswith('image/'):
                     # Look for thumbnail in the thumbnails directory
                     thumbnails_dir = job.get_thumbnail_dir()
-                    thumbnail_name = None
-                        
                         
                     thumb_path = os.path.join(settings.MEDIA_ROOT, thumbnails_dir, item_name)
                     if os.path.exists(thumb_path):
@@ -760,7 +746,6 @@ def job_input_directory(request, job_id, subpath=''):
                 if mime_type and mime_type.startswith('image/'):
                     # Look for thumbnail in the thumbnails directory
                     thumbnails_dir = job.get_thumbnail_dir()
-                    thumbnail_name = None
                         
                     thumb_path = os.path.join(settings.MEDIA_ROOT, thumbnails_dir, item_name)
                     if os.path.exists(thumb_path):
@@ -881,7 +866,11 @@ def activate_account(request, uidb64, token):
 def save_snip(request, job_id, page_number):
     """Save snipped coordinates and modify the output image directly"""
     # Get the job
-    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    
         
     reviewdir   = job.get_review_dir()
     outimgdir   = job.get_outimg_dir()
