@@ -207,8 +207,9 @@
                                 <p class="mb-1">
                                     <span class="badge
                                         {% if job.status == 'completed' %}bg-success
-                                        {% elif job.status == 'processing' %}bg-warning
+                                        {% elif job.status == 'processing' or job.status == 'preparing_review' %}bg-warning
                                         {% elif job.status == 'failed' %}bg-danger
+                                        {% elif job.status == 'reviewing' or job.status == 'finalizing' %}bg-info
                                         {% else %}bg-secondary{% endif %}">
                                         {{ job.status }}
                                     </span>

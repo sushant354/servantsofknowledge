@@ -11,8 +11,9 @@
                     <h3 class="mb-0">{{ job.title|default:"Untitled Job" }}</h3>
                     <span class="badge
                         {% if job.status == 'completed' %}bg-success
-                        {% elif job.status == 'processing' %}bg-warning
+                        {% elif job.status == 'processing' or job.status == 'preparing_review' %}bg-warning
                         {% elif job.status == 'failed' %}bg-danger
+                        {% elif job.status == 'reviewing' or job.status == 'finalizing' %}bg-info
                         {% else %}bg-secondary{% endif %}">
                         {{ job.status }}
                     </span>
@@ -36,6 +37,22 @@
                         <i class="bi bi-folder"></i> Files
                     </a>
                     
+                    <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-sm mb-3" title="View input directory">
+                        <i class="bi bi-folder-plus"></i> Input
+                    </a>
+                {% elif job.status == 'preparing_review' %}
+                    <div class="alert alert-info">
+                        <h4 class="alert-heading">Preparing review mode!</h4>
+                        <p>Generating review files for your document. This page will update automatically when ready.</p>
+                        <div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                        </div>
+                    </div>
+
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm mb-3 me-2" title="View output directory">
+                        <i class="bi bi-folder"></i> Files
+                    </a>
+
                     <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-sm mb-3" title="View input directory">
                         <i class="bi bi-folder-plus"></i> Input
                     </a>
@@ -342,7 +359,7 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="bi bi-x-circle"></i> Cancel
                 </button>
-                <a href="{% url 'job_review' job.id %}" class="btn btn-primary">
+                <a href="{% url 'job_review' job.id %}" class="btn btn-primary" id="continueReviewButton">
                     <i class="bi bi-eye"></i> Continue to Review Pages
                 </a>
             </div>
@@ -438,7 +455,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const jobId = '{{ job.id }}';
     let currentStatus = '{{ job.status }}';
     const reviewUrl = '{% url "job_review" job.id %}';
-    
+
+    // Prevent multiple clicks on "Continue to Review Pages" button
+    const continueReviewButton = document.getElementById('continueReviewButton');
+    if (continueReviewButton) {
+        continueReviewButton.addEventListener('click', function(e) {
+            if (this.classList.contains('disabled')) {
+                e.preventDefault();
+                return false;
+            }
+            // Disable button to prevent multiple clicks
+            this.classList.add('disabled');
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Loading Review...';
+        });
+    }
+
     // Helper function to show status alerts and handle page reload
     function showStatusAlert(alertClass, heading, message) {
         const statusContainer = document.getElementById('job-status-container');
@@ -458,8 +489,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 1500);
     }
     
-    // Only start polling if the job is processing or finalizing
-    if (currentStatus === 'processing' || currentStatus === 'finalizing') {
+    // Only start polling if the job is processing, preparing review, or finalizing
+    if (currentStatus === 'processing' || currentStatus === 'preparing_review' || currentStatus === 'finalizing') {
         pollJobStatus();
     }
     
@@ -476,19 +507,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.status === 'reviewing') {
                     // Update currentStatus to prevent unnecessary refreshes
                     currentStatus = data.status;
-                    
+
                     // Show a brief message before redirecting
                     const statusContainer = document.getElementById('job-status-container');
+                    const wasPreparingReview = (currentStatus === 'preparing_review');
+                    const heading = wasPreparingReview ? 'Review ready!' : 'Processing complete!';
+                    const message = wasPreparingReview ? 'Review files have been prepared. Redirecting to review page...' : 'Your document has been processed successfully. Redirecting to review page...';
+
                     statusContainer.innerHTML = `
                         <div class="alert alert-success">
-                            <h4 class="alert-heading">Processing complete!</h4>
-                            <p>Your document has been processed successfully. Redirecting to review page...</p>
+                            <h4 class="alert-heading">${heading}</h4>
+                            <p>${message}</p>
                             <div class="progress">
                                 <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
                             </div>
                         </div>
                     `;
-                    
+
                     // Redirect after a short delay to show the message
                     setTimeout(() => {
                         window.location.href = reviewUrl;
@@ -529,15 +564,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Update currentStatus to prevent unnecessary refreshes
                     currentStatus = data.status;
-                    
-                    // If still processing or finalizing, continue polling
-                    if (data.status === 'processing' || data.status === 'finalizing') {
+
+                    // If still processing, preparing review, or finalizing, continue polling
+                    if (data.status === 'processing' || data.status === 'preparing_review' || data.status === 'finalizing') {
                         setTimeout(pollJobStatus, 2000);
                     }
                 });
             } else {
                 // If status hasn't changed, continue polling
-                if (data.status === 'processing' || data.status === 'finalizing') {
+                if (data.status === 'processing' || data.status === 'preparing_review' || data.status === 'finalizing') {
                     setTimeout(pollJobStatus, 2000);
                 }
             }

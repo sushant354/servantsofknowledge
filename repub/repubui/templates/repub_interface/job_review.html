@@ -190,13 +190,13 @@
             
             <div class="mt-4">
                 <div class="d-flex justify-content-between">
-                    <form method="post" action="{% url 'reject_review' job.id %}" style="display: inline;">
+                    <form method="post" action="{% url 'reject_review' job.id %}" style="display: inline;" id="rejectForm">
                         {% csrf_token %}
-                        <button type="submit" class="btn btn-secondary">Reject the review</button>
+                        <button type="submit" class="btn btn-secondary" id="rejectButton">Reject the review</button>
                     </form>
-                    <form method="post" action="{% url 'finalize_job' job.id %}" style="display: inline;">
+                    <form method="post" action="{% url 'finalize_job' job.id %}" style="display: inline;" id="finalizeForm">
                         {% csrf_token %}
-                        <button type="submit" class="btn btn-primary">Finalize and Rerun</button>
+                        <button type="submit" class="btn btn-primary" id="finalizeButton">Finalize and Rerun</button>
                     </form>
                 </div>
             </div>
@@ -286,6 +286,28 @@
     // Run the refresh check when the page loads
     document.addEventListener('DOMContentLoaded', function() {
         checkForRefresh();
+
+        // Prevent multiple form submissions
+        const finalizeForm = document.getElementById('finalizeForm');
+        const finalizeButton = document.getElementById('finalizeButton');
+        const rejectForm = document.getElementById('rejectForm');
+        const rejectButton = document.getElementById('rejectButton');
+
+        if (finalizeForm && finalizeButton) {
+            finalizeForm.addEventListener('submit', function(e) {
+                // Disable button to prevent multiple clicks
+                finalizeButton.disabled = true;
+                finalizeButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Finalizing...';
+            });
+        }
+
+        if (rejectForm && rejectButton) {
+            rejectForm.addEventListener('submit', function(e) {
+                // Disable button to prevent multiple clicks
+                rejectButton.disabled = true;
+                rejectButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Rejecting...';
+            });
+        }
     });
 </script>
 {% endblock %} 

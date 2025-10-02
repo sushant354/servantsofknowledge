@@ -83,10 +83,10 @@ def login_or_token_required(view_func):
 @login_required
 def all_jobs(request):
     jobs_list = ProcessingJob.objects.filter(user=request.user).order_by('-created_at')
-    
+
     # Get status filter from query parameters
     status_filter = request.GET.get('status')
-    if status_filter and status_filter in ['completed', 'processing', 'reviewing', 'failed', 'finalizing']:
+    if status_filter and status_filter in ['completed', 'processing', 'reviewing', 'failed', 'finalizing', 'preparing_review']:
         jobs_list = jobs_list.filter(status=status_filter)
     
     paginator = Paginator(jobs_list, 10)  # Show 10 jobs per page
@@ -221,6 +221,29 @@ def get_pagenum(filename):
         pagenum   = int(groupdict['pagenum'])
     return pagenum
 
+def prepare_review_in_background(job):
+    """Background thread function to prepare review files"""
+    try:
+        indir       = job.get_input_dir()
+        reviewdir   = job.get_review_dir()
+
+        imgdir   = os.path.join(reviewdir, 'images')
+        thumbdir = os.path.join(reviewdir, 'thumbnails')
+
+        os.makedirs(imgdir, exist_ok=True)
+        os.makedirs(thumbdir, exist_ok=True)
+
+        scandir  = Scandir(indir, imgdir, None)
+        generate_files_for_review(scandir, thumbdir, job)
+
+        job.status = 'reviewing'
+        job.save()
+        logger.info(f"Review preparation completed for job {job.id}")
+    except Exception as e:
+        logger.error(f"Error preparing review for job {job.id}: {str(e)}")
+        job.status = job.status  # Keep previous status
+        job.save()
+
 @login_required
 def job_review(request, job_id):
     # Allow admin users to start/view review for any job, regular users can only review their own jobs
@@ -229,23 +252,32 @@ def job_review(request, job_id):
     else:
         job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
 
-    indir       = job.get_input_dir()
     reviewdir   = job.get_review_dir()
-    outimgdir   = job.get_outimg_dir()
-    outthumbdir = job.get_thumbnail_dir()
-
     imgdir   = os.path.join(reviewdir, 'images')
     thumbdir = os.path.join(reviewdir, 'thumbnails')
 
+    # If review directory doesn't exist, start preparation in background
     if not os.path.exists(reviewdir):
-        os.makedirs(imgdir, exist_ok=True)
-        os.makedirs(thumbdir, exist_ok=True)
+        # Check if job is already in reviewing or finalizing status to prevent race conditions
+        if job.status == 'reviewing' or job.status == 'finalizing':
+            logger.warning(f"Job {job.id} is already in {job.status} status. Skipping review directory generation.")
+        else:
+            # Set status to 'preparing_review' and start background preparation
+            job.status = 'preparing_review'
+            job.save()
 
-        scandir  = Scandir(indir, imgdir, None)
-        generate_files_for_review(scandir, thumbdir, job)
-        job.status = 'reviewing'
-        job.save()
+            thread = threading.Thread(target=prepare_review_in_background, args=(job,))
+            thread.start()
 
+            messages.success(request, f'Preparing review for job "{job.title or "Untitled"}". Please wait...')
+            return redirect('job_detail', job_id=job_id)
+
+    # If we're still preparing, redirect back to job detail
+    if job.status == 'preparing_review':
+        return redirect('job_detail', job_id=job_id)
+
+    outimgdir   = job.get_outimg_dir()
+    outthumbdir = job.get_thumbnail_dir()
     pages = []
     for filename in os.listdir(imgdir):
         page = {}
@@ -1048,6 +1080,11 @@ def finalize_job(request, job_id):
     """Finalize the job after review"""
     job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
 
+    # Check if job is already being finalized to prevent duplicate submissions
+    if job.status == 'finalizing':
+        logger.warning(f"Job {job.id} is already being finalized. Ignoring duplicate request.")
+        return redirect('job_detail', job_id=job_id)
+
     # Set job status to finalizing
     job.status = 'finalizing'
     job.save()
@@ -1073,12 +1110,17 @@ def reject_review(request, job_id):
     else:
         job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
 
+    # Check if job is not in reviewing status to prevent duplicate submissions
+    reviewdir = job.get_review_dir()
+    if not os.path.exists(reviewdir):
+        logger.warning(f"Job {job.id} is not in reviewing status. Current status: {job.status}. Ignoring reject request.")
+        return redirect('job_detail', job_id=job_id)
+
+    shutil.rmtree(reviewdir)
+
     job.status = 'completed'
     job.save()
 
-    reviewdir   = job.get_review_dir()
-    shutil.rmtree(reviewdir)
-   
     return redirect('job_detail', job_id=job_id)
 
 
