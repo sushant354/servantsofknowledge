@@ -153,8 +153,8 @@
                                 <div class="col">
                                     <div class="comparison-label">Original</div>
                                     {% if page.original_thumbnail %}
-                                        <img src="{{page.original_thumbnail}}" 
-                                            class="img-thumbnail original-thumb" 
+                                        <img src="{{page.original_thumbnail}}"
+                                            class="img-thumbnail original-thumb"
                                             alt="Original Page {{ page.page_number }}"
                                             data-full="{{ page.original_image }}"
                                             data-page="{{ page.page_number }}"
@@ -168,8 +168,8 @@
                                 <div class="col">
                                     <div class="comparison-label">Processed</div>
                                     {% if page.cropped_thumbnail %}
-                                        <img src="{{page.cropped_thumbnail}}" 
-                                            class="img-thumbnail cropped-thumb" 
+                                        <img src="{{page.cropped_thumbnail}}?t={{ now.timestamp }}"
+                                            class="img-thumbnail cropped-thumb"
                                             alt="Cropped Page {{ page.page_number }}"
                                             data-full="{{ page.cropped_image }}"
                                             data-page="{{ page.page_number }}"
