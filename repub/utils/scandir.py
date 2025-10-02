@@ -27,13 +27,19 @@ def get_scandata(indir):
     scanfh.close()
     return json.loads(s)
 
-def get_metadata(indir):
+def read_metadata(indir):
     filepath = os.path.join(indir, 'metadata.xml')
     if not os.path.exists(filepath):
         return None
 
     metadata = xml_ops.parse_xml(filepath)
+    return metadata
+
+def get_metadata(indir):
+    metadata = read_metadata(indir)
     m = {}
+    if not metadata:
+        return m
     for k, v in metadata.items():
         m['/%s' % k.title()] = v
     return m    
@@ -105,7 +111,13 @@ class Scandir:
                                    self.pagenums, self.logger):
             yield d
 
-    def is_cover_page(self, pagenum):            
+    def is_cover_page(self, pagenum):
+        if not self.pagedata:
+            if pagenum == 1:
+                return True
+            else: 
+                return False 
+
         pageinfo = self.pagedata['%d' % pagenum]
 
         cover = False

@@ -163,7 +163,6 @@ def home(request):
         job = form.save(commit=False)
         job.user = request.user
         job.save()
-
         logger.info(f"Created job {job.id} with file: {job.input_file}")
         run_and_monitor_job(job)
 
@@ -182,9 +181,11 @@ def run_and_monitor_job(job):
     thread.start()
 
 def run_job(job):
+    logger = logging.getLogger('repubui')
     try:
         process_job(job)
     except Exception as e:
+        logger.exception('Error in process_job %s error: %s', job.id, e)
         job.status = 'failed'
         job.save()
 
@@ -457,33 +458,34 @@ def process_job(job):
             destination = os.path.join(input_dir, filename)
             shutil.copy(input_file_path, destination)
 
-        args = Args(job, input_dir, output_dir)
-        scandir = Scandir(args.indir, args.outdir, args.pagenums, job_logger)
-        if job.input_type == 'pdf':
-            metadata = pdfs.get_metadata(input_file_path)
-        else:
-            metadata = scandir.metadata
-        if args.drawcontours:
-            args.thumbnaildir = job.get_thumbnail_dir()
-            outfiles = process_raw.draw_contours(scandir, args, job_logger)
-        elif args.gray:
-            args.thumbnaildir = job.get_thumbnail_dir()
-            outfiles = process_raw.gray_images(scandir, args, job_logger)
-        elif args.deskew and not args.crop:
-            outfiles = process_raw.deskew_images(scandir, args, job_logger)
-        else:
-            outfiles = process_raw.process_images(scandir, args, job_logger)
-            if args.outpdf:
-                pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, \
-                              args.do_ocr, args.outhocr, args.outtxt, job_logger)
-                relative_path = os.path.relpath(args.outpdf, settings.MEDIA_ROOT)
-                job.output_file = relative_path
+    args = Args(job, input_dir, output_dir)
+    scandir = Scandir(args.indir, args.outdir, args.pagenums, job_logger)
+    if job.input_type == 'pdf':
+        metadata = pdfs.get_metadata(input_file_path)
+    else:
+        metadata = scandir.metadata
+    logger.error('Before main functions: %s', metadata)     
+    if args.drawcontours:
+        args.thumbnaildir = job.get_thumbnail_dir()
+        outfiles = process_raw.draw_contours(scandir, args, job_logger)
+    elif args.gray:
+        args.thumbnaildir = job.get_thumbnail_dir()
+        outfiles = process_raw.gray_images(scandir, args, job_logger)
+    elif args.deskew and not args.crop:
+        outfiles = process_raw.deskew_images(scandir, args, job_logger)
+    else:
+        outfiles = process_raw.process_images(scandir, args, job_logger)
+        if args.outpdf:
+            pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, \
+                          args.do_ocr, args.outhocr, args.outtxt, job_logger)
+            relative_path = os.path.relpath(args.outpdf, settings.MEDIA_ROOT)
+            job.output_file = relative_path
 
-        job.status = 'completed'
-        job.save()
+    job.status = 'completed'
+    job.save()
 
-        # Close the log file handle
-        loghandle.close()
+    # Close the log file handle
+    loghandle.close()
 
 @require_http_methods(["GET"])
 @login_or_token_required
