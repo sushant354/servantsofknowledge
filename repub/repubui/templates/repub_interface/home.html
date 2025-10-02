@@ -200,20 +200,32 @@
                     <div class="list-group">
                         {% for job in jobs %}
                             <a href="{% url 'job_detail' job.id %}" class="list-group-item list-group-item-action job-card">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <h5 class="mb-1">{{ job.title|default:"Untitled Job" }}</h5>
-                                    <small>{{ job.created_at|date:"M d, Y" }}</small>
+                                <div class="d-flex w-100 align-items-start">
+                                    {% if job.get_thumbnail_url %}
+                                        <div class="me-3">
+                                            <img src="{{ job.get_thumbnail_url }}"
+                                                 alt="{{ job.title|default:'Untitled Job' }}"
+                                                 class="img-thumbnail"
+                                                 style="max-width: 50px; max-height: 50px; object-fit: cover;">
+                                        </div>
+                                    {% endif %}
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <h5 class="mb-1">{{ job.title|default:"Untitled Job" }}</h5>
+                                            <small>{{ job.created_at|date:"M d, Y" }}</small>
+                                        </div>
+                                        <p class="mb-1">
+                                            <span class="badge
+                                                {% if job.status == 'completed' %}bg-success
+                                                {% elif job.status == 'processing' or job.status == 'preparing_review' %}bg-warning
+                                                {% elif job.status == 'failed' %}bg-danger
+                                                {% elif job.status == 'reviewing' or job.status == 'finalizing' %}bg-info
+                                                {% else %}bg-secondary{% endif %}">
+                                                {{ job.status }}
+                                            </span>
+                                        </p>
+                                    </div>
                                 </div>
-                                <p class="mb-1">
-                                    <span class="badge
-                                        {% if job.status == 'completed' %}bg-success
-                                        {% elif job.status == 'processing' or job.status == 'preparing_review' %}bg-warning
-                                        {% elif job.status == 'failed' %}bg-danger
-                                        {% elif job.status == 'reviewing' or job.status == 'finalizing' %}bg-info
-                                        {% else %}bg-secondary{% endif %}">
-                                        {{ job.status }}
-                                    </span>
-                                </p>
                             </a>
                         {% endfor %}
                     </div>

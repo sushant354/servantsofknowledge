@@ -94,3 +94,11 @@ class ProcessingJob(models.Model):
     def get_thumbnail_dir(self):
         return os.path.join(settings.MEDIA_ROOT, 'processed',  str(self.id), 'thumbnails')
 
+    def get_thumbnail_url(self):
+        """Get URL for the job's main thumbnail (__ia_thumb.jpg) if it exists"""
+        thumb_path = os.path.join(self.get_output_dir(), '__ia_thumb.jpg')
+        if os.path.exists(thumb_path):
+            relative_path = os.path.relpath(thumb_path, settings.MEDIA_ROOT)
+            return f"{settings.MEDIA_URL}{relative_path}"
+        return None
+
