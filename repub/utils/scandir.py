@@ -4,7 +4,7 @@ import json
 import re
 import logging
 
-from . import xml_ops
+from repub.utils import xml_ops
 
 def read_image(scaninfo, infile):
     img = cv2.imread(infile)
@@ -38,10 +38,9 @@ def read_metadata(indir):
 def get_metadata(indir):
     metadata = read_metadata(indir)
     m = {}
-    if not metadata:
-        return m
-    for k, v in metadata.items():
-        m['/%s' % k.title()] = v
+    if  metadata is not None:
+        for k, v in metadata.items():
+            m['/%s' % k.title()] = v
     return m    
 
 def get_scanned_pages(pagedata, indir, outdir, pagenums, logger=None):
@@ -91,7 +90,7 @@ class Scandir:
         self.pagedata = None
         if scandata:
             self.pagedata = scandata['pageData']
-        self.metadata =  get_metadata(indir)
+        self.metadata =  get_metadata(self.indir)
 
     def find_input_dir(self, indir):
         while True:
@@ -125,3 +124,7 @@ class Scandir:
             cover = True
 
         return cover    
+
+if __name__ == '__main__':
+    scandir = Scandir('/home/sushant/servantsofknowledge/repub/repubui/media/uploads/fd6686e1-cfec-4099-9039-43f765e5439c/extracted/Book', 'Book', None)        
+    print (scandir.metadata)

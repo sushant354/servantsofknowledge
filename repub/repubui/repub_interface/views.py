@@ -464,7 +464,11 @@ def process_job(job):
         metadata = pdfs.get_metadata(input_file_path)
     else:
         metadata = scandir.metadata
-    logger.error('Before main functions: %s', metadata)     
+    title = metadata.get('/Title')
+    if title:
+        job.title = title
+        job.save()    
+
     if args.drawcontours:
         args.thumbnaildir = job.get_thumbnail_dir()
         outfiles = process_raw.draw_contours(scandir, args, job_logger)
