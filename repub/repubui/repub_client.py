@@ -23,11 +23,11 @@ import threading
 
 class REPUBClient:
     """Python client for REPUB document processing service"""
-    
+
     def __init__(self, base_url: str, token: str, logger: Optional[logging.Logger] = None):
         """
         Initialize the REPUB client
-        
+
         Args:
             base_url: Base URL of the REPUB service (e.g., 'http://localhost:8000')
             token: REST framework authentication token
@@ -40,6 +40,18 @@ class REPUBClient:
             'Authorization': f'Token {token}',
             'User-Agent': 'REPUB-Python-Client/1.0'
         })
+
+    @staticmethod
+    def _parse_bool(value: str) -> bool:
+        """Parse a string value to boolean"""
+        if not value:
+            return None
+        value_lower = value.strip().lower()
+        if value_lower in ('true', 'yes', '1', 'on'):
+            return True
+        elif value_lower in ('false', 'no', '0', 'off'):
+            return False
+        return None
     
     
     def submit_job(self,
@@ -297,8 +309,8 @@ class REPUBClient:
         
         return result
 
-    def process_batch_from_file(self, 
-                                batch_file: Union[str, Path], 
+    def process_batch_from_file(self,
+                                batch_file: Union[str, Path],
                                 output_dir: Optional[Union[str, Path]] = None,
                                 max_workers: int = 4,
                                 wait_for_completion: bool = True,
@@ -306,19 +318,37 @@ class REPUBClient:
                                 **kwargs) -> Dict[str, Any]:
         """
         Process multiple files specified in a batch file using parallel processing
-        
+
         Supports two file formats:
         1. Text file with file paths (one per line)
-        2. CSV file with 'title', 'file_path', and optional 'language' columns
-        
+        2. CSV file with 'file_path' (required) and optional columns for any processing parameter
+
+        CSV columns (all optional except file_path):
+            - file_path (required): Path to the file
+            - title: Job title
+            - language: OCR language (e.g., eng, eng+asm)
+            - input_type: pdf or images
+            - crop: true/false, yes/no, 1/0, on/off
+            - deskew: true/false, yes/no, 1/0, on/off
+            - ocr: true/false, yes/no, 1/0, on/off
+            - dewarp: true/false, yes/no, 1/0, on/off
+            - draw_contours: true/false, yes/no, 1/0, on/off
+            - gray: true/false, yes/no, 1/0, on/off
+            - rotate_type: vertical/horizontal/overall
+            - reduce_factor: float (e.g., 0.2)
+            - xmaximum: integer
+            - ymax: integer
+            - maxcontours: integer
+            - mingray: integer
+
         Args:
             batch_file: Path to text or CSV file containing file information
             output_dir: Directory to save results (optional)
             max_workers: Maximum number of parallel workers (default: 4)
             wait_for_completion: Whether to wait for all jobs to complete (default: True)
             auto_download: Whether to automatically download results (default: False)
-            **kwargs: Additional arguments for submit_job()
-            
+            **kwargs: Default values for submit_job() parameters (used when not specified in CSV)
+
         Returns:
             Dict containing batch processing results
         """
@@ -331,31 +361,61 @@ class REPUBClient:
         file_data = []
         try:
             if batch_file.suffix.lower() == '.csv':
-                # CSV format with title and file_path columns
+                # CSV format with file_path and optional processing parameters
                 with open(batch_file, 'r', encoding='utf-8') as f:
                     reader = csv.DictReader(f)
-                    
+
                     # Check for required columns
                     if 'file_path' not in reader.fieldnames:
                         raise ValueError("CSV file must contain a 'file_path' column")
-                    
+
                     for row_num, row in enumerate(reader, 2):  # Start at 2 (header is row 1)
                         file_path_str = row.get('file_path', '').strip()
                         if not file_path_str:
                             self.logger.warning(f"Row {row_num}: Empty file_path, skipping")
                             continue
-                            
+
                         file_path = Path(file_path_str)
-                        if file_path.exists():
-                            title = row.get('title', '').strip() or file_path.stem
-                            language = row.get('language', '').strip() or None  # Use None if empty/missing
-                            file_data.append({
-                                'file_path': file_path,
-                                'title': title,
-                                'language': language
-                            })
-                        else:
+                        if not file_path.exists():
                             self.logger.warning(f"Row {row_num}: File not found: {file_path_str}")
+                            continue
+
+                        # Extract all processing parameters from CSV row
+                        file_info = {
+                            'file_path': file_path,
+                            'title': row.get('title', '').strip() or file_path.stem,
+                            'processing_options': {}
+                        }
+
+                        # Extract optional text parameters
+                        for param in ['language', 'input_type', 'rotate_type']:
+                            value = row.get(param, '').strip()
+                            if value:
+                                file_info['processing_options'][param] = value
+
+                        # Extract boolean parameters
+                        for param in ['crop', 'deskew', 'ocr', 'dewarp', 'draw_contours', 'gray']:
+                            value = row.get(param, '').strip()
+                            if value:
+                                parsed = self._parse_bool(value)
+                                if parsed is not None:
+                                    file_info['processing_options'][param] = parsed
+
+                        # Extract numeric parameters
+                        try:
+                            if row.get('reduce_factor', '').strip():
+                                file_info['processing_options']['reduce_factor'] = float(row['reduce_factor'].strip())
+                        except ValueError:
+                            self.logger.warning(f"Row {row_num}: Invalid reduce_factor value")
+
+                        for param in ['xmaximum', 'ymax', 'maxcontours', 'mingray']:
+                            try:
+                                if row.get(param, '').strip():
+                                    file_info['processing_options'][param] = int(row[param].strip())
+                            except ValueError:
+                                self.logger.warning(f"Row {row_num}: Invalid {param} value")
+
+                        file_data.append(file_info)
             else:
                 # Text format with file paths (one per line)
                 with open(batch_file, 'r', encoding='utf-8') as f:
@@ -367,7 +427,7 @@ class REPUBClient:
                                 file_data.append({
                                     'file_path': file_path,
                                     'title': file_path.stem,  # Use filename as title
-                                    'language': None  # No language specified in text format
+                                    'processing_options': {}  # No processing options in text format, use defaults
                                 })
                             else:
                                 self.logger.warning(f"Line {line_num}: File not found: {line}")
@@ -401,8 +461,8 @@ class REPUBClient:
             for file_info in file_data:
                 file_path = file_info['file_path']
                 title = file_info['title']
-                language = file_info['language']
-                
+                processing_options = file_info['processing_options']
+
                 # Generate output path if output_dir is specified
                 file_output_path = None
                 if output_dir and auto_download:
@@ -410,13 +470,13 @@ class REPUBClient:
                     if not safe_title:
                         safe_title = file_path.stem
                     file_output_path = output_dir / f"{safe_title}_processed.pdf"
-                
-                # Add title and language to kwargs for this specific file
+
+                # Merge kwargs (command-line defaults) with CSV-specific options
+                # CSV options take precedence over command-line defaults
                 file_kwargs = kwargs.copy()
                 file_kwargs['title'] = title
-                if language:  # Only set language if it's specified in CSV
-                    file_kwargs['language'] = language
-                
+                file_kwargs.update(processing_options)
+
                 future = executor.submit(
                     self._process_single_file,
                     file_path,
@@ -432,8 +492,8 @@ class REPUBClient:
                 file_info = future_to_data[future]
                 file_path = file_info['file_path']
                 title = file_info['title']
-                language = file_info['language']
-                
+                processing_options = file_info['processing_options']
+
                 try:
                     result = future.result()
                     result_entry = {
@@ -441,10 +501,8 @@ class REPUBClient:
                         'title': title,
                         'result': result
                     }
-                    if language:
-                        result_entry['language'] = language
                     results['results'].append(result_entry)
-                    
+
                     if result.get('success'):
                         results['successful_submissions'] += 1
                         if result.get('status') == 'completed':
@@ -453,18 +511,15 @@ class REPUBClient:
                             results['failed_jobs'] += 1
                     else:
                         results['failed_submissions'] += 1
-                        
+
                 except Exception as e:
-                    lang_info = f" (language: {language})" if language else ""
-                    error_msg = f"Error processing {file_path} (title: {title}{lang_info}): {str(e)}"
+                    error_msg = f"Error processing {file_path} (title: {title}): {str(e)}"
                     self.logger.error(error_msg)
                     error_entry = {
                         'file_path': str(file_path),
                         'title': title,
                         'error': str(e)
                     }
-                    if language:
-                        error_entry['language'] = language
                     results['errors'].append(error_entry)
                     results['failed_submissions'] += 1
         
@@ -538,26 +593,62 @@ def main():
                        help='REST framework authentication token')
     # File processing options (mutually exclusive)
     file_group = parser.add_mutually_exclusive_group(required=True)
-    file_group.add_argument('--file', 
+    file_group.add_argument('--file',
                            help='Path to single file to process')
     file_group.add_argument('--batch-file',
-                           help='Path to text file (one file path per line) or CSV file (with title, file_path, and optional language columns)')
+                           help='Path to batch file: text file (one file path per line) or CSV file. '
+                                'CSV must have "file_path" column and can optionally include: title, language, '
+                                'input_type, crop, deskew, ocr, dewarp, draw_contours, gray, rotate_type, '
+                                'reduce_factor, xmaximum, ymax, maxcontours, mingray. '
+                                'CSV values override command-line defaults.')
     
-    parser.add_argument('--output', 
+    parser.add_argument('--output',
                        help='Output file path (single file) or output directory (batch)')
     parser.add_argument('--max-workers', type=int, default=4,
                        help='Maximum number of parallel workers for batch processing (default: 4)')
-    parser.add_argument('--title', 
+    parser.add_argument('--title',
                        help='Job title (optional)')
+
+    # Processing options
+    parser.add_argument('--input-type', choices=['pdf', 'images'], default='images',
+                       help='Input type: pdf or images (default: images)')
     parser.add_argument('--language', default='eng',
-                       help='OCR language code (default: eng). Examples: eng, fra, deu, spa, ita, etc.')
+                       help='OCR language code (default: eng). Examples: eng, fra, deu, spa, ita, eng+asm, etc.')
+    parser.add_argument('--no-crop', action='store_true',
+                       help='Disable auto-cropping (default: enabled)')
+    parser.add_argument('--no-deskew', action='store_true',
+                       help='Disable deskewing (default: enabled)')
+    parser.add_argument('--no-ocr', action='store_true',
+                       help='Disable OCR (default: enabled)')
+    parser.add_argument('--dewarp', action='store_true',
+                       help='Enable dewarping (default: disabled)')
+    parser.add_argument('--draw-contours', action='store_true',
+                       help='Draw contours for debugging (default: disabled)')
+    parser.add_argument('--gray', action='store_true',
+                       help='Convert to grayscale (default: disabled)')
+    parser.add_argument('--rotate-type', choices=['vertical', 'horizontal', 'overall'], default='vertical',
+                       help='Rotation calculation method (default: vertical)')
+    parser.add_argument('--reduce-factor', type=float, default=0.2,
+                       help='Image scaling factor (default: 0.2)')
+    parser.add_argument('--xmaximum', type=int, default=30,
+                       help='Max horizontal line distance in pixels (default: 30)')
+    parser.add_argument('--ymax', type=int, default=60,
+                       help='Max vertical line distance in pixels (default: 60)')
+    parser.add_argument('--maxcontours', type=int, default=5,
+                       help='Maximum contours to examine (default: 5)')
+    parser.add_argument('--mingray', type=int, default=100,
+                       help='Minimum gray threshold for contours (default: 100)')
+
+    # Workflow options
     parser.add_argument('--no-wait', action='store_true',
                        help='Don\'t wait for job completion')
     parser.add_argument('--download', action='store_true',
                        help='Automatically download result when completed')
-    parser.add_argument('--logfile', 
+
+    # Logging options
+    parser.add_argument('--logfile',
                        help='Log file path (optional, logs to console if not specified)')
-    parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
+    parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                        default='INFO', help='Logging level (default: INFO)')
     
     args = parser.parse_args()
@@ -594,7 +685,20 @@ def main():
             file_path=args.file,
             output_path=args.output,
             title=args.title,
+            input_type=args.input_type,
             language=args.language,
+            crop=not args.no_crop,
+            deskew=not args.no_deskew,
+            ocr=not args.no_ocr,
+            dewarp=args.dewarp,
+            draw_contours=args.draw_contours,
+            gray=args.gray,
+            rotate_type=args.rotate_type,
+            reduce_factor=args.reduce_factor,
+            xmaximum=args.xmaximum,
+            ymax=args.ymax,
+            maxcontours=args.maxcontours,
+            mingray=args.mingray,
             wait_for_completion=not args.no_wait,
             auto_download=args.download
         )
@@ -602,14 +706,33 @@ def main():
         
     elif args.batch_file:
         # Batch processing
+        # Prepare kwargs for all processing options
+        processing_kwargs = {
+            'input_type': args.input_type,
+            'crop': not args.no_crop,
+            'deskew': not args.no_deskew,
+            'ocr': not args.no_ocr,
+            'dewarp': args.dewarp,
+            'draw_contours': args.draw_contours,
+            'gray': args.gray,
+            'rotate_type': args.rotate_type,
+            'reduce_factor': args.reduce_factor,
+            'xmaximum': args.xmaximum,
+            'ymax': args.ymax,
+            'maxcontours': args.maxcontours,
+            'mingray': args.mingray,
+        }
+
         result = client.process_batch_from_file(
             batch_file=args.batch_file,
             output_dir=args.output,
             max_workers=args.max_workers,
             wait_for_completion=not args.no_wait,
-            auto_download=args.download
-            # Note: For CSV files, titles come from the CSV. For text files, filenames are used as titles.
-            # The --title argument only applies to single file processing.
+            auto_download=args.download,
+            **processing_kwargs
+            # Note: For CSV files, processing options can be specified per-file in the CSV.
+            # CSV values override the command-line defaults (processing_kwargs).
+            # For text files, filenames are used as titles and command-line defaults are used.
         )
         
         # Print summary
