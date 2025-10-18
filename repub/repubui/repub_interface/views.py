@@ -358,12 +358,19 @@ def page_editor(request, job_id, pagenum):
     else:
         job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
 
-    page = {'page_number': pagenum}    
+    page = {'page_number': pagenum}
     logger.warning ('page_editor: %s', page)
-            
+
     reviewdir   = job.get_review_dir()
     imgdir      = os.path.join(reviewdir, 'images')
-    origimg     = os.path.join(imgdir, f"{pagenum:04d}.jpg")
+    filename    = f"{pagenum:04d}.jpg"
+    origimg     = os.path.join(imgdir, filename)
+
+    # Get processed/cropped image paths
+    outimgdir   = job.get_outimg_dir()
+    outthumbdir = job.get_thumbnail_dir()
+    croppedimg  = os.path.join(outimgdir, filename)
+    thumbfile   = os.path.join(outthumbdir, filename)
 
     next_page   = pagenum + 1
     next_img    = os.path.join(imgdir, f"{next_page:04d}.jpg")
@@ -375,8 +382,23 @@ def page_editor(request, job_id, pagenum):
     if not os.path.exists(prev_img):
         prev_page = None
 
+    # Original image URL
     relpath     = os.path.relpath(origimg, settings.MEDIA_ROOT)
     page['original_image'] = f"{settings.MEDIA_URL}{relpath}"
+
+    # Processed/cropped image URLs (if they exist)
+    if os.path.exists(croppedimg):
+        relpath = os.path.relpath(croppedimg, settings.MEDIA_ROOT)
+        page['cropped_image'] = f"{settings.MEDIA_URL}{relpath}"
+    else:
+        page['cropped_image'] = None
+
+    if os.path.exists(thumbfile):
+        relpath = os.path.relpath(thumbfile, settings.MEDIA_ROOT)
+        page['cropped_thumbnail'] = f"{settings.MEDIA_URL}{relpath}"
+    else:
+        page['cropped_thumbnail'] = None
+
     context = {
         'job': job,
         'page': page,

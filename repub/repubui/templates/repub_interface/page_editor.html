@@ -257,7 +257,7 @@
                     class="btn btn-outline-success"
                     aria-label="Show output image"
                     data-tooltip="Show processed output image"
-                    style="display: none;">
+                    {% if page.cropped_image %}style="display: inline-block;"{% else %}style="display: none;"{% endif %}>
                 <i class="bi bi-image-fill"></i> Output
             </button>
         </div>
@@ -269,6 +269,7 @@
              alt="Original Page {{ page.page_number }}"
              style="max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain;">
         <img id="output-image"
+             {% if page.cropped_image %}src="{{ page.cropped_image }}?t={{ now.timestamp }}"{% endif %}
              alt="Output Image"
              style="max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: none;">
         <canvas id="snip-canvas" class="snip-canvas" style="display: none;"></canvas>
