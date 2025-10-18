@@ -114,15 +114,35 @@ def home(request):
     jobs = ProcessingJob.objects.filter(user=request.user).order_by('-created_at')[:10]
     form = ProcessingJobForm()
 
+    # Check if this is an API request (has Authorization header)
+    is_api_request = bool(request.META.get('HTTP_AUTHORIZATION'))
+
     if request.method == 'POST':
         logger.debug(f"POST request received with FILES: {list(request.FILES.keys())}")
         logger.debug(f"POST data: {dict(request.POST)}")
-        
+
         form = ProcessingJobForm(request.POST, request.FILES)
         logger.debug(f"Form is valid: {form.is_valid()}")
-        
+
         if not form.is_valid():
             logger.debug(f"Form errors: {form.errors}")
+
+            # For API requests, return JSON error response
+            if is_api_request:
+                error_messages = []
+                for field, errors in form.errors.items():
+                    field_name = field.replace('_', ' ').title() if field != "__all__" else "General"
+                    for error in errors:
+                        error_messages.append(f"{field_name}: {error}")
+
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Form validation failed',
+                    'errors': error_messages,
+                    'form_errors': dict(form.errors)
+                }, status=400)
+
+            # For web requests, render HTML with errors
             messages.error(request, "Please correct the errors below.")
             # Process field names for display
             form_errors_processed = {}
@@ -137,11 +157,21 @@ def home(request):
                 'jobs': jobs,
                 'form_errors_processed': form_errors_processed
             })
-        
+
         # First check if a file was actually uploaded
         if 'input_file' not in request.FILES:
-            form.add_error('input_file', 'No file was uploaded. Please select a file to upload.')
-            messages.error(request, "No file was uploaded. Please select a file to upload.")
+            error_msg = 'No file was uploaded. Please select a file to upload.'
+            form.add_error('input_file', error_msg)
+
+            # For API requests, return JSON error
+            if is_api_request:
+                return JsonResponse({
+                    'success': False,
+                    'error': error_msg
+                }, status=400)
+
+            # For web requests, render HTML with errors
+            messages.error(request, error_msg)
             return render(request, 'repub_interface/home.html', {
                 'form': form,
                 'jobs': jobs

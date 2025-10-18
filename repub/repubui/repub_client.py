@@ -42,7 +42,7 @@ class REPUBClient:
         })
     
     
-    def submit_job(self, 
+    def submit_job(self,
                    file_path: Union[str, Path],
                    title: Optional[str] = None,
                    input_type: str = 'images',
@@ -57,10 +57,11 @@ class REPUBClient:
                    reduce_factor: float = 0.2,
                    xmaximum: int = 30,
                    ymax: int = 60,
-                   maxcontours: int = 5) -> Dict[str, Any]:
+                   maxcontours: int = 5,
+                   mingray: int = 100) -> Dict[str, Any]:
         """
         Submit a document processing job
-        
+
         Args:
             file_path: Path to the file to process (PDF or ZIP)
             title: Job title (optional, will use filename if not provided)
@@ -73,11 +74,12 @@ class REPUBClient:
             draw_contours: Draw contours for debugging (default: False)
             gray: Convert to grayscale (default: False)
             rotate_type: Rotation type ('vertical', 'horizontal', 'overall')
-            reduce_factor: Image scaling factor (default: 1.0)
-            xmaximum: X maximum for line detection (default: 0)
-            ymax: Y maximum for line detection (default: 0)
+            reduce_factor: Image scaling factor (default: 0.2)
+            xmaximum: X maximum for line detection (default: 30)
+            ymax: Y maximum for line detection (default: 60)
             maxcontours: Maximum contours to analyze (default: 5)
-            
+            mingray: Minimum gray threshold for contours (default: 100)
+
         Returns:
             Dict containing job information or error details
         """
@@ -99,6 +101,7 @@ class REPUBClient:
             'xmaximum': str(xmaximum),
             'ymax': str(ymax),
             'maxcontours': str(maxcontours),
+            'mingray': str(mingray),
         }
         
         # Add checkboxes only if True (like HTML forms do)
