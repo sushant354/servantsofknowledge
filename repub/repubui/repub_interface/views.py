@@ -39,6 +39,9 @@ from repub.utils.scandir import Scandir
 from repub.utils import pdfs
 
 
+max_concurrent_jobs = settings.MAX_CONCURRENT_JOBS
+check_interval = settings.JOB_QUEUE_CHECK_INTERVAL
+
 def authenticate_user(request):
     """Custom authentication that supports both session and token auth"""
     # First try session authentication (for web users)
@@ -182,7 +185,8 @@ def home(request):
         job.user = request.user
         job.save()
         logger.info(f"Created job {job.id} with file: {job.input_file}")
-        run_and_monitor_job(job)
+        thread = threading.Thread(target=run_and_monitor_job, args=(job,))
+        thread.start()
 
         logger.info(f"Started processing job {job.id} in background thread")
         messages.success(request, f'Job "{job.title or "Untitled"}" has been submitted and is being processed.')
@@ -194,9 +198,24 @@ def home(request):
     })
 
 def run_and_monitor_job(job):
-    # Start processing in background thread
-    thread = threading.Thread(target=run_job, args=(job,))
-    thread.start()
+    """
+    Start job processing with concurrent job limiting.
+    Waits if maximum concurrent jobs are already running.
+    """
+
+    # Wait until there are fewer than max concurrent jobs processing
+    while True:
+        processing_count = ProcessingJob.objects.filter(status='processing').count()
+
+        if processing_count < max_concurrent_jobs:
+            # Start processing in background thread
+            logger.info(f"Starting job {job.id}. Current processing jobs: {processing_count}/{max_concurrent_jobs}")
+            run_job(job)
+            break
+        else:
+            # Wait before checking again
+            logger.info(f"Job {job.id} waiting in queue. Current processing jobs: {processing_count}/{max_concurrent_jobs}")
+            time.sleep(check_interval)
 
 def run_job(job):
     logger = logging.getLogger('repubui')
@@ -1196,7 +1215,8 @@ def retry_job(request, job_id):
 
         thumbnaildir = os.path.join(output_dir, 'thumbnails')
         os.makedirs(thumbnaildir, exist_ok=True)
-    run_and_monitor_job(job) 
+    thread = threading.Thread(target=run_and_monitor_job, args=(job,))
+    thread.start()
     
     return redirect('job_detail', job_id=job_id)
 

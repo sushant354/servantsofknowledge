@@ -156,8 +156,12 @@ EMAIL_HOST_USER = DEFAULT_FROM_EMAIL
 EMAIL_SUBJECT_PREFIX = '[repub]'
 
 # Session security settings
-SESSION_COOKIE_AGE = 24*30*3600  # 30 days 
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False 
+SESSION_COOKIE_AGE = 24*30*3600  # 30 days
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# Processing job settings
+MAX_CONCURRENT_JOBS = int(os.getenv('MAX_CONCURRENT_JOBS', '2'))  # Maximum number of jobs that can be processed concurrently
+JOB_QUEUE_CHECK_INTERVAL = int(os.getenv('JOB_QUEUE_CHECK_INTERVAL', '10'))  # Seconds to wait before checking queue again
 
 # Security settings - only enabled in production (when DEBUG=False)
 if not DEBUG:
