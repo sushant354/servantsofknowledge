@@ -40,6 +40,8 @@ def get_metadata(indir):
     m = {}
     if  metadata is not None:
         for k, v in metadata.items():
+            if isinstance(v, str):
+                v = v.strip()
             m['/%s' % k.title()] = v
 
     # Read identifier from identifier.txt
