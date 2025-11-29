@@ -41,6 +41,14 @@ def get_metadata(indir):
     if  metadata is not None:
         for k, v in metadata.items():
             m['/%s' % k.title()] = v
+
+    # Read identifier from identifier.txt
+    identifier_path = os.path.join(indir, 'identifier.txt')
+    if os.path.exists(identifier_path):
+        with open(identifier_path, 'r', encoding='utf8') as identifier_fh:
+            identifier = identifier_fh.read().strip()
+            if identifier:
+                m['/Identifier'] = identifier
     return m    
 
 def get_scanned_pages(pagedata, indir, outdir, pagenums, logger=None):
