@@ -61,7 +61,7 @@ class REPUBClient:
                    language: str = 'eng',
                    crop: bool = True,
                    deskew: bool = True,
-                   ocr: bool = True,
+                   ocr: bool = False,
                    dewarp: bool = False,
                    draw_contours: bool = False,
                    gray: bool = False,
@@ -81,7 +81,7 @@ class REPUBClient:
             language: OCR language code (default: 'eng')
             crop: Enable auto-cropping (default: True)
             deskew: Enable deskewing (default: True)
-            ocr: Enable OCR (default: True)
+            ocr: Enable OCR (default: False)
             dewarp: Enable dewarping (default: False)
             draw_contours: Draw contours for debugging (default: False)
             gray: Convert to grayscale (default: False)
@@ -618,8 +618,8 @@ def main():
                        help='Disable auto-cropping (default: enabled)')
     parser.add_argument('--no-deskew', action='store_true',
                        help='Disable deskewing (default: enabled)')
-    parser.add_argument('--no-ocr', action='store_true',
-                       help='Disable OCR (default: enabled)')
+    parser.add_argument('--ocr', action='store_true',
+                       help='Enable OCR (default: disabled)')
     parser.add_argument('--dewarp', action='store_true',
                        help='Enable dewarping (default: disabled)')
     parser.add_argument('--draw-contours', action='store_true',
@@ -689,7 +689,7 @@ def main():
             language=args.language,
             crop=not args.no_crop,
             deskew=not args.no_deskew,
-            ocr=not args.no_ocr,
+            ocr=args.ocr,
             dewarp=args.dewarp,
             draw_contours=args.draw_contours,
             gray=args.gray,
@@ -711,7 +711,7 @@ def main():
             'input_type': args.input_type,
             'crop': not args.no_crop,
             'deskew': not args.no_deskew,
-            'ocr': not args.no_ocr,
+            'ocr': args.ocr,
             'dewarp': args.dewarp,
             'draw_contours': args.draw_contours,
             'gray': args.gray,

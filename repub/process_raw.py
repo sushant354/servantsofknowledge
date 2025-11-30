@@ -246,17 +246,18 @@ def save_thumbnails(img, args, outfile):
 
 def initialize_iadir(args):
     mk_clean(args.iadir)
-    outdir         = os.path.join(args.iadir, 'output')
+    outdir            = os.path.join(args.iadir, 'output')
     args.thumbnaildir = os.path.join(args.iadir, 'thumbnails')
     args.thumbnail    = os.path.join(args.iadir, '__ia_thumb.jpg')
-    args.outhocr      = os.path.join(args.iadir, 'x_hocr.html.gz')
-    args.outtxt       = os.path.join(args.iadir, 'x_text.txt')
-    args.outpdf       = os.path.join(args.iadir, 'x_final.pdf')
-    os.mkdir(outdir)
-    os.mkdir(args.thumbnaildir)
-    args.outdir = outdir
-    args.crop = True
-    args.do_ocr = True
+    args.outdir       = outdir
+    args.crop         = True
+
+    if args.do_ocr:
+        args.outhocr      = os.path.join(args.iadir, 'x_hocr.html.gz')
+        args.outtxt       = os.path.join(args.iadir, 'x_text.txt')
+        args.outpdf       = os.path.join(args.iadir, 'x_final.pdf')
+        os.mkdir(outdir)
+        os.mkdir(args.thumbnaildir)
 
 if __name__ == '__main__':
     parser = get_arg_parser()

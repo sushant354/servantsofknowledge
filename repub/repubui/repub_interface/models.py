@@ -50,7 +50,7 @@ class ProcessingJob(models.Model):
     language = models.CharField(max_length=100, default='eng')
     crop = models.BooleanField(default=True)
     deskew = models.BooleanField(default=True)
-    ocr = models.BooleanField(default=True)
+    ocr = models.BooleanField(default=False)
     dewarp = models.BooleanField(default=False)
     draw_contours = models.BooleanField(default=False)
     gray = models.BooleanField(default=False)

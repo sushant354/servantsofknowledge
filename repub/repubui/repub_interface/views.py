@@ -479,8 +479,6 @@ class Args:
 
         self.thumbnaildir = thumbnaildir
         self.thumbnail    = os.path.join(output_dir, '__ia_thumb.jpg')
-        self.outhocr      = os.path.join(output_dir, 'x_hocr.html.gz')
-        self.outtxt       = os.path.join(output_dir, 'x_text.txt')
 
         self.maxcontours  = job.maxcontours
         self.xmax         = job.xmaximum
@@ -489,6 +487,13 @@ class Args:
         self.crop         = job.crop
         self.deskew       = job.deskew
         self.do_ocr       = job.ocr
+
+        if self.do_ocr:
+            self.outhocr = os.path.join(output_dir, 'x_hocr.html.gz')
+            self.outtxt  = os.path.join(output_dir, 'x_text.txt')
+        else:
+            self.outhocr = None     
+            self.outtxt  = None
 
         self.dewarp       = job.dewarp
         self.drawcontours = job.draw_contours
