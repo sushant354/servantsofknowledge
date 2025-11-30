@@ -108,6 +108,7 @@
                         <tr>
                             <th style="width: 140px;">Preview</th>
                             <th>Title</th>
+                            {% if user.is_staff %}<th>Owner</th>{% endif %}
                             <th>Status</th>
                             <th>Input Type</th>
                             <th>Created</th>
@@ -140,6 +141,16 @@
                                     </div>
                                 </div>
                             </td>
+                            {% if user.is_staff %}
+                            <td>
+                                <div class="text-muted">
+                                    <i class="bi bi-person"></i> {{ job.user.username }}
+                                    {% if job.user.first_name %}
+                                        <small class="d-block">{{ job.user.first_name }} {{ job.user.last_name }}</small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            {% endif %}
                             <td>
                                 <span class="badge fs-6
                                     {% if job.status == 'completed' %}bg-success

@@ -86,20 +86,27 @@ def login_or_token_required(view_func):
 
 @login_required
 def all_jobs(request):
-    jobs_list = ProcessingJob.objects.filter(user=request.user).order_by('-created_at')
+    # Staff users can see all jobs, regular users only see their own jobs
+    if request.user.is_staff:
+        jobs_list = ProcessingJob.objects.all().order_by('-created_at')
+    else:
+        jobs_list = ProcessingJob.objects.filter(user=request.user).order_by('-created_at')
 
     # Get status filter from query parameters
     status_filter = request.GET.get('status')
     if status_filter and status_filter in ['completed', 'processing', 'reviewing', 'failed', 'finalizing', 'preparing_review']:
         jobs_list = jobs_list.filter(status=status_filter)
-    
+
     paginator = Paginator(jobs_list, 10)  # Show 10 jobs per page
     page_number = request.GET.get('page')
     jobs = paginator.get_page(page_number)
-    
-    # Get all jobs for statistics (not filtered)
-    all_jobs_list = ProcessingJob.objects.filter(user=request.user)
-    
+
+    # Get all jobs for statistics (not filtered by status, but filtered by user if not staff)
+    if request.user.is_staff:
+        all_jobs_list = ProcessingJob.objects.all()
+    else:
+        all_jobs_list = ProcessingJob.objects.filter(user=request.user)
+
     context = {
         'jobs': jobs,
         'total_jobs': all_jobs_list.count(),
@@ -108,7 +115,7 @@ def all_jobs(request):
         'failed_jobs': all_jobs_list.filter(status='failed').count(),
         'reviewing_jobs': all_jobs_list.filter(status='reviewing').count(),
     }
-    
+
     return render(request, 'repub_interface/all_jobs.html', context)
 
 
@@ -1396,6 +1403,18 @@ def all_items(request):
     """View all derived items"""
     derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
 
+    # Get derived jobs - staff users see all, regular users see only their own
+    if request.user.is_staff:
+        derived_jobs = ProcessingJob.objects.filter(is_derived=True)
+    else:
+        derived_jobs = ProcessingJob.objects.filter(is_derived=True, user=request.user)
+
+    # Create a mapping of identifier to job owner
+    identifier_to_owner = {}
+    for job in derived_jobs:
+        if job.derived_identifier:
+            identifier_to_owner[job.derived_identifier] = job.user
+
     # Check if derived directory exists
     if not os.path.exists(derive_base_dir):
         items = []
@@ -1406,9 +1425,14 @@ def all_items(request):
 
             # Only include directories
             if os.path.isdir(item_path):
+                # For non-staff users, only show items they own
+                if not request.user.is_staff and identifier not in identifier_to_owner:
+                    continue
+
                 item_info = {
                     'identifier': identifier,
                     'path': item_path,
+                    'owner': identifier_to_owner.get(identifier),  # Add owner information
                 }
 
                 # Get statistics about the directory
@@ -1459,6 +1483,18 @@ def all_items(request):
 @login_required
 def item_directory(request, identifier, subpath=''):
     """View derived directory contents by identifier"""
+    # Check ownership - regular users can only access their own items
+    if not request.user.is_staff:
+        derived_job = ProcessingJob.objects.filter(
+            is_derived=True,
+            derived_identifier=identifier,
+            user=request.user
+        ).first()
+
+        if not derived_job:
+            messages.error(request, 'Access denied. You do not have permission to view this item.')
+            return redirect('all_items')
+
     # Get the derive directory path
     derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
     item_dir = os.path.join(derive_base_dir, identifier)
@@ -1466,7 +1502,7 @@ def item_directory(request, identifier, subpath=''):
     # Check if the directory exists
     if not os.path.exists(item_dir):
         messages.error(request, f'Derived directory for identifier "{identifier}" does not exist.')
-        return redirect('home')
+        return redirect('all_items')
 
     # Construct the current directory path
     if subpath:

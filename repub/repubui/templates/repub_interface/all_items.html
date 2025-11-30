@@ -61,6 +61,7 @@
                         <tr>
                             <th style="width: 140px;">Preview</th>
                             <th>Identifier</th>
+                            {% if user.is_staff %}<th>Owner</th>{% endif %}
                             <th>Files</th>
                             <th>Size</th>
                             <th>Last Modified</th>
@@ -95,6 +96,20 @@
                                     </div>
                                 </div>
                             </td>
+                            {% if user.is_staff %}
+                            <td>
+                                {% if item.owner %}
+                                    <div class="text-muted">
+                                        <i class="bi bi-person"></i> {{ item.owner.username }}
+                                        {% if item.owner.first_name %}
+                                            <small class="d-block">{{ item.owner.first_name }} {{ item.owner.last_name }}</small>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">Unknown</span>
+                                {% endif %}
+                            </td>
+                            {% endif %}
                             <td>
                                 <span class="badge bg-info text-dark">
                                     <i class="bi bi-file-earmark-fill"></i> {{ item.file_count }} file{{ item.file_count|pluralize }}
