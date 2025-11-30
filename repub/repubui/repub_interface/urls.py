@@ -22,6 +22,7 @@ urlpatterns = [
     path('job/<uuid:job_id>/status/', views.job_status, name='job_status'),
     path('job/<uuid:job_id>/stop/', views.stop_job, name='stop_job'),
     path('job/<uuid:job_id>/derive/', views.derive_job, name='derive_job'),
+    path('item/<str:identifier>/delete/', views.delete_item, name='delete_item'),
     path('item/<str:identifier>/', views.item_directory, name='item_directory'),
     path('item/<str:identifier>/<path:subpath>/', views.item_directory, name='item_directory_subpath'),
     path('api-token/', views.api_token_management, name='api_token'),

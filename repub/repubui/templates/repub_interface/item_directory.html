@@ -38,9 +38,14 @@
                         <i class="bi bi-arrow-up"></i> Up
                     </a>
                 {% endif %}
-                <a href="{% url 'home' %}" class="btn btn-outline-secondary">
+                <a href="{% url 'home' %}" class="btn btn-outline-secondary me-2">
                     <i class="bi bi-arrow-left"></i> Back to Home
                 </a>
+                {% if user.is_staff and not current_subpath %}
+                    <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteItemModal">
+                        <i class="bi bi-trash"></i> Delete Item
+                    </button>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -183,4 +188,38 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Delete Confirmation Modal -->
+{% if user.is_staff and not current_subpath %}
+<div class="modal fade" id="deleteItemModal" tabindex="-1" aria-labelledby="deleteItemModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteItemModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Confirm Deletion
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3">Are you sure you want to delete the item <strong>{{ identifier }}</strong>?</p>
+                <div class="alert alert-warning mb-0">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Warning:</strong> This action cannot be undone. All files and directories within this item will be permanently deleted.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <form method="post" action="{% url 'delete_item' identifier %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Delete Permanently
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

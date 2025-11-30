@@ -1552,3 +1552,39 @@ def item_directory(request, identifier, subpath=''):
     }
 
     return render(request, 'repub_interface/item_directory.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def delete_item(request, identifier):
+    """Delete a derived item directory (staff only)"""
+    # Only allow staff users to delete items
+    if not request.user.is_staff:
+        messages.error(request, 'Permission denied. Only staff members can delete items.')
+        return redirect('item_directory', identifier=identifier)
+
+    # Get the derive directory path
+    derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
+    item_dir = os.path.join(derive_base_dir, identifier)
+
+    # Check if the directory exists
+    if not os.path.exists(item_dir):
+        messages.error(request, f'Derived directory for identifier "{identifier}" does not exist.')
+        return redirect('all_items')
+
+    # Security check: ensure we're within the derived directory
+    if not os.path.commonpath([derive_base_dir, item_dir]) == derive_base_dir:
+        messages.error(request, 'Access denied: Invalid directory path.')
+        return redirect('all_items')
+
+    try:
+        # Delete the entire directory
+        shutil.rmtree(item_dir)
+        logger.info(f"Staff user {request.user.username} deleted item: {identifier}")
+        messages.success(request, f'Item "{identifier}" has been deleted successfully.')
+    except Exception as e:
+        logger.error(f"Error deleting item {identifier}: {str(e)}", exc_info=True)
+        messages.error(request, f'Error deleting item: {str(e)}')
+        return redirect('item_directory', identifier=identifier)
+
+    return redirect('all_items')
