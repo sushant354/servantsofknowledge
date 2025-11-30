@@ -75,6 +75,11 @@
                             <i class="bi bi-list-task"></i> All Jobs
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link{% if request.resolver_match.url_name == 'all_items' %} active{% endif %}" href="{% url 'all_items' %}">
+                            <i class="bi bi-box-seam"></i> All Items
+                        </a>
+                    </li>
                     {% endif %}
                 </ul>
                 <ul class="navbar-nav">

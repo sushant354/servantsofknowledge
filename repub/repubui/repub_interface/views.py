@@ -1392,6 +1392,71 @@ def derive_job(request, job_id):
 
 
 @login_required
+def all_items(request):
+    """View all derived items"""
+    derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
+
+    # Check if derived directory exists
+    if not os.path.exists(derive_base_dir):
+        items = []
+    else:
+        items = []
+        for identifier in sorted(os.listdir(derive_base_dir)):
+            item_path = os.path.join(derive_base_dir, identifier)
+
+            # Only include directories
+            if os.path.isdir(item_path):
+                item_info = {
+                    'identifier': identifier,
+                    'path': item_path,
+                }
+
+                # Get statistics about the directory
+                try:
+                    file_count = 0
+                    total_size = 0
+                    modified_time = None
+
+                    for root, dirs, files in os.walk(item_path):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            file_count += 1
+                            total_size += os.path.getsize(file_path)
+
+                    # Get the most recent modification time
+                    stat_info = os.stat(item_path)
+                    modified_time = timezone.datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.get_current_timezone())
+
+                    item_info['file_count'] = file_count
+                    item_info['total_size'] = format_file_size(total_size)
+                    item_info['modified'] = modified_time
+
+                    # Check for thumbnail
+                    thumb_path = os.path.join(item_path, '__ia_thumb.jpg')
+                    if os.path.exists(thumb_path):
+                        relative_path = os.path.relpath(thumb_path, settings.MEDIA_ROOT)
+                        item_info['thumbnail_url'] = f"{settings.MEDIA_URL}{relative_path}"
+                    else:
+                        item_info['thumbnail_url'] = None
+
+                except Exception as e:
+                    logger.error(f"Error reading item {identifier}: {str(e)}")
+                    item_info['file_count'] = 0
+                    item_info['total_size'] = "Unknown"
+                    item_info['modified'] = None
+                    item_info['thumbnail_url'] = None
+
+                items.append(item_info)
+
+    context = {
+        'items': items,
+        'total_items': len(items),
+    }
+
+    return render(request, 'repub_interface/all_items.html', context)
+
+
+@login_required
 def item_directory(request, identifier, subpath=''):
     """View derived directory contents by identifier"""
     # Get the derive directory path
