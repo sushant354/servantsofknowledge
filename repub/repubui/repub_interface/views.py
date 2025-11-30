@@ -1344,27 +1344,60 @@ def derive_job(request, job_id):
                         zipf.write(file_path, arcname)
             logger.info(f"Created thumbnails zip: {zip_path}")
 
-        # Copy PDF if it exists
+        # Check if HOCR file exists, if not regenerate PDF with OCR
         output_dir = job.get_output_dir()
-        pdf_path = os.path.join(output_dir, 'x_final.pdf')
-        if os.path.exists(pdf_path):
-            pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
-            shutil.copy2(pdf_path, pdf_dest)
-            logger.info(f"Copied PDF to: {pdf_dest}")
-
-        # Copy HOCR if it exists
         hocr_path = os.path.join(output_dir, 'x_hocr.html.gz')
-        if os.path.exists(hocr_path):
-            hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
-            shutil.copy2(hocr_path, hocr_dest)
-            logger.info(f"Copied HOCR to: {hocr_dest}")
 
-        # Copy text file if it exists
-        text_path = os.path.join(output_dir, 'x_text.txt')
-        if os.path.exists(text_path):
+        if not os.path.exists(hocr_path):
+            logger.info(f"HOCR file not found for job {job_id}, regenerating PDF with OCR in derive directory")
+
+            # Prepare output file paths in derive directory
+            pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
+            hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
             text_dest = os.path.join(derive_dir, f'{identifier}_text.txt')
-            shutil.copy2(text_path, text_dest)
-            logger.info(f"Copied text file to: {text_dest}")
+
+            # Get list of output images
+            output_img_dir = job.get_outimg_dir()
+            outfiles = []
+            for filename in sorted(os.listdir(output_img_dir)):
+                outfile = os.path.join(output_img_dir, filename)
+                pagenum = get_pagenum(filename)
+                if pagenum is not None:
+                    outfiles.append((pagenum, outfile))
+
+            outfiles.sort(key=lambda x: x[0])
+
+            # Create a logger for the OCR process
+            derive_logger = logging.getLogger(f'repub.derive.{job_id}')
+            derive_logger.info(f"Regenerating PDF with OCR for {len(outfiles)} pages")
+
+            # Generate PDF with OCR, HOCR, and text
+            pdfs.save_pdf(outfiles, metadata, job.language, pdf_dest,
+                         True, hocr_dest, text_dest, derive_logger)
+
+            logger.info(f"Generated PDF with OCR in derive directory: {pdf_dest}")
+            logger.info(f"Generated HOCR in derive directory: {hocr_dest}")
+            logger.info(f"Generated text in derive directory: {text_dest}")
+        else:
+            # Copy existing PDF if it exists
+            pdf_path = os.path.join(output_dir, 'x_final.pdf')
+            if os.path.exists(pdf_path):
+                pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
+                shutil.copy2(pdf_path, pdf_dest)
+                logger.info(f"Copied PDF to: {pdf_dest}")
+
+            # Copy HOCR if it exists
+            if os.path.exists(hocr_path):
+                hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
+                shutil.copy2(hocr_path, hocr_dest)
+                logger.info(f"Copied HOCR to: {hocr_dest}")
+
+            # Copy text file if it exists
+            text_path = os.path.join(output_dir, 'x_text.txt')
+            if os.path.exists(text_path):
+                text_dest = os.path.join(derive_dir, f'{identifier}_text.txt')
+                shutil.copy2(text_path, text_dest)
+                logger.info(f"Copied text file to: {text_dest}")
 
         # Copy thumbnail if it exists
         thumb_path = os.path.join(output_dir, '__ia_thumb.jpg')
