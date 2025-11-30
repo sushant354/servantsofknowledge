@@ -20,6 +20,15 @@
                 </div>
             </div>
             <div class="card-body" id="job-status-container">
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message|safe }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+
                 {% if job.status == 'processing' %}
                     <div class="alert alert-info">
                         <h4 class="alert-heading">Processing in progress!</h4>
@@ -116,28 +125,44 @@
                         <i class="bi bi-folder-plus"></i> Input
                     </a>
                 {% elif job.status == 'completed' %}
-                    <div class="alert alert-success">
-                        <h4 class="alert-heading">Processing complete!</h4>
-                        <p>Your document has been successfully processed.</p>
-                    </div>
+                    {% if job.is_derived %}
+                        <div class="alert alert-success">
+                            <h4 class="alert-heading">Job Derived!</h4>
+                            <p>Your document has been successfully processed and derived to <strong>{{ job.derived_identifier }}</strong>.</p>
+                            <p class="mb-0"><small>Derived on: {{ job.derived_at }}</small></p>
+                        </div>
 
-                    {% if job.output_file %}
-                        <a href="{% url 'job_download' job.id %}" class="btn btn-primary btn-lg mb-4 me-3">
-                            <i class="bi bi-download"></i> Download Processed PDF
+                        <a href="{% url 'item_directory' job.derived_identifier %}" class="btn btn-primary btn-lg mb-4 me-3">
+                            <i class="bi bi-folder2-open"></i> View Derived Files
+                        </a>
+                    {% else %}
+                        <div class="alert alert-success">
+                            <h4 class="alert-heading">Processing complete!</h4>
+                            <p>Your document has been successfully processed.</p>
+                        </div>
+
+                        {% if job.output_file %}
+                            <a href="{% url 'job_download' job.id %}" class="btn btn-primary btn-lg mb-4 me-3">
+                                <i class="bi bi-download"></i> Download Processed PDF
+                            </a>
+                        {% endif %}
+
+                        <button type="button" class="btn btn-success btn-lg mb-4 me-3" data-bs-toggle="modal" data-bs-target="#deriveJobModal">
+                            <i class="bi bi-box-arrow-up-right"></i> Derive
+                        </button>
+
+                        <button type="button" class="btn btn-outline-primary btn-lg mb-4 me-3" data-bs-toggle="modal" data-bs-target="#reviewPagesModal">
+                            <i class="bi bi-eye"></i> Review Pages
+                        </button>
+
+                        <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-lg mb-4 me-3" title="View output directory">
+                            <i class="bi bi-folder"></i> Files
+                        </a>
+
+                        <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-lg mb-4" title="View input directory">
+                            <i class="bi bi-folder-plus"></i> Input
                         </a>
                     {% endif %}
-                    
-                    <button type="button" class="btn btn-outline-primary btn-lg mb-4 me-3" data-bs-toggle="modal" data-bs-target="#reviewPagesModal">
-                        <i class="bi bi-eye"></i> Review Pages
-                    </button>
-                    
-                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-lg mb-4 me-3" title="View output directory">
-                        <i class="bi bi-folder"></i> Files
-                    </a>
-                    
-                    <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-lg mb-4" title="View input directory">
-                        <i class="bi bi-folder-plus"></i> Input
-                    </a>
                 {% endif %}
 
                 <h4 class="mt-4 mb-3">Job Details</h4>
@@ -147,6 +172,18 @@
                             <th style="width: 30%">Created</th>
                             <td>{{ job.created_at }}</td>
                         </tr>
+                        {% if job.is_derived %}
+                        <tr>
+                            <th>Derived Status</th>
+                            <td>
+                                <span class="badge bg-success">Derived</span>
+                                <br>
+                                <small><strong>Identifier:</strong> {{ job.derived_identifier }}</small>
+                                <br>
+                                <small><strong>Derived At:</strong> {{ job.derived_at }}</small>
+                            </td>
+                        </tr>
+                        {% endif %}
                         <tr>
                             <th>Input Type</th>
                             <td>{{ job.get_input_type_display }}</td>
@@ -441,6 +478,55 @@
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger">
                         <i class="bi bi-stop-fill"></i> Mark as Failed
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Derive Job Modal -->
+<div class="modal fade" id="deriveJobModal" tabindex="-1" aria-labelledby="deriveJobModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="deriveJobModalLabel">
+                    <i class="bi bi-box-arrow-up-right me-2"></i>Derive Job
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>What happens when you derive a job?</h6>
+                    <ul class="mb-0">
+                        <li><strong>Directory Creation:</strong> A new directory will be created using the Identifier from metadata</li>
+                        <li><strong>Input File Copy:</strong> The original input file will be copied to the derive directory</li>
+                        <li><strong>Output Images:</strong> All output images will be zipped and copied to the derive directory</li>
+                        <li><strong>Thumbnails:</strong> All thumbnail images will be zipped and copied to the derive directory</li>
+                        <li><strong>PDF, HOCR & Text:</strong> The final PDF, HOCR, and text files (if they exist) will be copied</li>
+                        <li><strong>Main Thumbnail:</strong> The main thumbnail image (__ia_thumb.jpg) will be copied to the derive directory</li>
+                        <li><strong>Database Record:</strong> Job will be marked as derived in the database</li>
+                        <li><strong>Cleanup:</strong> Original output, upload, and thumbnail folders will be deleted to save space</li>
+                        <li><strong>Location:</strong> Files will be saved to <code>media/derived/[Identifier]/</code></li>
+                    </ul>
+                </div>
+                <div class="alert alert-warning">
+                    <h6 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i>Important:</h6>
+                    <ul class="mb-0">
+                        <li>If a derive directory with the same Identifier already exists, it will be overwritten</li>
+                        <li>After deriving, the job page will show the derived files instead of the output folder</li>
+                        <li>This action cannot be undone - original files will be permanently deleted</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <form method="post" action="{% url 'derive_job' job.id %}" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-box-arrow-up-right"></i> Confirm Derive
                     </button>
                 </form>
             </div>

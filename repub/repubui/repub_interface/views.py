@@ -25,6 +25,7 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils.safestring import mark_safe
 from rest_framework.authtoken.models import Token
 from .models import ProcessingJob, UserProfile
 from .forms import ProcessingJobForm, UserRegistrationForm, ProcessingOptionsForm
@@ -1225,10 +1226,10 @@ def retry_job(request, job_id):
 def api_token_management(request):
     """Manage user's API token for REST framework authentication"""
     token = Token.objects.filter(user=request.user).first()
-    
+
     if request.method == 'POST':
         action = request.POST.get('action')
-        
+
         if action == 'generate':
             if not token:
                 token = Token.objects.create(user=request.user)
@@ -1236,14 +1237,14 @@ def api_token_management(request):
                 logger.info(f"Generated new API token for user {request.user.username}")
             else:
                 messages.info(request, 'You already have an API token. Use "Regenerate" to create a new one.')
-        
+
         elif action == 'regenerate':
             if token:
                 token.delete()
             token = Token.objects.create(user=request.user)
             messages.success(request, 'API token has been regenerated successfully! Make sure to update any applications using the old token.')
             logger.info(f"Regenerated API token for user {request.user.username}")
-        
+
         elif action == 'delete':
             if token:
                 token.delete()
@@ -1252,11 +1253,237 @@ def api_token_management(request):
                 logger.info(f"Deleted API token for user {request.user.username}")
             else:
                 messages.info(request, 'No API token to delete.')
-        
+
         return redirect('api_token')
-    
+
     context = {
         'token': token,
     }
-    
+
     return render(request, 'repub_interface/api_token.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def derive_job(request, job_id):
+    """Derive a job by creating a directory with identifier and copying all relevant files"""
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+
+    if job.status != 'completed':
+        messages.error(request, 'Can only derive completed jobs.')
+        return redirect('job_detail', job_id=job_id)
+
+    try:
+        # Get metadata to extract the Identifier
+        input_dir = job.get_input_dir()
+        scandir = Scandir(input_dir, None, None, logger)
+        metadata = scandir.metadata
+
+        identifier = metadata.get('/Identifier')
+        if not identifier:
+            messages.error(request, 'No identifier found in job metadata. Cannot derive.')
+            return redirect('job_detail', job_id=job_id)
+
+        # Create derive directory with the identifier name
+        derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
+        os.makedirs(derive_base_dir, exist_ok=True)
+
+        derive_dir = os.path.join(derive_base_dir, identifier)
+        if os.path.exists(derive_dir):
+            messages.error(request, f'Derive directory "{identifier}" already exists.')
+            return redirect('job_detail', job_id=job_id)
+
+        os.makedirs(derive_dir, exist_ok=True)
+        logger.info(f"Created derive directory: {derive_dir}")
+
+        # Copy input file
+        if job.input_file and os.path.exists(job.input_file.path):
+            input_filename = os.path.basename(job.input_file.path)
+            input_dest = os.path.join(derive_dir, input_filename)
+            shutil.copy2(job.input_file.path, input_dest)
+            logger.info(f"Copied input file to: {input_dest}")
+
+        # Zip output image folder
+        output_img_dir = job.get_outimg_dir()
+        if os.path.exists(output_img_dir):
+            zip_filename = f'{identifier}_images.zip'
+            zip_path = os.path.join(derive_dir, zip_filename)
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for root, dirs, files in os.walk(output_img_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, output_img_dir)
+                        zipf.write(file_path, arcname)
+            logger.info(f"Created output images zip: {zip_path}")
+
+        # Zip thumbnail folder
+        thumbnail_dir = job.get_thumbnail_dir()
+        if os.path.exists(thumbnail_dir):
+            zip_filename = f'{identifier}_thumbnails.zip'
+            zip_path = os.path.join(derive_dir, zip_filename)
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for root, dirs, files in os.walk(thumbnail_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, thumbnail_dir)
+                        zipf.write(file_path, arcname)
+            logger.info(f"Created thumbnails zip: {zip_path}")
+
+        # Copy PDF if it exists
+        output_dir = job.get_output_dir()
+        pdf_path = os.path.join(output_dir, 'x_final.pdf')
+        if os.path.exists(pdf_path):
+            pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
+            shutil.copy2(pdf_path, pdf_dest)
+            logger.info(f"Copied PDF to: {pdf_dest}")
+
+        # Copy HOCR if it exists
+        hocr_path = os.path.join(output_dir, 'x_hocr.html.gz')
+        if os.path.exists(hocr_path):
+            hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
+            shutil.copy2(hocr_path, hocr_dest)
+            logger.info(f"Copied HOCR to: {hocr_dest}")
+
+        # Copy text file if it exists
+        text_path = os.path.join(output_dir, 'x_text.txt')
+        if os.path.exists(text_path):
+            text_dest = os.path.join(derive_dir, f'{identifier}_text.txt')
+            shutil.copy2(text_path, text_dest)
+            logger.info(f"Copied text file to: {text_dest}")
+
+        # Copy thumbnail if it exists
+        thumb_path = os.path.join(output_dir, '__ia_thumb.jpg')
+        if os.path.exists(thumb_path):
+            thumb_dest = os.path.join(derive_dir, '__ia_thumb.jpg')
+            shutil.copy2(thumb_path, thumb_dest)
+            logger.info(f"Copied thumbnail to: {thumb_dest}")
+
+        # Record derive operation in database
+        job.is_derived = True
+        job.derived_identifier = identifier
+        job.derived_at = timezone.now()
+        job.save()
+        logger.info(f"Updated job {job_id} with derived info: {identifier}")
+
+        # Clean up output folder and related directories
+        output_base_dir = job.get_output_dir()
+        if os.path.exists(output_base_dir):
+            shutil.rmtree(output_base_dir)
+            logger.info(f"Cleaned up output directory: {output_base_dir}")
+
+        # Clean up uploads folder
+        upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job_id))
+        if os.path.exists(upload_base_dir):
+            shutil.rmtree(upload_base_dir)
+            logger.info(f"Cleaned up upload directory: {upload_base_dir}")
+
+        message_text = f'Job successfully derived to directory: {identifier}. <a href="/item/{identifier}/" class="alert-link">View derived files</a>'
+        messages.success(request, mark_safe(message_text))
+        logger.info(f"Successfully derived job {job_id} to {derive_dir}")
+
+    except Exception as e:
+        logger.error(f"Error deriving job {job_id}: {str(e)}", exc_info=True)
+        messages.error(request, f'Error deriving job: {str(e)}')
+
+    return redirect('job_detail', job_id=job_id)
+
+
+@login_required
+def item_directory(request, identifier, subpath=''):
+    """View derived directory contents by identifier"""
+    # Get the derive directory path
+    derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
+    item_dir = os.path.join(derive_base_dir, identifier)
+
+    # Check if the directory exists
+    if not os.path.exists(item_dir):
+        messages.error(request, f'Derived directory for identifier "{identifier}" does not exist.')
+        return redirect('home')
+
+    # Construct the current directory path
+    if subpath:
+        # Sanitize the subpath to prevent directory traversal
+        subpath = subpath.strip('/')
+        subpath_parts = [part for part in subpath.split('/') if part and part != '..']
+        current_dir = os.path.join(item_dir, *subpath_parts)
+        current_subpath = '/'.join(subpath_parts)
+    else:
+        current_dir = item_dir
+        current_subpath = ''
+
+    # Security check: ensure we're still within the item directory
+    if not os.path.commonpath([item_dir, current_dir]) == item_dir:
+        messages.error(request, 'Access denied: Invalid directory path.')
+        return redirect('item_directory', identifier=identifier)
+
+    if not os.path.exists(current_dir):
+        messages.error(request, 'Directory does not exist.')
+        return redirect('item_directory', identifier=identifier)
+
+    # Build breadcrumb navigation
+    breadcrumbs = [{'name': identifier, 'path': ''}]
+    if current_subpath:
+        path_parts = current_subpath.split('/')
+        for i, part in enumerate(path_parts):
+            breadcrumb_path = '/'.join(path_parts[:i+1])
+            breadcrumbs.append({'name': part, 'path': breadcrumb_path})
+
+    # Get directory contents
+    items = []
+    for item_name in sorted(os.listdir(current_dir)):
+        item_path = os.path.join(current_dir, item_name)
+        is_dir = os.path.isdir(item_path)
+
+        item_info = {
+            'name': item_name,
+            'is_directory': is_dir,
+            'size': None,
+            'modified': None,
+            'mime_type': None,
+            'relative_url': None,
+            'subpath': os.path.join(current_subpath, item_name).replace('\\', '/') if current_subpath else item_name
+        }
+
+        if is_dir:
+            # Count items in subdirectory
+            try:
+                subitem_count = len(os.listdir(item_path))
+                item_info['size'] = f"{subitem_count} items"
+            except:
+                item_info['size'] = "Unknown"
+        else:
+            # Get file info
+            stat_info = os.stat(item_path)
+            item_info['size'] = format_file_size(stat_info.st_size)
+            item_info['modified'] = timezone.datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.get_current_timezone())
+
+            # Get mime type
+            mime_type, _ = mimetypes.guess_type(item_path)
+            item_info['mime_type'] = mime_type
+
+            # Create relative URL for media files
+            relative_path = os.path.relpath(item_path, settings.MEDIA_ROOT)
+            item_info['relative_url'] = f"{settings.MEDIA_URL}{relative_path}"
+
+        items.append(item_info)
+
+    # Separate directories and files
+    directories = [item for item in items if item['is_directory']]
+    files = [item for item in items if not item['is_directory']]
+
+    context = {
+        'identifier': identifier,
+        'current_dir': current_dir,
+        'current_subpath': current_subpath,
+        'breadcrumbs': breadcrumbs,
+        'directories': directories,
+        'files': files,
+        'total_items': len(items),
+        'parent_path': '/'.join(current_subpath.split('/')[:-1]) if current_subpath and '/' in current_subpath else '' if current_subpath else None,
+        'is_item_directory': True
+    }
+
+    return render(request, 'repub_interface/item_directory.html', context)

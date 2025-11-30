@@ -76,6 +76,11 @@ class ProcessingJob(models.Model):
     needs_review = models.BooleanField(default=False)
     reviewed = models.BooleanField(default=False)
 
+    # Derive tracking
+    is_derived = models.BooleanField(default=False)
+    derived_identifier = models.CharField(max_length=255, blank=True, null=True)
+    derived_at = models.DateTimeField(blank=True, null=True)
+
     def __str__(self):
         return f"Job {self.id} - {self.status}"
 
@@ -100,5 +105,11 @@ class ProcessingJob(models.Model):
         if os.path.exists(thumb_path):
             relative_path = os.path.relpath(thumb_path, settings.MEDIA_ROOT)
             return f"{settings.MEDIA_URL}{relative_path}"
+        return None
+
+    def get_derived_dir(self):
+        """Get the derived directory path if job has been derived"""
+        if self.derived_identifier:
+            return os.path.join(settings.MEDIA_ROOT, 'derived', self.derived_identifier)
         return None
 
