@@ -40,8 +40,9 @@ from repub.utils.scandir import Scandir
 from repub.utils import pdfs
 
 
+max_deriving_jobs   = settings.MAX_DERIVING_JOBS
 max_concurrent_jobs = settings.MAX_CONCURRENT_JOBS
-check_interval = settings.JOB_QUEUE_CHECK_INTERVAL
+check_interval      = settings.JOB_QUEUE_CHECK_INTERVAL
 
 def authenticate_user(request):
     """Custom authentication that supports both session and token auth"""
@@ -1284,8 +1285,8 @@ def derive_job(request, job_id):
     else:
         job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
 
-    if job.status != 'completed':
-        messages.error(request, 'Can only derive completed jobs.')
+    if job.status not in ['completed', 'derive_failed']:
+        messages.error(request, 'Can only derive completed jobs or retry failed derivations.')
         return redirect('job_detail', job_id=job_id)
 
     try:
@@ -1311,6 +1312,8 @@ def derive_job(request, job_id):
         os.makedirs(derive_dir, exist_ok=True)
         logger.info(f"Created derive directory: {derive_dir}")
 
+        job.status = 'deriving'
+        job.save()
         # Copy input file
         if job.input_file and os.path.exists(job.input_file.path):
             input_filename = os.path.basename(job.input_file.path)
@@ -1344,74 +1347,37 @@ def derive_job(request, job_id):
                         zipf.write(file_path, arcname)
             logger.info(f"Created thumbnails zip: {zip_path}")
 
-        # Check if HOCR file exists, if not regenerate PDF with OCR
-        output_dir = job.get_output_dir()
-        hocr_path = os.path.join(output_dir, 'x_hocr.html.gz')
-
-        if not os.path.exists(hocr_path):
-            logger.info(f"HOCR file not found for job {job_id}, regenerating PDF with OCR in derive directory")
-
-            # Prepare output file paths in derive directory
-            pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
-            hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
-            text_dest = os.path.join(derive_dir, f'{identifier}_text.txt')
-
-            # Get list of output images
-            output_img_dir = job.get_outimg_dir()
-            outfiles = []
-            for filename in sorted(os.listdir(output_img_dir)):
-                outfile = os.path.join(output_img_dir, filename)
-                pagenum = get_pagenum(filename)
-                if pagenum is not None:
-                    outfiles.append((pagenum, outfile))
-
-            outfiles.sort(key=lambda x: x[0])
-
-            # Create a logger for the OCR process
-            derive_logger = logging.getLogger(f'repub.derive.{job_id}')
-            derive_logger.info(f"Regenerating PDF with OCR for {len(outfiles)} pages")
-
-            # Generate PDF with OCR, HOCR, and text
-            pdfs.save_pdf(outfiles, metadata, job.language, pdf_dest,
-                         True, hocr_dest, text_dest, derive_logger)
-
-            logger.info(f"Generated PDF with OCR in derive directory: {pdf_dest}")
-            logger.info(f"Generated HOCR in derive directory: {hocr_dest}")
-            logger.info(f"Generated text in derive directory: {text_dest}")
-        else:
-            # Copy existing PDF if it exists
-            pdf_path = os.path.join(output_dir, 'x_final.pdf')
-            if os.path.exists(pdf_path):
-                pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
-                shutil.copy2(pdf_path, pdf_dest)
-                logger.info(f"Copied PDF to: {pdf_dest}")
-
-            # Copy HOCR if it exists
-            if os.path.exists(hocr_path):
-                hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
-                shutil.copy2(hocr_path, hocr_dest)
-                logger.info(f"Copied HOCR to: {hocr_dest}")
-
-            # Copy text file if it exists
-            text_path = os.path.join(output_dir, 'x_text.txt')
-            if os.path.exists(text_path):
-                text_dest = os.path.join(derive_dir, f'{identifier}_text.txt')
-                shutil.copy2(text_path, text_dest)
-                logger.info(f"Copied text file to: {text_dest}")
-
         # Copy thumbnail if it exists
+        output_dir = job.get_output_dir()
         thumb_path = os.path.join(output_dir, '__ia_thumb.jpg')
         if os.path.exists(thumb_path):
             thumb_dest = os.path.join(derive_dir, '__ia_thumb.jpg')
             shutil.copy2(thumb_path, thumb_dest)
             logger.info(f"Copied thumbnail to: {thumb_dest}")
 
-        # Record derive operation in database
-        job.is_derived = True
-        job.derived_identifier = identifier
-        job.derived_at = timezone.now()
-        job.save()
-        logger.info(f"Updated job {job_id} with derived info: {identifier}")
+        # Check if HOCR file exists, if not regenerate PDF with OCR
+        hocr_path = os.path.join(output_dir, 'x_hocr.html.gz')
+        pdf_path = os.path.join(output_dir, 'x_final.pdf')
+        text_path = os.path.join(output_dir, 'x_text.txt')
+
+        if not os.path.exists(hocr_path) or not os.path.exists(pdf_path) or \
+                not os.path.exists(text_path):
+            logger.info(f"HOCR file not found for job {job_id}, regenerating PDF with OCR in derive directory")
+
+            run_and_monitor_pdf(job, identifier, metadata, derive_dir)
+        else:
+            # Copy existing PDF if it exists
+            pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
+            shutil.copy2(pdf_path, pdf_dest)
+            logger.info(f"Copied PDF to: {pdf_dest}")
+
+            hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
+            shutil.copy2(hocr_path, hocr_dest)
+            logger.info(f"Copied HOCR to: {hocr_dest}")
+
+            text_dest = os.path.join(derive_dir, f'{identifier}_text.txt')
+            shutil.copy2(text_path, text_dest)
+            logger.info(f"Copied text file to: {text_dest}")
 
         # Clean up output folder and related directories
         output_base_dir = job.get_output_dir()
@@ -1429,12 +1395,93 @@ def derive_job(request, job_id):
         messages.success(request, mark_safe(message_text))
         logger.info(f"Successfully derived job {job_id} to {derive_dir}")
 
+        job.is_derived = True
+        job.derived_identifier = identifier
+        job.derived_at = timezone.now()
+        job.status = 'derive_completed'
+        job.save()
+        logger.info(f"Updated job {job_id} with derived info: {identifier}")
+ 
     except Exception as e:
+        job.status = 'derive_failed'
+        job.save()
         logger.error(f"Error deriving job {job_id}: {str(e)}", exc_info=True)
         messages.error(request, f'Error deriving job: {str(e)}')
 
     return redirect('job_detail', job_id=job_id)
 
+def run_and_monitor_pdf(job, identifier, metadata, derive_dir):
+    """
+    Start job processing with concurrent job limiting.
+    Waits if maximum concurrent jobs are already running.
+    """
+
+    # Wait until there are fewer than max concurrent jobs processing
+    while True:
+        processing_count = ProcessingJob.objects.filter(status='deriving').count()
+
+        if processing_count < max_deriving_jobs:
+            # Start processing in background thread
+            logger.info(f"Starting job {job.id}. Current processing jobs: {processing_count}/{max_deriving_jobs}")
+            derive_pdf(job, identifier, metadata, derive_dir) 
+            break
+        else:
+            # Wait before checking again
+            logger.info(f"Job {job.id} waiting in queue. Current processing jobs: {processing_count}/{max_deriving_jobs}")
+            time.sleep(check_interval)
+
+def derive_pdf(job, identifier, metadata, derive_dir):
+    try:
+        # Prepare output file paths in derive directory
+        pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
+        hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
+        text_dest = os.path.join(derive_dir, f'{identifier}_text.txt')
+
+        # Get list of output images
+        output_img_dir = job.get_outimg_dir()
+        outfiles = []
+        for filename in sorted(os.listdir(output_img_dir)):
+            outfile = os.path.join(output_img_dir, filename)
+            pagenum = get_pagenum(filename)
+            if pagenum is not None:
+                outfiles.append((pagenum, outfile))
+
+        outfiles.sort(key=lambda x: x[0])
+
+        # Create a logger for the OCR process
+        derive_logger = logging.getLogger(f'repub.derive.{job.id}')
+        derive_logger.info(f"Regenerating PDF with OCR for {len(outfiles)} pages")
+
+        # Generate PDF with OCR, HOCR, and text
+        pdfs.save_pdf(outfiles, metadata, job.language, pdf_dest,
+                      True, hocr_dest, text_dest, derive_logger)
+
+        logger.info(f"Generated PDF with OCR in derive directory: {pdf_dest}")
+        logger.info(f"Generated HOCR in derive directory: {hocr_dest}")
+        logger.info(f"Generated text in derive directory: {text_dest}")
+
+        # Clean up output folder and related directories after successful PDF generation
+        output_base_dir = job.get_output_dir()
+        if os.path.exists(output_base_dir):
+            shutil.rmtree(output_base_dir)
+            logger.info(f"Cleaned up output directory: {output_base_dir}")
+
+        # Clean up uploads folder
+        upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
+        if os.path.exists(upload_base_dir):
+            shutil.rmtree(upload_base_dir)
+            logger.info(f"Cleaned up upload directory: {upload_base_dir}")
+
+        # Update job status to completed
+        job.status = 'derive_completed'
+        job.save()
+        logger.info(f"Updated job {job.id} to derive_completed after PDF generation")
+
+    except Exception as e:
+        logger.error(f"Error generating PDF for job {job.id}: {str(e)}", exc_info=True)
+        job.status = 'derive_failed'
+        job.save()
+        logger.error(f"Updated job {job.id} to derive_failed")
 
 @login_required
 def all_items(request):

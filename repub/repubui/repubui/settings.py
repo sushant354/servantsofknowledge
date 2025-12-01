@@ -161,6 +161,7 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 # Processing job settings
 MAX_CONCURRENT_JOBS = int(os.getenv('MAX_CONCURRENT_JOBS', '2'))  # Maximum number of jobs that can be processed concurrently
+MAX_DERIVING_JOBS = int(os.getenv('MAX_DERIVING_JOBS', '2'))  # Maximum number of jobs that can be processed concurrently
 JOB_QUEUE_CHECK_INTERVAL = int(os.getenv('JOB_QUEUE_CHECK_INTERVAL', '10'))  # Seconds to wait before checking queue again
 
 # Security settings - only enabled in production (when DEBUG=False)

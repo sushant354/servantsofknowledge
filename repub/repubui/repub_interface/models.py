@@ -37,7 +37,10 @@ class ProcessingJob(models.Model):
                                   ('completed', 'Completed'),
                                   ('failed', 'Failed'),
                                   ('reviewing', 'Awaiting Review'),
-                                  ('finalizing', 'Finalizing')
+                                  ('finalizing', 'Finalizing'),
+                                  ('deriving', 'Deriving'),
+                                  ('derive_completed', 'Derive Completed'),
+                                  ('derive_failed', 'Derive Failed')
                               ])
 
     # Input options

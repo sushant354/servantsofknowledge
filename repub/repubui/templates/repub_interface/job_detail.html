@@ -124,45 +124,81 @@
                     <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-lg mb-4" title="View input directory">
                         <i class="bi bi-folder-plus"></i> Input
                     </a>
-                {% elif job.status == 'completed' %}
-                    {% if job.is_derived %}
-                        <div class="alert alert-success">
-                            <h4 class="alert-heading">Job Derived!</h4>
-                            <p>Your document has been successfully processed and derived to <strong>{{ job.derived_identifier }}</strong>.</p>
-                            <p class="mb-0"><small>Derived on: {{ job.derived_at }}</small></p>
+                {% elif job.status == 'deriving' %}
+                    <div class="alert alert-info">
+                        <h4 class="alert-heading">Deriving your document!</h4>
+                        <p>Your document is being derived. This may take a few minutes if OCR is being performed. This page will update automatically.</p>
+                        <div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
                         </div>
+                    </div>
 
-                        <a href="{% url 'item_directory' job.derived_identifier %}" class="btn btn-primary btn-lg mb-4 me-3">
-                            <i class="bi bi-folder2-open"></i> View Derived Files
-                        </a>
-                    {% else %}
-                        <div class="alert alert-success">
-                            <h4 class="alert-heading">Processing complete!</h4>
-                            <p>Your document has been successfully processed.</p>
-                        </div>
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm mb-3 me-2" title="View output directory">
+                        <i class="bi bi-folder"></i> Files
+                    </a>
 
-                        {% if job.output_file %}
-                            <a href="{% url 'job_download' job.id %}" class="btn btn-primary btn-lg mb-4 me-3">
-                                <i class="bi bi-download"></i> Download Processed PDF
-                            </a>
+                    <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-sm mb-3" title="View input directory">
+                        <i class="bi bi-folder-plus"></i> Input
+                    </a>
+                {% elif job.status == 'derive_completed' %}
+                    <div class="alert alert-success">
+                        <h4 class="alert-heading">Job Derived!</h4>
+                        <p>Your document has been successfully processed and derived to <strong>{{ job.derived_identifier }}</strong>.</p>
+                        <p class="mb-0"><small>Derived on: {{ job.derived_at }}</small></p>
+                    </div>
+
+                    <a href="{% url 'item_directory' job.derived_identifier %}" class="btn btn-primary btn-lg mb-4 me-3">
+                        <i class="bi bi-folder2-open"></i> View Derived Files
+                    </a>
+                {% elif job.status == 'derive_failed' %}
+                    <div class="alert alert-danger">
+                        <h4 class="alert-heading">Derive failed!</h4>
+                        <p>There was an error while deriving your document.</p>
+                        {% if job.error_message %}
+                            <hr>
+                            <p class="mb-0">Error details:</p>
+                            <pre class="mt-2">{{ job.error_message }}</pre>
                         {% endif %}
+                    </div>
 
-                        <button type="button" class="btn btn-success btn-lg mb-4 me-3" data-bs-toggle="modal" data-bs-target="#deriveJobModal">
-                            <i class="bi bi-box-arrow-up-right"></i> Derive
-                        </button>
+                    <button type="button" class="btn btn-warning btn-lg mb-4 me-3" data-bs-toggle="modal" data-bs-target="#deriveJobModal">
+                        <i class="bi bi-arrow-repeat"></i> Derive Again
+                    </button>
 
-                        <button type="button" class="btn btn-outline-primary btn-lg mb-4 me-3" data-bs-toggle="modal" data-bs-target="#reviewPagesModal">
-                            <i class="bi bi-eye"></i> Review Pages
-                        </button>
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-lg mb-4 me-3" title="View output directory">
+                        <i class="bi bi-folder"></i> Files
+                    </a>
 
-                        <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-lg mb-4 me-3" title="View output directory">
-                            <i class="bi bi-folder"></i> Files
-                        </a>
+                    <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-lg mb-4" title="View input directory">
+                        <i class="bi bi-folder-plus"></i> Input
+                    </a>
+                {% elif job.status == 'completed' %}
+                    <div class="alert alert-success">
+                        <h4 class="alert-heading">Processing complete!</h4>
+                        <p>Your document has been successfully processed.</p>
+                    </div>
 
-                        <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-lg mb-4" title="View input directory">
-                            <i class="bi bi-folder-plus"></i> Input
+                    {% if job.output_file %}
+                        <a href="{% url 'job_download' job.id %}" class="btn btn-primary btn-lg mb-4 me-3">
+                            <i class="bi bi-download"></i> Download Processed PDF
                         </a>
                     {% endif %}
+
+                    <button type="button" class="btn btn-success btn-lg mb-4 me-3" data-bs-toggle="modal" data-bs-target="#deriveJobModal">
+                        <i class="bi bi-box-arrow-up-right"></i> Derive
+                    </button>
+
+                    <button type="button" class="btn btn-outline-primary btn-lg mb-4 me-3" data-bs-toggle="modal" data-bs-target="#reviewPagesModal">
+                        <i class="bi bi-eye"></i> Review Pages
+                    </button>
+
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-lg mb-4 me-3" title="View output directory">
+                        <i class="bi bi-folder"></i> Files
+                    </a>
+
+                    <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-lg mb-4" title="View input directory">
+                        <i class="bi bi-folder-plus"></i> Input
+                    </a>
                 {% endif %}
 
                 <h4 class="mt-4 mb-3">Job Details</h4>
@@ -575,8 +611,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 1500);
     }
     
-    // Only start polling if the job is processing, preparing review, or finalizing
-    if (currentStatus === 'processing' || currentStatus === 'preparing_review' || currentStatus === 'finalizing') {
+    // Only start polling if the job is processing, preparing review, finalizing, or deriving
+    if (currentStatus === 'processing' || currentStatus === 'preparing_review' || currentStatus === 'finalizing' || currentStatus === 'deriving') {
         pollJobStatus();
     }
     
@@ -621,12 +657,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.status === 'completed' || data.status === 'failed') {
                     // Update currentStatus to prevent unnecessary refreshes
                     currentStatus = data.status;
-                    
+
                     // Show appropriate alert and refresh page
                     if (data.status === 'completed') {
                         showStatusAlert('alert-success', 'Finalization complete!', 'Your document has been finalized successfully. Refreshing page...');
                     } else {
                         showStatusAlert('alert-danger', 'Processing failed!', 'There was an error during processing. Refreshing page...');
+                    }
+                    return;
+                }
+
+                // If status has changed to derive_completed or derive_failed, refresh the page
+                if (data.status === 'derive_completed' || data.status === 'derive_failed') {
+                    // Update currentStatus to prevent unnecessary refreshes
+                    currentStatus = data.status;
+
+                    // Show appropriate alert and refresh page
+                    if (data.status === 'derive_completed') {
+                        showStatusAlert('alert-success', 'Derive complete!', 'Your job has been successfully derived. Refreshing page...');
+                    } else {
+                        showStatusAlert('alert-danger', 'Derive failed!', 'There was an error during derivation. Refreshing page...');
                     }
                     return;
                 }
@@ -651,14 +701,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Update currentStatus to prevent unnecessary refreshes
                     currentStatus = data.status;
 
-                    // If still processing, preparing review, or finalizing, continue polling
-                    if (data.status === 'processing' || data.status === 'preparing_review' || data.status === 'finalizing') {
+                    // If still processing, preparing review, finalizing, or deriving, continue polling
+                    if (data.status === 'processing' || data.status === 'preparing_review' || data.status === 'finalizing' || data.status === 'deriving') {
                         setTimeout(pollJobStatus, 2000);
                     }
                 });
             } else {
                 // If status hasn't changed, continue polling
-                if (data.status === 'processing' || data.status === 'preparing_review' || data.status === 'finalizing') {
+                if (data.status === 'processing' || data.status === 'preparing_review' || data.status === 'finalizing' || data.status === 'deriving') {
                     setTimeout(pollJobStatus, 2000);
                 }
             }
