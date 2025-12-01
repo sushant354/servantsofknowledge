@@ -552,17 +552,30 @@
                         <li>This action cannot be undone - original files will be copied and the output directory will be deleted.</li>
                     </ul>
                 </div>
+                <form method="post" action="{% url 'derive_job' job.id %}" id="deriveJobForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="derive_reduce_factor" class="form-label">
+                            <strong>Reduce Factor (Optional)</strong>
+                        </label>
+                        <input type="number" class="form-control" id="derive_reduce_factor" name="derive_reduce_factor"
+                               step="0.01" min="0.01" max="1.0" placeholder="Leave empty to use original size">
+                        <div class="form-text">
+                            Current job reduce factor: <strong>{{ job.reduce_factor }}</strong>
+                            <br>
+                            Enter a value (e.g., 0.5 for 50% size reduction) to reduce image sizes in the final PDF.
+                            Leave empty to keep original image sizes.
+                        </div>
+                    </div>
+                </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="bi bi-x-circle"></i> Cancel
                 </button>
-                <form method="post" action="{% url 'derive_job' job.id %}" style="display: inline;">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-success">
-                        <i class="bi bi-box-arrow-up-right"></i> Confirm Derive
-                    </button>
-                </form>
+                <button type="submit" form="deriveJobForm" class="btn btn-success">
+                    <i class="bi bi-box-arrow-up-right"></i> Confirm Derive
+                </button>
             </div>
         </div>
     </div>

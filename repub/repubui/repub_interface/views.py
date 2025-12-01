@@ -1276,7 +1276,7 @@ def api_token_management(request):
     return render(request, 'repub_interface/api_token.html', context)
 
 
-def run_derive_job(job):
+def run_derive_job(job, derive_reduce_factor=None):
     """Background thread function to derive a job"""
     try:
         # Get metadata to extract the Identifier
@@ -1358,7 +1358,7 @@ def run_derive_job(job):
             logger.info(f"HOCR file not found for job {job.id}, regenerating PDF with OCR in derive directory")
 
             # Generate PDF with OCR directly (removed the queue logic for now)
-            derive_pdf(job, identifier, metadata, derive_dir)
+            derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor)
         else:
             # Copy existing PDF if it exists
             pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
@@ -1418,16 +1418,30 @@ def derive_job(request, job_id):
         logger.warning(f"Job {job.id} is already being derived. Ignoring duplicate request.")
         return redirect('job_detail', job_id=job_id)
 
+    # Extract derive_reduce_factor from POST request
+    derive_reduce_factor = request.POST.get('derive_reduce_factor', '').strip()
+    if derive_reduce_factor:
+        try:
+            derive_reduce_factor = float(derive_reduce_factor)
+            if derive_reduce_factor <= 0 or derive_reduce_factor > 1:
+                messages.error(request, 'Reduce factor must be between 0 and 1.')
+                return redirect('job_detail', job_id=job_id)
+        except ValueError:
+            messages.error(request, 'Invalid reduce factor value.')
+            return redirect('job_detail', job_id=job_id)
+    else:
+        derive_reduce_factor = None
+
     # Set job status to deriving
     job.status = 'deriving'
     job.error_message = ''
     job.save()
 
     # Start derivation in background thread
-    thread = threading.Thread(target=run_derive_job, args=(job,))
+    thread = threading.Thread(target=run_derive_job, args=(job, derive_reduce_factor))
     thread.start()
 
-    logger.info(f"Started derivation for job {job.id} in background thread")
+    logger.info(f"Started derivation for job {job.id} in background thread with reduce_factor={derive_reduce_factor}")
     messages.success(request, f'Job "{job.title or "Untitled"}" is being derived.')
 
     return redirect('job_detail', job_id=job_id)
@@ -1452,7 +1466,8 @@ def run_and_monitor_pdf(job, identifier, metadata, derive_dir):
             logger.info(f"Job {job.id} waiting in queue. Current processing jobs: {processing_count}/{max_deriving_jobs}")
             time.sleep(check_interval)
 
-def derive_pdf(job, identifier, metadata, derive_dir):
+def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor=None):
+    temp_dir = None
     try:
         # Prepare output file paths in derive directory
         pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
@@ -1474,6 +1489,41 @@ def derive_pdf(job, identifier, metadata, derive_dir):
         derive_logger = logging.getLogger(f'repub.derive.{job.id}')
         derive_logger.info(f"Regenerating PDF with OCR for {len(outfiles)} pages")
 
+        # If reduce_factor is specified, create reduced images
+        if derive_reduce_factor is not None:
+            import tempfile
+            temp_dir = tempfile.mkdtemp(prefix=f'derive_reduced_{job.id}_')
+            derive_logger.info(f"Reducing images by factor {derive_reduce_factor} in temporary directory: {temp_dir}")
+
+            reduced_outfiles = []
+            for pagenum, outfile in outfiles:
+                # Read the image
+                img = cv2.imread(outfile)
+                if img is None:
+                    derive_logger.warning(f"Failed to read image {outfile}, using original")
+                    reduced_outfiles.append((pagenum, outfile))
+                    continue
+
+                # Calculate new dimensions
+                height, width = img.shape[:2]
+                new_width = int(width * derive_reduce_factor)
+                new_height = int(height * derive_reduce_factor)
+
+                # Resize the image
+                reduced_img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+
+                # Save reduced image to temp directory
+                filename = os.path.basename(outfile)
+                reduced_path = os.path.join(temp_dir, filename)
+                cv2.imwrite(reduced_path, reduced_img)
+
+                reduced_outfiles.append((pagenum, reduced_path))
+                derive_logger.info(f"Reduced page {pagenum} from {width}x{height} to {new_width}x{new_height}")
+
+            # Use reduced images for PDF generation
+            outfiles = reduced_outfiles
+            derive_logger.info(f"Using {len(outfiles)} reduced images for PDF generation")
+
         # Generate PDF with OCR, HOCR, and text
         pdfs.save_pdf(outfiles, metadata, job.language, pdf_dest,
                       True, hocr_dest, text_dest, derive_logger)
@@ -1481,6 +1531,11 @@ def derive_pdf(job, identifier, metadata, derive_dir):
         logger.info(f"Generated PDF with OCR in derive directory: {pdf_dest}")
         logger.info(f"Generated HOCR in derive directory: {hocr_dest}")
         logger.info(f"Generated text in derive directory: {text_dest}")
+
+        # Clean up temporary directory if it was created
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+            logger.info(f"Cleaned up temporary directory: {temp_dir}")
 
         # Clean up output folder and related directories after successful PDF generation
         output_base_dir = job.get_output_dir()
@@ -1501,6 +1556,15 @@ def derive_pdf(job, identifier, metadata, derive_dir):
 
     except Exception as e:
         logger.error(f"Error generating PDF for job {job.id}: {str(e)}", exc_info=True)
+
+        # Clean up temporary directory if it exists
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+                logger.info(f"Cleaned up temporary directory: {temp_dir}")
+            except Exception as cleanup_error:
+                logger.error(f"Error cleaning up temporary directory: {str(cleanup_error)}")
+
         job.status = 'derive_failed'
         job.save()
         logger.error(f"Updated job {job.id} to derive_failed")
