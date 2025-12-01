@@ -1276,19 +1276,8 @@ def api_token_management(request):
     return render(request, 'repub_interface/api_token.html', context)
 
 
-@login_required
-@require_http_methods(["POST"])
-def derive_job(request, job_id):
-    """Derive a job by creating a directory with identifier and copying all relevant files"""
-    if request.user.is_staff:
-        job = get_object_or_404(ProcessingJob, id=job_id)
-    else:
-        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
-
-    if job.status not in ['completed', 'derive_failed']:
-        messages.error(request, 'Can only derive completed jobs or retry failed derivations.')
-        return redirect('job_detail', job_id=job_id)
-
+def run_derive_job(job):
+    """Background thread function to derive a job"""
     try:
         # Get metadata to extract the Identifier
         input_dir = job.get_input_dir()
@@ -1297,8 +1286,11 @@ def derive_job(request, job_id):
 
         identifier = metadata.get('/Identifier')
         if not identifier:
-            messages.error(request, 'No identifier found in job metadata. Cannot derive.')
-            return redirect('job_detail', job_id=job_id)
+            job.status = 'derive_failed'
+            job.error_message = 'No identifier found in job metadata.'
+            job.save()
+            logger.error(f"No identifier found for job {job.id}")
+            return
 
         # Create derive directory with the identifier name
         derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
@@ -1306,14 +1298,15 @@ def derive_job(request, job_id):
 
         derive_dir = os.path.join(derive_base_dir, identifier)
         if os.path.exists(derive_dir):
-            messages.error(request, f'Derive directory "{identifier}" already exists.')
-            return redirect('job_detail', job_id=job_id)
+            job.status = 'derive_failed'
+            job.error_message = f'Derive directory "{identifier}" already exists.'
+            job.save()
+            logger.error(f"Derive directory already exists: {derive_dir}")
+            return
 
         os.makedirs(derive_dir, exist_ok=True)
         logger.info(f"Created derive directory: {derive_dir}")
 
-        job.status = 'deriving'
-        job.save()
         # Copy input file
         if job.input_file and os.path.exists(job.input_file.path):
             input_filename = os.path.basename(job.input_file.path)
@@ -1362,9 +1355,10 @@ def derive_job(request, job_id):
 
         if not os.path.exists(hocr_path) or not os.path.exists(pdf_path) or \
                 not os.path.exists(text_path):
-            logger.info(f"HOCR file not found for job {job_id}, regenerating PDF with OCR in derive directory")
+            logger.info(f"HOCR file not found for job {job.id}, regenerating PDF with OCR in derive directory")
 
-            run_and_monitor_pdf(job, identifier, metadata, derive_dir)
+            # Generate PDF with OCR directly (removed the queue logic for now)
+            derive_pdf(job, identifier, metadata, derive_dir)
         else:
             # Copy existing PDF if it exists
             pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
@@ -1379,34 +1373,63 @@ def derive_job(request, job_id):
             shutil.copy2(text_path, text_dest)
             logger.info(f"Copied text file to: {text_dest}")
 
-        # Clean up output folder and related directories
-        output_base_dir = job.get_output_dir()
-        if os.path.exists(output_base_dir):
-            shutil.rmtree(output_base_dir)
-            logger.info(f"Cleaned up output directory: {output_base_dir}")
+            # Clean up output folder and related directories
+            output_base_dir = job.get_output_dir()
+            if os.path.exists(output_base_dir):
+                shutil.rmtree(output_base_dir)
+                logger.info(f"Cleaned up output directory: {output_base_dir}")
 
-        # Clean up uploads folder
-        upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job_id))
-        if os.path.exists(upload_base_dir):
-            shutil.rmtree(upload_base_dir)
-            logger.info(f"Cleaned up upload directory: {upload_base_dir}")
+            # Clean up uploads folder
+            upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
+            if os.path.exists(upload_base_dir):
+                shutil.rmtree(upload_base_dir)
+                logger.info(f"Cleaned up upload directory: {upload_base_dir}")
 
-        message_text = f'Job successfully derived to directory: {identifier}. <a href="/item/{identifier}/" class="alert-link">View derived files</a>'
-        messages.success(request, mark_safe(message_text))
-        logger.info(f"Successfully derived job {job_id} to {derive_dir}")
+            logger.info(f"Successfully derived job {job.id} to {derive_dir}")
 
-        job.is_derived = True
-        job.derived_identifier = identifier
-        job.derived_at = timezone.now()
-        job.status = 'derive_completed'
-        job.save()
-        logger.info(f"Updated job {job_id} with derived info: {identifier}")
- 
+            job.is_derived = True
+            job.derived_identifier = identifier
+            job.derived_at = timezone.now()
+            job.status = 'derive_completed'
+            job.save()
+            logger.info(f"Updated job {job.id} with derived info: {identifier}")
+
     except Exception as e:
         job.status = 'derive_failed'
+        job.error_message = str(e)
         job.save()
-        logger.error(f"Error deriving job {job_id}: {str(e)}", exc_info=True)
-        messages.error(request, f'Error deriving job: {str(e)}')
+        logger.error(f"Error deriving job {job.id}: {str(e)}", exc_info=True)
+
+
+@login_required
+@require_http_methods(["POST"])
+def derive_job(request, job_id):
+    """Derive a job by creating a directory with identifier and copying all relevant files"""
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+
+    if job.status not in ['completed', 'derive_failed']:
+        messages.error(request, 'Can only derive completed jobs or retry failed derivations.')
+        return redirect('job_detail', job_id=job_id)
+
+    # Check if job is already being derived to prevent duplicate submissions
+    if job.status == 'deriving':
+        logger.warning(f"Job {job.id} is already being derived. Ignoring duplicate request.")
+        return redirect('job_detail', job_id=job_id)
+
+    # Set job status to deriving
+    job.status = 'deriving'
+    job.error_message = ''
+    job.save()
+
+    # Start derivation in background thread
+    thread = threading.Thread(target=run_derive_job, args=(job,))
+    thread.start()
+
+    logger.info(f"Started derivation for job {job.id} in background thread")
+    messages.success(request, f'Job "{job.title or "Untitled"}" is being derived.')
 
     return redirect('job_detail', job_id=job_id)
 
