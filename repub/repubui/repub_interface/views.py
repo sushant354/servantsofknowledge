@@ -585,6 +585,21 @@ def process_job(job):
         metadata = pdfs.get_metadata(input_file_path)
     else:
         metadata = scandir.metadata
+
+    # Check if identifier is already derived
+    identifier = metadata.get('/Identifier')
+    if identifier:
+        derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
+        derive_dir = os.path.join(derive_base_dir, identifier)
+
+        if os.path.exists(derive_dir):
+            job.status = 'failed'
+            job.error_message = f'Job rejected: The identifier "<a href="/item/{identifier}/">{identifier}</a>" has already been derived.'
+            job.save()
+            job_logger.error(f"Job rejected: Identifier '{identifier}' already exists in derived directory: {derive_dir}")
+            loghandle.close()
+            return
+
     title = metadata.get('/Title')
     if title:
         job.title = title

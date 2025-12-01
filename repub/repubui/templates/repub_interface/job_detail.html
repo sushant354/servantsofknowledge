@@ -109,7 +109,7 @@
                         {% if job.error_message %}
                             <hr>
                             <p class="mb-0">Error details:</p>
-                            <pre class="mt-2">{{ job.error_message }}</pre>
+                            <pre class="mt-2">{{ job.error_message|safe }}</pre>
                         {% endif %}
                     </div>
 
@@ -157,7 +157,7 @@
                         {% if job.error_message %}
                             <hr>
                             <p class="mb-0">Error details:</p>
-                            <pre class="mt-2">{{ job.error_message }}</pre>
+                            <pre class="mt-2">{{ job.error_message|safe }}</pre>
                         {% endif %}
                     </div>
 
