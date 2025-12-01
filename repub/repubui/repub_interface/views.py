@@ -256,10 +256,22 @@ def job_detail(request, job_id):
             return redirect('job_detail', job_id=job.id)
     else:
         form = ProcessingOptionsForm(instance=job)
-        
+
+    # Check if cleanup directories exist
+    upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
+    output_base_dir = job.get_output_dir()
+    review_dir = job.get_review_dir()
+
+    has_directories_to_cleanup = (
+        os.path.exists(upload_base_dir) or
+        os.path.exists(output_base_dir) or
+        os.path.exists(review_dir)
+    )
+
     return render(request, 'repub_interface/job_detail.html', {
         'job': job,
-        'form': form
+        'form': form,
+        'has_directories_to_cleanup': has_directories_to_cleanup
     })
 
 def generate_files_for_review(scandir, thumbdir, job):
@@ -1795,3 +1807,72 @@ def delete_item(request, identifier):
         return redirect('item_directory', identifier=identifier)
 
     return redirect('all_items')
+
+
+@login_required
+@require_http_methods(["POST"])
+@csrf_exempt
+def cleanup_job(request, job_id):
+    """Clean up input and output directories for a job without deleting the job from database"""
+    # Allow admin users to cleanup any job, regular users can only cleanup their own jobs
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+
+    # Don't allow cleanup if job is currently processing
+    if job.status in ['processing', 'finalizing', 'deriving', 'preparing_review']:
+        messages.error(request, f'Cannot cleanup job while it is in {job.status} status.')
+        return redirect('job_detail', job_id=job_id)
+
+    directories_cleaned = []
+    errors = []
+
+    # Clean up input directory
+    upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
+    if os.path.exists(upload_base_dir):
+        try:
+            shutil.rmtree(upload_base_dir)
+            directories_cleaned.append(f'Input directory (uploads/{job.id})')
+            logger.info(f"User {request.user.username} cleaned up input directory for job {job.id}")
+        except Exception as e:
+            error_msg = f'Error cleaning input directory: {str(e)}'
+            errors.append(error_msg)
+            logger.error(f"Error cleaning input directory for job {job.id}: {str(e)}", exc_info=True)
+
+    # Clean up output directory
+    output_base_dir = job.get_output_dir()
+    if os.path.exists(output_base_dir):
+        try:
+            shutil.rmtree(output_base_dir)
+            directories_cleaned.append(f'Output directory (processed/{job.id})')
+            logger.info(f"User {request.user.username} cleaned up output directory for job {job.id}")
+        except Exception as e:
+            error_msg = f'Error cleaning output directory: {str(e)}'
+            errors.append(error_msg)
+            logger.error(f"Error cleaning output directory for job {job.id}: {str(e)}", exc_info=True)
+
+    # Clean up review directory if it exists
+    review_dir = job.get_review_dir()
+    if os.path.exists(review_dir):
+        try:
+            shutil.rmtree(review_dir)
+            directories_cleaned.append(f'Review directory (review/{job.id})')
+            logger.info(f"User {request.user.username} cleaned up review directory for job {job.id}")
+        except Exception as e:
+            error_msg = f'Error cleaning review directory: {str(e)}'
+            errors.append(error_msg)
+            logger.error(f"Error cleaning review directory for job {job.id}: {str(e)}", exc_info=True)
+
+    # Display results to user
+    if directories_cleaned:
+        cleaned_list = '<br>'.join([f'- {d}' for d in directories_cleaned])
+        messages.success(request, mark_safe(f'Successfully cleaned up directories for job "{job.title or "Untitled"}":<br>{cleaned_list}'))
+    else:
+        messages.info(request, f'No directories found to clean up for job "{job.title or "Untitled"}".')
+
+    if errors:
+        error_list = '<br>'.join([f'- {e}' for e in errors])
+        messages.error(request, mark_safe(f'Some errors occurred during cleanup:<br>{error_list}'))
+
+    return redirect('job_detail', job_id=job_id)

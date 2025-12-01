@@ -401,6 +401,12 @@
                         </button>
                     {% endif %}
 
+                    {% if has_directories_to_cleanup and job.status != 'processing' and job.status != 'finalizing' and job.status != 'deriving' and job.status != 'preparing_review' %}
+                        <button type="button" class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#cleanupJobModal">
+                            <i class="bi bi-trash"></i> Cleanup Directories
+                        </button>
+                    {% endif %}
+
                 </div>
             </div>
         </div>
@@ -576,6 +582,51 @@
                 <button type="submit" form="deriveJobForm" class="btn btn-success">
                     <i class="bi bi-box-arrow-up-right"></i> Confirm Derive
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cleanup Job Modal -->
+<div class="modal fade" id="cleanupJobModal" tabindex="-1" aria-labelledby="cleanupJobModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="cleanupJobModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Cleanup Job Directories
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <h6 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i>Are you sure you want to cleanup this job's directories?</h6>
+                    <ul class="mb-0">
+                        <li><strong>Input Directory:</strong> All uploaded files and extracted images will be deleted</li>
+                        <li><strong>Output Directory:</strong> All processed images, PDFs, and intermediate files will be deleted</li>
+                        <li><strong>Review Directory:</strong> Review files will be deleted if they exist</li>
+                        <li><strong>Job Record:</strong> The job record will remain in the database with all settings</li>
+                        <li><strong>Cannot Undo:</strong> This action cannot be undone - all files will be permanently deleted</li>
+                    </ul>
+                </div>
+                <div class="alert alert-info">
+                    <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Use this to:</h6>
+                    <ul class="mb-0">
+                        <li>Free up disk space while keeping job records</li>
+                        <li>Remove sensitive data from the server</li>
+                        <li>Clean up after successfully deriving a job</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <form method="post" action="{% url 'cleanup_job' job.id %}" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-trash"></i> Confirm Cleanup
+                    </button>
+                </form>
             </div>
         </div>
     </div>
