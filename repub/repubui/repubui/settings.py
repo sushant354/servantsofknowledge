@@ -79,12 +79,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'repubui.wsgi.application'
 # Database
+DBTYPE = os.getenv('DBTYPE', 'sqlite')
+
 DATABASE_OPTIONS = {
-    'local': {
+    'sqlite': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     },
-    'prod': {
+    'postgres': {
         'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
         'NAME': os.getenv('DB_NAME', 'repubdb'),
         'USER': os.getenv('DB_USER', 'repub'),
@@ -94,7 +96,7 @@ DATABASE_OPTIONS = {
     }
 }
 
-DATABASES = {'default': DATABASE_OPTIONS[DEPLOYMENT]}
+DATABASES = {'default': DATABASE_OPTIONS[DBTYPE]}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

@@ -1385,21 +1385,20 @@ def run_derive_job(job):
                 shutil.rmtree(upload_base_dir)
                 logger.info(f"Cleaned up upload directory: {upload_base_dir}")
 
-            logger.info(f"Successfully derived job {job.id} to {derive_dir}")
+        logger.info(f"Successfully derived job {job.id} to {derive_dir}")
 
-            job.is_derived = True
-            job.derived_identifier = identifier
-            job.derived_at = timezone.now()
-            job.status = 'derive_completed'
-            job.save()
-            logger.info(f"Updated job {job.id} with derived info: {identifier}")
+        job.is_derived = True
+        job.derived_identifier = identifier
+        job.derived_at = timezone.now()
+        job.status = 'derive_completed'
+        job.save()
+        logger.info(f"Updated job {job.id} with derived info: {identifier}")
 
     except Exception as e:
         job.status = 'derive_failed'
         job.error_message = str(e)
         job.save()
         logger.error(f"Error deriving job {job.id}: {str(e)}", exc_info=True)
-
 
 @login_required
 @require_http_methods(["POST"])

@@ -539,19 +539,17 @@
                         <li><strong>Input File Copy:</strong> The original input file will be copied to the derive directory</li>
                         <li><strong>Output Images:</strong> All output images will be zipped and copied to the derive directory</li>
                         <li><strong>Thumbnails:</strong> All thumbnail images will be zipped and copied to the derive directory</li>
-                        <li><strong>PDF, HOCR & Text:</strong> The final PDF, HOCR, and text files (if they exist) will be copied</li>
+                        <li><strong>PDF, HOCR & Text:</strong> The final PDF, HOCR, and text files (if they exist) will be copied or derived</li>
                         <li><strong>Main Thumbnail:</strong> The main thumbnail image (__ia_thumb.jpg) will be copied to the derive directory</li>
                         <li><strong>Database Record:</strong> Job will be marked as derived in the database</li>
                         <li><strong>Cleanup:</strong> Original output, upload, and thumbnail folders will be deleted to save space</li>
-                        <li><strong>Location:</strong> Files will be saved to <code>media/derived/[Identifier]/</code></li>
                     </ul>
                 </div>
                 <div class="alert alert-warning">
                     <h6 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i>Important:</h6>
                     <ul class="mb-0">
-                        <li>If a derive directory with the same Identifier already exists, it will be overwritten</li>
                         <li>After deriving, the job page will show the derived files instead of the output folder</li>
-                        <li>This action cannot be undone - original files will be permanently deleted</li>
+                        <li>This action cannot be undone - original files will be copied and the output directory will be deleted.</li>
                     </ul>
                 </div>
             </div>
