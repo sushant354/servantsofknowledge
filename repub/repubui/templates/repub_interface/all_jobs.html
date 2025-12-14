@@ -181,6 +181,9 @@
                                     <div>
                                         <strong>{{ job.title|default:"Untitled Job" }}</strong>
                                         <small class="d-block text-muted">ID: {{ job.id }}</small>
+                                        {% if job.identifier %}
+                                        <small class="d-block text-muted"><i class="bi bi-tag"></i> {{ job.identifier }}</small>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </td>
