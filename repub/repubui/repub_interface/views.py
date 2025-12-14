@@ -98,11 +98,42 @@ def all_jobs(request):
     if status_filter and status_filter in ['completed', 'processing', 'reviewing', 'failed', 'finalizing', 'preparing_review']:
         jobs_list = jobs_list.filter(status=status_filter)
 
+    # Get search parameters
+    title_query = request.GET.get('title', '').strip()
+    identifier_query = request.GET.get('identifier', '').strip()
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
+
+    # Apply search filters
+    if title_query:
+        jobs_list = jobs_list.filter(title__icontains=title_query)
+
+    if identifier_query:
+        jobs_list = jobs_list.filter(identifier__icontains=identifier_query)
+
+    if date_from:
+        try:
+            from_date = timezone.datetime.strptime(date_from, '%Y-%m-%d')
+            from_date = timezone.make_aware(from_date, timezone.get_current_timezone())
+            jobs_list = jobs_list.filter(created_at__gte=from_date)
+        except ValueError:
+            pass
+
+    if date_to:
+        try:
+            to_date = timezone.datetime.strptime(date_to, '%Y-%m-%d')
+            # Set to end of day
+            to_date = to_date.replace(hour=23, minute=59, second=59)
+            to_date = timezone.make_aware(to_date, timezone.get_current_timezone())
+            jobs_list = jobs_list.filter(created_at__lte=to_date)
+        except ValueError:
+            pass
+
     paginator = Paginator(jobs_list, 10)  # Show 10 jobs per page
     page_number = request.GET.get('page')
     jobs = paginator.get_page(page_number)
 
-    # Get all jobs for statistics (not filtered by status, but filtered by user if not staff)
+    # Get all jobs for statistics (not filtered by status or search, but filtered by user if not staff)
     if request.user.is_staff:
         all_jobs_list = ProcessingJob.objects.all()
     else:
@@ -586,9 +617,24 @@ def process_job(job):
     else:
         metadata = scandir.metadata
 
-    # Check if identifier is already derived
+    # Check if identifier is already being processed or derived
     identifier = metadata.get('/Identifier')
     if identifier:
+        # Check if there's already a job with this identifier being processed
+        processing_statuses = ['pending', 'processing', 'reviewing', 'finalizing', 'deriving']
+        existing_job = ProcessingJob.objects.filter(
+            identifier=identifier,
+            status__in=processing_statuses
+        ).exclude(id=job.id).first()
+
+        if existing_job:
+            job.status = 'failed'
+            job.error_message = f'Job rejected: Identifier "{identifier}" is already being processed by <a href="/job/{existing_job.id}/">another job</a>.'
+            job.save()
+            job_logger.error(f"Job rejected: Identifier '{identifier}' is already being processed by job {existing_job.id}")
+            loghandle.close()
+            return
+
         derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
         derive_dir = os.path.join(derive_base_dir, identifier)
 
@@ -603,7 +649,11 @@ def process_job(job):
     title = metadata.get('/Title')
     if title:
         job.title = title
-        job.save()    
+        job.save()
+
+    # Save identifier to job
+    job.identifier = identifier
+    job.save()
 
     if args.drawcontours:
         args.thumbnaildir = job.get_thumbnail_dir()
