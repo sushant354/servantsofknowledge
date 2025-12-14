@@ -9,13 +9,13 @@ from repub.utils import pdfs
 
 
 class Command(BaseCommand):
-    help = 'Populate identifier field for existing jobs that are missing it'
+    help = 'Populate identifier and author fields for existing jobs that are missing them'
 
     def add_arguments(self, parser):
         parser.add_argument(
             '--all',
             action='store_true',
-            help='Update all jobs, even if they already have an identifier',
+            help='Update all jobs, even if they already have identifier and author fields',
         )
         parser.add_argument(
             '--dry-run',
@@ -31,8 +31,16 @@ class Command(BaseCommand):
             jobs = ProcessingJob.objects.all()
             self.stdout.write(f"Processing all {jobs.count()} jobs...")
         else:
-            jobs = ProcessingJob.objects.filter(identifier__isnull=True) | ProcessingJob.objects.filter(identifier='')
-            self.stdout.write(f"Processing {jobs.count()} jobs without identifiers...")
+            jobs = ProcessingJob.objects.filter(
+                identifier__isnull=True
+            ) | ProcessingJob.objects.filter(
+                identifier=''
+            ) | ProcessingJob.objects.filter(
+                author__isnull=True
+            ) | ProcessingJob.objects.filter(
+                author=''
+            )
+            self.stdout.write(f"Processing {jobs.count()} jobs without identifiers or authors...")
 
         updated_count = 0
         error_count = 0
@@ -87,17 +95,29 @@ class Command(BaseCommand):
 
                 if metadata:
                     identifier = metadata.get('/Identifier')
-                    
-                    if identifier:
+                    author = metadata.get('/Creator')
+
+                    if identifier or author:
+                        updates = []
+                        if identifier:
+                            updates.append(f"identifier to '{identifier}'")
+                        if author:
+                            updates.append(f"author to '{author}'")
+
+                        update_msg = ", ".join(updates)
+
                         if options['dry_run']:
-                            self.stdout.write(self.style.SUCCESS(f"Job {job.id}: Would set identifier to '{identifier}'"))
+                            self.stdout.write(self.style.SUCCESS(f"Job {job.id}: Would set {update_msg}"))
                         else:
-                            job.identifier = identifier
+                            if identifier:
+                                job.identifier = identifier
+                            if author:
+                                job.author = author
                             job.save()
-                            self.stdout.write(self.style.SUCCESS(f"Job {job.id}: Set identifier to '{identifier}'"))
+                            self.stdout.write(self.style.SUCCESS(f"Job {job.id}: Set {update_msg}"))
                         updated_count += 1
                     else:
-                        self.stdout.write(self.style.WARNING(f"Job {job.id}: No identifier found in metadata"))
+                        self.stdout.write(self.style.WARNING(f"Job {job.id}: No identifier or author found in metadata"))
                         skipped_count += 1
                 else:
                     self.stdout.write(self.style.WARNING(f"Job {job.id}: Could not extract metadata"))

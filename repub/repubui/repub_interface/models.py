@@ -30,6 +30,7 @@ class ProcessingJob(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, related_name='processing_jobs', null=True, blank=True)
     title = models.CharField(max_length=255, blank=True)
     identifier = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    author = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, default='pending',
                               choices=[

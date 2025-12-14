@@ -101,6 +101,7 @@ def all_jobs(request):
     # Get search parameters
     title_query = request.GET.get('title', '').strip()
     identifier_query = request.GET.get('identifier', '').strip()
+    author_query = request.GET.get('author', '').strip()
     date_from = request.GET.get('date_from', '').strip()
     date_to = request.GET.get('date_to', '').strip()
 
@@ -110,6 +111,9 @@ def all_jobs(request):
 
     if identifier_query:
         jobs_list = jobs_list.filter(identifier__icontains=identifier_query)
+
+    if author_query:
+        jobs_list = jobs_list.filter(author__icontains=author_query)
 
     if date_from:
         try:
@@ -651,6 +655,11 @@ def process_job(job):
     if title:
         job.title = title
         job.save()
+
+    # Save author to job
+    author = metadata.get('/Creator')
+    if author:
+        job.author = author
 
     # Save identifier to job
     job.identifier = identifier
