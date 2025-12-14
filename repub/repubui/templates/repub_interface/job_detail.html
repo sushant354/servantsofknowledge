@@ -29,7 +29,20 @@
                     {% endfor %}
                 {% endif %}
 
-                {% if job.status == 'processing' %}
+                {% if job.status == 'pending' %}
+                    <div class="alert alert-secondary">
+                        <h4 class="alert-heading">Job is pending</h4>
+                        <p>Your document is waiting to be processed.</p>
+                    </div>
+
+                    <button type="button" class="btn btn-danger btn-sm mb-3 me-3" data-bs-toggle="modal" data-bs-target="#stopJobModal">
+                        <i class="bi bi-stop-fill"></i> Cancel Job
+                    </button>
+
+                    <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-sm mb-3" title="View input directory">
+                        <i class="bi bi-folder-plus"></i> Input
+                    </a>
+                {% elif job.status == 'processing' %}
                     <div class="alert alert-info">
                         <h4 class="alert-heading">Processing in progress!</h4>
                         <p>Your document is currently being processed. This page will update automatically.</p>
@@ -37,15 +50,15 @@
                             <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
                         </div>
                     </div>
-                    
+
                     <button type="button" class="btn btn-danger btn-sm mb-3 me-3" data-bs-toggle="modal" data-bs-target="#stopJobModal">
                         <i class="bi bi-stop-fill"></i> Stop Processing
                     </button>
-                    
+
                     <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm mb-3 me-2" title="View output directory">
                         <i class="bi bi-folder"></i> Files
                     </a>
-                    
+
                     <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-sm mb-3" title="View input directory">
                         <i class="bi bi-folder-plus"></i> Input
                     </a>
@@ -488,22 +501,28 @@
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
                 <h5 class="modal-title" id="stopJobModalLabel">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Stop Job Processing
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>{% if job.status == 'pending' %}Cancel Job{% else %}Stop Job Processing{% endif %}
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="alert alert-warning">
-                    <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Important: How "Stop" Actually Works</h6>
+                    <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Important: {% if job.status == 'pending' %}Canceling this Job{% else %}How "Stop" Actually Works{% endif %}</h6>
                     <ul class="mb-3">
+                        {% if job.status == 'pending' %}
+                        <li><strong>Job Status Change:</strong> The job will be marked as <span class="badge bg-danger">failed</span></li>
+                        <li><strong>No Processing Started:</strong> Since the job hasn't started processing yet, it will be immediately canceled</li>
+                        <li><strong>Input Files Retained:</strong> Your uploaded files will remain available</li>
+                        {% else %}
                         <li><strong>Background Process:</strong> The actual processing cannot be immediately stopped</li>
                         <li><strong>Job Status Change:</strong> The job will be marked as <span class="badge bg-danger">failed</span></li>
                         <li><strong>Processing Continues:</strong> Background processing may continue for a short time</li>
                         <li><strong>Results Lost:</strong> Any partial progress will be discarded</li>
+                        {% endif %}
                     </ul>
                 </div>
                 <div class="alert alert-info">
-                    <h6 class="alert-heading"><i class="bi bi-arrow-clockwise me-2"></i>After Stopping, You Can:</h6>
+                    <h6 class="alert-heading"><i class="bi bi-arrow-clockwise me-2"></i>After {% if job.status == 'pending' %}Canceling{% else %}Stopping{% endif %}, You Can:</h6>
                     <ul class="mb-0">
                         <li>Retry the job with the same settings</li>
                         <li>Modify processing parameters and resubmit</li>
@@ -519,7 +538,7 @@
                 <form method="post" action="{% url 'stop_job' job.id %}" style="display: inline;">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger">
-                        <i class="bi bi-stop-fill"></i> Mark as Failed
+                        <i class="bi bi-stop-fill"></i> {% if job.status == 'pending' %}Cancel Job{% else %}Mark as Failed{% endif %}
                     </button>
                 </form>
             </div>

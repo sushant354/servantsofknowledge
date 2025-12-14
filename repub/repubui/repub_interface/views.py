@@ -264,6 +264,7 @@ def run_job(job):
     except Exception as e:
         logger.exception('Error in process_job %s error: %s', job.id, e)
         job.status = 'failed'
+        job.error_message = str(e)
         job.save()
 
 @login_required
@@ -730,12 +731,17 @@ def stop_job(request, job_id):
         else:
             job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
         
-        # Only allow stopping jobs that are currently processing
-        if job.status in ['processing', 'finalizing']:
+        # Allow stopping jobs that are pending, processing, or finalizing
+        if job.status in ['pending', 'processing', 'finalizing']:
+            original_status = job.status
             job.status = 'failed'
-            job.error_message = 'Job stopped by user'
+            if original_status == 'pending':
+                job.error_message = 'Job canceled by user'
+                messages.success(request, f'Job "{job.title or "Untitled"}" has been canceled.')
+            else:
+                job.error_message = 'Job stopped by user'
+                messages.success(request, f'Job "{job.title or "Untitled"}" has been stopped.')
             job.save()
-            messages.success(request, f'Job "{job.title or "Untitled"}" has been stopped.')
         else:
             messages.warning(request, f'Job "{job.title or "Untitled"}" cannot be stopped in its current state.')
         
