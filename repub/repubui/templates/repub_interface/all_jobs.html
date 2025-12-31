@@ -102,6 +102,16 @@
         </a>
     </div>
     <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+        <a href="?status=pending{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
+            <div class="card bg-secondary text-white clickable-card{% if request.GET.status == 'pending' %} filter-active{% endif %}">
+                <div class="card-body text-center">
+                    <h6 class="card-title">Pending</h6>
+                    <h4 class="card-text">{{ pending_jobs }}</h4>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
         <a href="?status=completed{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-success text-white clickable-card{% if request.GET.status == 'completed' %} filter-active{% endif %}">
                 <div class="card-body text-center">
@@ -208,12 +218,15 @@
                             <td>
                                 <span class="badge fs-6
                                     {% if job.status == 'completed' %}bg-success
+                                    {% elif job.status == 'pending' %}bg-secondary
                                     {% elif job.status == 'processing' or job.status == 'preparing_review' %}bg-warning text-dark
                                     {% elif job.status == 'reviewing' %}bg-info
                                     {% elif job.status == 'finalizing' %}bg-secondary
                                     {% elif job.status == 'failed' %}bg-danger
                                     {% else %}bg-secondary{% endif %}">
-                                    {% if job.status == 'reviewing' %}
+                                    {% if job.status == 'pending' %}
+                                        <i class="bi bi-hourglass"></i> Pending
+                                    {% elif job.status == 'reviewing' %}
                                         <i class="bi bi-eye"></i> Review Required
                                     {% elif job.status == 'processing' %}
                                         <i class="bi bi-gear-fill"></i> Processing
@@ -328,12 +341,12 @@
 
 {% block extra_js %}
 <script>
-    // Auto-refresh for jobs that are still processing
+    // Auto-refresh for jobs that are still processing or pending
     document.addEventListener('DOMContentLoaded', function() {
-        const processingJobs = document.querySelectorAll('[data-job-status="processing"], [data-job-status="preparing_review"], [data-job-status="finalizing"]');
+        const processingJobs = document.querySelectorAll('[data-job-status="pending"], [data-job-status="processing"], [data-job-status="preparing_review"], [data-job-status="finalizing"]');
 
         if (processingJobs.length > 0) {
-            // Refresh the page every 30 seconds if there are processing jobs
+            // Refresh the page every 30 seconds if there are processing or pending jobs
             setTimeout(function() {
                 window.location.reload();
             }, 30000);

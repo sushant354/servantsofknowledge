@@ -95,7 +95,7 @@ def all_jobs(request):
 
     # Get status filter from query parameters
     status_filter = request.GET.get('status')
-    if status_filter and status_filter in ['completed', 'processing', 'reviewing', 'failed', 'finalizing', 'preparing_review']:
+    if status_filter and status_filter in ['pending', 'completed', 'processing', 'reviewing', 'failed', 'finalizing', 'preparing_review']:
         jobs_list = jobs_list.filter(status=status_filter)
 
     # Get search parameters
@@ -146,6 +146,7 @@ def all_jobs(request):
     context = {
         'jobs': jobs,
         'total_jobs': all_jobs_list.count(),
+        'pending_jobs': all_jobs_list.filter(status='pending').count(),
         'completed_jobs': all_jobs_list.filter(status='completed').count(),
         'processing_jobs': all_jobs_list.filter(status='processing').count(),
         'failed_jobs': all_jobs_list.filter(status='failed').count(),
