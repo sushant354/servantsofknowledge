@@ -133,7 +133,7 @@ def all_jobs(request):
         except ValueError:
             pass
 
-    paginator = Paginator(jobs_list, 10)  # Show 10 jobs per page
+    paginator = Paginator(jobs_list, 20)  # Show 20 jobs per page
     page_number = request.GET.get('page')
     jobs = paginator.get_page(page_number)
 
