@@ -155,27 +155,64 @@
 
 <!-- Jobs Table -->
 <div class="card shadow">
-    <div class="card-header bg-light">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Processing Jobs</h5>
+        {% if request.GET.status == 'failed' %}
+        <div class="d-flex gap-2 align-items-center">
+            <button type="button" id="selectAllBtn" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-check-square"></i> Select All
+            </button>
+            <button type="button" id="retrySelectedBtn" class="btn btn-sm btn-primary" disabled>
+                <i class="bi bi-arrow-clockwise"></i> Retry Selected (<span id="selectedCount">0</span>)
+            </button>
+        </div>
+        {% elif request.GET.status == 'processing' or request.GET.status == 'pending' %}
+        <div class="d-flex gap-2 align-items-center">
+            <button type="button" id="selectAllBtn" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-check-square"></i> Select All
+            </button>
+            <button type="button" id="stopSelectedBtn" class="btn btn-sm btn-danger" disabled>
+                <i class="bi bi-stop-circle"></i> Stop Selected (<span id="selectedCount">0</span>)
+            </button>
+        </div>
+        {% endif %}
     </div>
     <div class="card-body p-0">
         {% if jobs %}
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th style="width: 140px;">Preview</th>
-                            <th>Title</th>
-                            {% if user.is_staff %}<th>Owner</th>{% endif %}
-                            <th>Status</th>
-                            <th>Input Type</th>
-                            <th>Created</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            {% if request.GET.status == 'failed' %}
+            <form id="bulkActionForm" method="post" action="{% url 'bulk_retry_jobs' %}">
+            {% elif request.GET.status == 'processing' or request.GET.status == 'pending' %}
+            <form id="bulkActionForm" method="post" action="{% url 'bulk_stop_jobs' %}">
+            {% else %}
+            <form id="bulkActionForm">
+            {% endif %}
+                {% csrf_token %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                {% if request.GET.status == 'failed' or request.GET.status == 'processing' or request.GET.status == 'pending' %}
+                                <th style="width: 40px;">
+                                    <input type="checkbox" id="selectAllCheckbox" class="form-check-input" title="Select all jobs">
+                                </th>
+                                {% endif %}
+                                <th style="width: 140px;">Preview</th>
+                                <th>Title</th>
+                                {% if user.is_staff %}<th>Owner</th>{% endif %}
+                                <th>Status</th>
+                                <th>Input Type</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
                         {% for job in jobs %}
                         <tr>
+                            {% if request.GET.status == 'failed' or request.GET.status == 'processing' or request.GET.status == 'pending' %}
+                            <td class="text-center">
+                                <input type="checkbox" name="job_ids" value="{{ job.id }}" class="form-check-input job-checkbox">
+                            </td>
+                            {% endif %}
                             <td class="text-center">
                                 {% if job.get_thumbnail_url %}
                                     <a href="{% url 'job_detail' job.id %}">
@@ -282,6 +319,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+            </form>
             </div>
 
             <!-- Pagination -->
@@ -350,6 +388,72 @@
             setTimeout(function() {
                 window.location.reload();
             }, 30000);
+        }
+
+        // Bulk action functionality for failed/processing/pending jobs
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        const selectAllBtn = document.getElementById('selectAllBtn');
+        const retrySelectedBtn = document.getElementById('retrySelectedBtn');
+        const stopSelectedBtn = document.getElementById('stopSelectedBtn');
+        const jobCheckboxes = document.querySelectorAll('.job-checkbox');
+        const selectedCountSpan = document.getElementById('selectedCount');
+        const bulkActionForm = document.getElementById('bulkActionForm');
+
+        if (selectAllCheckbox && selectAllBtn && (retrySelectedBtn || stopSelectedBtn)) {
+            const actionBtn = retrySelectedBtn || stopSelectedBtn;
+            const actionType = retrySelectedBtn ? 'retry' : 'stop';
+
+            // Update selected count and button state
+            function updateSelectedCount() {
+                const checkedCount = document.querySelectorAll('.job-checkbox:checked').length;
+                selectedCountSpan.textContent = checkedCount;
+                actionBtn.disabled = checkedCount === 0;
+
+                // Update select all checkbox state
+                const allChecked = checkedCount === jobCheckboxes.length && jobCheckboxes.length > 0;
+                const someChecked = checkedCount > 0 && checkedCount < jobCheckboxes.length;
+                selectAllCheckbox.checked = allChecked;
+                selectAllCheckbox.indeterminate = someChecked;
+            }
+
+            // Select all checkbox handler
+            selectAllCheckbox.addEventListener('change', function() {
+                jobCheckboxes.forEach(checkbox => {
+                    checkbox.checked = this.checked;
+                });
+                updateSelectedCount();
+            });
+
+            // Select all button handler
+            selectAllBtn.addEventListener('click', function() {
+                const allChecked = document.querySelectorAll('.job-checkbox:checked').length === jobCheckboxes.length;
+                jobCheckboxes.forEach(checkbox => {
+                    checkbox.checked = !allChecked;
+                });
+                updateSelectedCount();
+            });
+
+            // Individual checkbox change handler
+            jobCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', updateSelectedCount);
+            });
+
+            // Action button handler
+            actionBtn.addEventListener('click', function() {
+                const checkedCount = document.querySelectorAll('.job-checkbox:checked').length;
+                if (checkedCount > 0) {
+                    const confirmMessage = actionType === 'retry'
+                        ? `Are you sure you want to retry ${checkedCount} selected job${checkedCount > 1 ? 's' : ''}?`
+                        : `Are you sure you want to stop ${checkedCount} selected job${checkedCount > 1 ? 's' : ''}?`;
+
+                    if (confirm(confirmMessage)) {
+                        bulkActionForm.submit();
+                    }
+                }
+            });
+
+            // Initialize count
+            updateSelectedCount();
         }
     });
 </script>

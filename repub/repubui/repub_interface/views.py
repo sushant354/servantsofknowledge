@@ -252,7 +252,7 @@ def run_and_monitor_job(job):
     while True:
         processing_count = ProcessingJob.objects.filter(status='processing').count()
 
-        if processing_count < max_concurrent_jobs:
+        if processing_count <= max_concurrent_jobs:
             # Start processing in background thread
             logger.info(f"Starting job {job.id}. Current processing jobs: {processing_count}/{max_concurrent_jobs}")
             run_job(job)
@@ -740,23 +740,17 @@ def stop_job(request, job_id):
             job = get_object_or_404(ProcessingJob, id=job_id)
         else:
             job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
-        
-        # Allow stopping jobs that are pending, processing, or finalizing
-        if job.status in ['pending', 'processing', 'finalizing']:
-            original_status = job.status
-            job.status = 'failed'
-            if original_status == 'pending':
-                job.error_message = 'Job canceled by user'
+
+        if stop_single_job(job):
+            if 'canceled' in job.error_message:
                 messages.success(request, f'Job "{job.title or "Untitled"}" has been canceled.')
             else:
-                job.error_message = 'Job stopped by user'
                 messages.success(request, f'Job "{job.title or "Untitled"}" has been stopped.')
-            job.save()
         else:
             messages.warning(request, f'Job "{job.title or "Untitled"}" cannot be stopped in its current state.')
-        
+
         return redirect('job_detail', job_id=job.id)
-        
+
     except Exception as e:
         logger.error(f"Error stopping job {job_id}: {str(e)}", exc_info=True)
         messages.error(request, 'An error occurred while stopping the job.')
@@ -1302,17 +1296,50 @@ def reject_review(request, job_id):
     return redirect('job_detail', job_id=job_id)
 
 
-@login_required
-@require_http_methods(["POST"])
-def retry_job(request, job_id):
-    """Retry job with same settings"""
-    # Allow admin users to retry any job, regular users can only retry their own jobs
-    if request.user.is_staff:
-        job = get_object_or_404(ProcessingJob, id=job_id)
+def stop_single_job(job):
+    """
+    Helper function to stop a single job.
+    Sets job status to failed with appropriate error message.
+
+    Args:
+        job: ProcessingJob instance to stop
+
+    Returns:
+        bool: True if job was stopped, False if job cannot be stopped
+
+    Raises:
+        Exception: If there's an error during stop
+    """
+    if job.status not in ['pending', 'processing', 'finalizing']:
+        return False
+
+    original_status = job.status
+    job.status = 'failed'
+
+    if original_status == 'pending':
+        job.error_message = 'Job canceled by user'
     else:
-        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
-    job.status = 'processing'
+        job.error_message = 'Job stopped by user'
+
     job.save()
+    return True
+
+
+def retry_single_job(job):
+    """
+    Helper function to retry a single job.
+    Cleans up output directory and starts the job processing in a background thread.
+
+    Args:
+        job: ProcessingJob instance to retry
+
+    Raises:
+        Exception: If there's an error during retry setup
+    """
+    job.status = 'pending'
+    job.error_message = ''
+    job.save()
+
     output_dir = job.get_output_dir()
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
@@ -1322,10 +1349,115 @@ def retry_job(request, job_id):
 
         thumbnaildir = os.path.join(output_dir, 'thumbnails')
         os.makedirs(thumbnaildir, exist_ok=True)
+
     thread = threading.Thread(target=run_and_monitor_job, args=(job,))
     thread.start()
-    
+
+
+@login_required
+@require_http_methods(["POST"])
+def retry_job(request, job_id):
+    """Retry job with same settings"""
+    # Allow admin users to retry any job, regular users can only retry their own jobs
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+
+    try:
+        retry_single_job(job)
+        messages.success(request, f'Job "{job.title or "Untitled"}" has been queued for retry.')
+    except Exception as e:
+        logger.error(f"Error retrying job {job.id}: {str(e)}", exc_info=True)
+        messages.error(request, f'Error retrying job: {str(e)}')
+
     return redirect('job_detail', job_id=job_id)
+
+
+@login_required
+@require_http_methods(["POST"])
+@csrf_exempt
+def bulk_retry_jobs(request):
+    """Retry multiple selected failed jobs"""
+    job_ids = request.POST.getlist('job_ids')
+
+    if not job_ids:
+        messages.warning(request, 'No jobs selected for retry.')
+        return redirect('all_jobs')
+
+    # Filter jobs based on user permissions
+    if request.user.is_staff:
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status='failed')
+    else:
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status='failed', user=request.user)
+
+    retry_count = 0
+    failed_count = 0
+
+    for job in jobs:
+        try:
+            retry_single_job(job)
+            retry_count += 1
+            logger.info(f"User {request.user.username} retried job {job.id}")
+        except Exception as e:
+            failed_count += 1
+            logger.error(f"Error retrying job {job.id}: {str(e)}", exc_info=True)
+            messages.error(request, f'Error retrying job "{job.title or job.id}": {str(e)}')
+
+    if retry_count > 0:
+        messages.success(request, f'Successfully queued {retry_count} job{"s" if retry_count > 1 else ""} for retry.')
+
+    if failed_count > 0:
+        messages.warning(request, f'{failed_count} job{"s" if failed_count > 1 else ""} could not be retried.')
+
+    if retry_count == 0 and failed_count == 0:
+        messages.warning(request, 'No jobs were retried. Please ensure selected jobs are in failed status.')
+
+    return redirect('all_jobs')
+
+
+@login_required
+@require_http_methods(["POST"])
+@csrf_exempt
+def bulk_stop_jobs(request):
+    """Stop multiple selected processing/pending jobs"""
+    job_ids = request.POST.getlist('job_ids')
+
+    if not job_ids:
+        messages.warning(request, 'No jobs selected to stop.')
+        return redirect('all_jobs')
+
+    # Filter jobs based on user permissions
+    if request.user.is_staff:
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['pending', 'processing', 'finalizing'])
+    else:
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['pending', 'processing', 'finalizing'], user=request.user)
+
+    stop_count = 0
+    failed_count = 0
+
+    for job in jobs:
+        try:
+            if stop_single_job(job):
+                stop_count += 1
+                logger.info(f"User {request.user.username} stopped job {job.id}")
+            else:
+                failed_count += 1
+        except Exception as e:
+            failed_count += 1
+            logger.error(f"Error stopping job {job.id}: {str(e)}", exc_info=True)
+            messages.error(request, f'Error stopping job "{job.title or job.id}": {str(e)}')
+
+    if stop_count > 0:
+        messages.success(request, f'Successfully stopped {stop_count} job{"s" if stop_count > 1 else ""}.')
+
+    if failed_count > 0:
+        messages.warning(request, f'{failed_count} job{"s" if failed_count > 1 else ""} could not be stopped.')
+
+    if stop_count == 0 and failed_count == 0:
+        messages.warning(request, 'No jobs were stopped. Please ensure selected jobs are in processing, pending, or finalizing status.')
+
+    return redirect('all_jobs')
 
 
 @login_required
@@ -1549,7 +1681,7 @@ def run_and_monitor_pdf(job, identifier, metadata, derive_dir):
     while True:
         processing_count = ProcessingJob.objects.filter(status='deriving').count()
 
-        if processing_count < max_deriving_jobs:
+        if processing_count <= max_deriving_jobs:
             # Start processing in background thread
             logger.info(f"Starting job {job.id}. Current processing jobs: {processing_count}/{max_deriving_jobs}")
             derive_pdf(job, identifier, metadata, derive_dir) 
