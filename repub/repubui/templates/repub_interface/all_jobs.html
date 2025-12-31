@@ -25,6 +25,13 @@
     transform: scale(1.1);
     box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 }
+th a {
+    cursor: pointer;
+    user-select: none;
+}
+th a:hover {
+    text-decoration: underline !important;
+}
 </style>
 {% endblock %}
 
@@ -201,7 +208,32 @@
                                 {% if user.is_staff %}<th>Owner</th>{% endif %}
                                 <th>Status</th>
                                 <th>Input Type</th>
-                                <th>Created</th>
+                                <th>
+                                    <a href="?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}sort_by=created_at&sort_order={% if sort_by == 'created_at' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
+                                       class="text-decoration-none text-dark">
+                                        Created
+                                        {% if sort_by == 'created_at' %}
+                                            {% if sort_order == 'asc' %}
+                                                <i class="bi bi-arrow-up"></i>
+                                            {% else %}
+                                                <i class="bi bi-arrow-down"></i>
+                                            {% endif %}
+                                        {% endif %}
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}sort_by=processing_started_at&sort_order={% if sort_by == 'processing_started_at' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
+                                       class="text-decoration-none text-dark">
+                                        Processing Started
+                                        {% if sort_by == 'processing_started_at' %}
+                                            {% if sort_order == 'asc' %}
+                                                <i class="bi bi-arrow-up"></i>
+                                            {% else %}
+                                                <i class="bi bi-arrow-down"></i>
+                                            {% endif %}
+                                        {% endif %}
+                                    </a>
+                                </th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -294,6 +326,14 @@
                                 <small class="d-block text-muted">{{ job.created_at|date:"M d, Y H:i" }}</small>
                             </td>
                             <td>
+                                {% if job.processing_started_at %}
+                                    <span title="{{ job.processing_started_at }}">{{ job.processing_started_at|timesince }} ago</span>
+                                    <small class="d-block text-muted">{{ job.processing_started_at|date:"M d, Y H:i" }}</small>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 <div class="btn-group" role="group">
                                     <a href="{% url 'job_detail' job.id %}" class="btn btn-outline-primary btn-sm">
                                         <i class="bi bi-eye"></i> View
@@ -329,10 +369,10 @@
                         <ul class="pagination justify-content-center mb-0">
                             {% if jobs.has_previous %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?page=1{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">First</a>
+                                    <a class="page-link" href="?page=1{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">First</a>
                                 </li>
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ jobs.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">Previous</a>
+                                    <a class="page-link" href="?page={{ jobs.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">Previous</a>
                                 </li>
                             {% endif %}
 
@@ -343,17 +383,17 @@
                                     </li>
                                 {% elif i > jobs.number|add:'-3' and i < jobs.number|add:'3' %}
                                     <li class="page-item">
-                                        <a class="page-link" href="?page={{ i }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">{{ i }}</a>
+                                        <a class="page-link" href="?page={{ i }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">{{ i }}</a>
                                     </li>
                                 {% endif %}
                             {% endfor %}
 
                             {% if jobs.has_next %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ jobs.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">Next</a>
+                                    <a class="page-link" href="?page={{ jobs.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">Next</a>
                                 </li>
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ jobs.paginator.num_pages }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">Last</a>
+                                    <a class="page-link" href="?page={{ jobs.paginator.num_pages }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">Last</a>
                                 </li>
                             {% endif %}
                         </ul>

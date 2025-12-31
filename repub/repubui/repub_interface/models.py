@@ -81,6 +81,9 @@ class ProcessingJob(models.Model):
     needs_review = models.BooleanField(default=False)
     reviewed = models.BooleanField(default=False)
 
+    # Processing tracking
+    processing_started_at = models.DateTimeField(blank=True, null=True)
+
     # Derive tracking
     is_derived = models.BooleanField(default=False)
     derived_identifier = models.CharField(max_length=255, blank=True, null=True)

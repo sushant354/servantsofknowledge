@@ -11,6 +11,7 @@ import re
 from PIL import Image
 from django.shortcuts import render, redirect, get_object_or_404
 from django.conf import settings
+from django.db import models
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -89,9 +90,32 @@ def login_or_token_required(view_func):
 def all_jobs(request):
     # Staff users can see all jobs, regular users only see their own jobs
     if request.user.is_staff:
-        jobs_list = ProcessingJob.objects.all().order_by('-created_at')
+        jobs_list = ProcessingJob.objects.all()
     else:
-        jobs_list = ProcessingJob.objects.filter(user=request.user).order_by('-created_at')
+        jobs_list = ProcessingJob.objects.filter(user=request.user)
+
+    # Get sorting parameters
+    sort_by = request.GET.get('sort_by', 'created_at')
+    sort_order = request.GET.get('sort_order', 'desc')
+
+    # Validate sort_by parameter
+    allowed_sort_fields = ['created_at', 'processing_started_at']
+    if sort_by not in allowed_sort_fields:
+        sort_by = 'created_at'
+
+    # Apply sorting
+    if sort_order == 'asc':
+        # For processing_started_at, nulls should be last when ascending
+        if sort_by == 'processing_started_at':
+            jobs_list = jobs_list.order_by(models.F('processing_started_at').asc(nulls_last=True))
+        else:
+            jobs_list = jobs_list.order_by(sort_by)
+    else:
+        # For processing_started_at, nulls should be last when descending too
+        if sort_by == 'processing_started_at':
+            jobs_list = jobs_list.order_by(models.F('processing_started_at').desc(nulls_last=True))
+        else:
+            jobs_list = jobs_list.order_by(f'-{sort_by}')
 
     # Get status filter from query parameters
     status_filter = request.GET.get('status')
@@ -151,6 +175,8 @@ def all_jobs(request):
         'processing_jobs': all_jobs_list.filter(status='processing').count(),
         'failed_jobs': all_jobs_list.filter(status='failed').count(),
         'reviewing_jobs': all_jobs_list.filter(status='reviewing').count(),
+        'sort_by': sort_by,
+        'sort_order': sort_order,
     }
 
     return render(request, 'repub_interface/all_jobs.html', context)
@@ -554,6 +580,7 @@ class Args:
 
 def process_job(job):
     job.status = 'processing'
+    job.processing_started_at = timezone.now()
     job.output_file = None
     job.save()
 
