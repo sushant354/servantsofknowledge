@@ -2089,3 +2089,85 @@ def cleanup_job(request, job_id):
         messages.error(request, mark_safe(f'Some errors occurred during cleanup:<br>{error_list}'))
 
     return redirect('job_detail', job_id=job_id)
+
+
+@login_required
+@require_http_methods(["POST"])
+@csrf_exempt
+def delete_job(request, job_id):
+    """Delete a job completely including all its files and database record"""
+    # Allow admin users to delete any job, regular users can only delete their own jobs
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+
+    # Don't allow deletion if job is currently processing
+    if job.status in ['processing', 'finalizing', 'deriving', 'preparing_review']:
+        messages.error(request, f'Cannot delete job while it is in {job.status} status.')
+        return redirect('job_detail', job_id=job_id)
+
+    job_title = job.title or "Untitled"
+    directories_deleted = []
+    errors = []
+
+    # Delete input directory
+    upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
+    if os.path.exists(upload_base_dir):
+        try:
+            shutil.rmtree(upload_base_dir)
+            directories_deleted.append(f'Input directory (uploads/{job.id})')
+            logger.info(f"User {request.user.username} deleted input directory for job {job.id}")
+        except Exception as e:
+            error_msg = f'Error deleting input directory: {str(e)}'
+            errors.append(error_msg)
+            logger.error(f"Error deleting input directory for job {job.id}: {str(e)}", exc_info=True)
+
+    # Delete output directory
+    output_base_dir = job.get_output_dir()
+    if os.path.exists(output_base_dir):
+        try:
+            shutil.rmtree(output_base_dir)
+            directories_deleted.append(f'Output directory (processed/{job.id})')
+            logger.info(f"User {request.user.username} deleted output directory for job {job.id}")
+        except Exception as e:
+            error_msg = f'Error deleting output directory: {str(e)}'
+            errors.append(error_msg)
+            logger.error(f"Error deleting output directory for job {job.id}: {str(e)}", exc_info=True)
+
+    # Delete review directory if it exists
+    review_dir = job.get_review_dir()
+    if os.path.exists(review_dir):
+        try:
+            shutil.rmtree(review_dir)
+            directories_deleted.append(f'Review directory (review/{job.id})')
+            logger.info(f"User {request.user.username} deleted review directory for job {job.id}")
+        except Exception as e:
+            error_msg = f'Error deleting review directory: {str(e)}'
+            errors.append(error_msg)
+            logger.error(f"Error deleting review directory for job {job.id}: {str(e)}", exc_info=True)
+
+    # Delete the job from database
+    try:
+        job.delete()
+        logger.info(f"User {request.user.username} deleted job {job_id} ({job_title}) from database")
+
+        # Show success message
+        if directories_deleted:
+            messages.success(request, f'Job "{job_title}" has been deleted successfully along with all associated files.')
+        else:
+            messages.success(request, f'Job "{job_title}" has been deleted successfully.')
+
+    except Exception as e:
+        error_msg = f'Error deleting job from database: {str(e)}'
+        errors.append(error_msg)
+        logger.error(f"Error deleting job {job_id} from database: {str(e)}", exc_info=True)
+        messages.error(request, mark_safe(f'Failed to delete job from database:<br>{error_msg}'))
+        return redirect('job_detail', job_id=job_id)
+
+    # Display any errors that occurred during file deletion
+    if errors:
+        error_list = '<br>'.join([f'- {e}' for e in errors])
+        messages.warning(request, mark_safe(f'Job deleted, but some errors occurred during file cleanup:<br>{error_list}'))
+
+    return redirect('all_jobs')

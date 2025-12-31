@@ -420,6 +420,12 @@
                         </button>
                     {% endif %}
 
+                    {% if job.status != 'processing' and job.status != 'finalizing' and job.status != 'deriving' and job.status != 'preparing_review' %}
+                        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteJobModal">
+                            <i class="bi bi-trash-fill"></i> Delete Job
+                        </button>
+                    {% endif %}
+
                 </div>
             </div>
         </div>
@@ -644,6 +650,54 @@
                     {% csrf_token %}
                     <button type="submit" class="btn btn-warning">
                         <i class="bi bi-trash"></i> Confirm Cleanup
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Job Modal -->
+<div class="modal fade" id="deleteJobModal" tabindex="-1" aria-labelledby="deleteJobModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteJobModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Delete Job
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <h6 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i>Are you sure you want to delete this job?</h6>
+                    <p class="mb-2"><strong>This action will permanently delete:</strong></p>
+                    <ul class="mb-0">
+                        <li><strong>Job Record:</strong> The job entry will be removed from the database</li>
+                        <li><strong>Input Files:</strong> All uploaded files and extracted images</li>
+                        <li><strong>Output Files:</strong> All processed images, PDFs, and intermediate files</li>
+                        <li><strong>Review Files:</strong> Review files if they exist</li>
+                        <li><strong>Job History:</strong> All processing logs and metadata</li>
+                    </ul>
+                </div>
+                <div class="alert alert-warning">
+                    <h6 class="alert-heading"><i class="bi bi-exclamation-circle me-2"></i>Warning:</h6>
+                    <ul class="mb-0">
+                        <li><strong>Cannot Undo:</strong> This action cannot be undone - all data will be permanently lost</li>
+                        <li><strong>Downloads:</strong> Make sure to download any files you need before deleting</li>
+                        {% if job.is_derived %}
+                        <li><strong>Derived Files:</strong> This job has been derived. The derived files in "<strong>{{ job.derived_identifier }}</strong>" will NOT be deleted</li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <form method="post" action="{% url 'delete_job' job.id %}" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash-fill"></i> Confirm Delete
                     </button>
                 </form>
             </div>
