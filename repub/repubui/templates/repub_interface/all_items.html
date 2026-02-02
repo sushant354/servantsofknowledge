@@ -61,6 +61,7 @@
                         <tr>
                             <th style="width: 140px;">Preview</th>
                             <th>Identifier</th>
+                            <th>Author</th>
                             {% if user.is_staff %}<th>Owner</th>{% endif %}
                             <th>Files</th>
                             <th>Size</th>
@@ -95,6 +96,13 @@
                                         </small>
                                     </div>
                                 </div>
+                            </td>
+                            <td>
+                                {% if item.author %}
+                                    <span><i class="bi bi-pencil"></i> {{ item.author }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
                             </td>
                             {% if user.is_staff %}
                             <td>

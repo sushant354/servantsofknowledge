@@ -1904,11 +1904,14 @@ def all_items(request):
     else:
         derived_jobs = ProcessingJob.objects.filter(is_derived=True, user=request.user)
 
-    # Create a mapping of identifier to job owner
-    identifier_to_owner = {}
+    # Create a mapping of identifier to job info (owner and author)
+    identifier_to_job_info = {}
     for job in derived_jobs:
         if job.derived_identifier:
-            identifier_to_owner[job.derived_identifier] = job.user
+            identifier_to_job_info[job.derived_identifier] = {
+                'owner': job.user,
+                'author': job.author,
+            }
 
     # Check if derived directory exists
     if not os.path.exists(derive_base_dir):
@@ -1921,13 +1924,15 @@ def all_items(request):
             # Only include directories
             if os.path.isdir(item_path):
                 # For non-staff users, only show items they own
-                if not request.user.is_staff and identifier not in identifier_to_owner:
+                if not request.user.is_staff and identifier not in identifier_to_job_info:
                     continue
 
+                job_info = identifier_to_job_info.get(identifier, {})
                 item_info = {
                     'identifier': identifier,
                     'path': item_path,
-                    'owner': identifier_to_owner.get(identifier),  # Add owner information
+                    'owner': job_info.get('owner'),  # Add owner information
+                    'author': job_info.get('author'),  # Add author information
                 }
 
                 # Get statistics about the directory
