@@ -90,15 +90,27 @@
 
 <!-- Items List -->
 <div class="card shadow">
-    <div class="card-header bg-light">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Derived Items <span class="badge bg-primary">{{ total_items }}</span></h5>
+        {% if items %}
+        <button type="button" class="btn btn-success btn-sm" id="export-csv-btn" disabled>
+            <i class="bi bi-download"></i> Export As CSV (<span id="selected-count">0</span>)
+        </button>
+        {% endif %}
     </div>
     <div class="card-body p-0">
         {% if items %}
+            <form id="export-form" method="post" action="{% url 'export_items_csv' %}">
+                {% csrf_token %}
+                <input type="hidden" name="identifiers" id="identifiers-input">
+            </form>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
                         <tr>
+                            <th style="width: 50px;">
+                                <input type="checkbox" class="form-check-input" id="select-all" title="Select all">
+                            </th>
                             <th style="width: 140px;">Preview</th>
                             <th>Identifier</th>
                             <th>Author</th>
@@ -112,6 +124,9 @@
                     <tbody>
                         {% for item in items %}
                         <tr>
+                            <td>
+                                <input type="checkbox" class="form-check-input item-checkbox" value="{{ item.identifier }}">
+                            </td>
                             <td class="text-center">
                                 {% if item.thumbnail_url %}
                                     <a href="{% url 'item_directory' item.identifier %}">
@@ -206,4 +221,57 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('select-all');
+    const itemCheckboxes = document.querySelectorAll('.item-checkbox');
+    const exportBtn = document.getElementById('export-csv-btn');
+    const selectedCountSpan = document.getElementById('selected-count');
+    const exportForm = document.getElementById('export-form');
+    const identifiersInput = document.getElementById('identifiers-input');
+
+    function updateSelectedCount() {
+        const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+        const count = checkedBoxes.length;
+        selectedCountSpan.textContent = count;
+        exportBtn.disabled = count === 0;
+    }
+
+    function updateSelectAllState() {
+        const allChecked = itemCheckboxes.length > 0 &&
+            document.querySelectorAll('.item-checkbox:checked').length === itemCheckboxes.length;
+        selectAllCheckbox.checked = allChecked;
+        selectAllCheckbox.indeterminate = !allChecked &&
+            document.querySelectorAll('.item-checkbox:checked').length > 0;
+    }
+
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            itemCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateSelectedCount();
+        });
+    }
+
+    itemCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            updateSelectAllState();
+            updateSelectedCount();
+        });
+    });
+
+    if (exportBtn) {
+        exportBtn.addEventListener('click', function() {
+            const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+            const identifiers = Array.from(checkedBoxes).map(cb => cb.value);
+            identifiersInput.value = identifiers.join(',');
+            exportForm.submit();
+        });
+    }
+});
+</script>
 {% endblock %}

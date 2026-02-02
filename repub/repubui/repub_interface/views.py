@@ -7,6 +7,7 @@ import time
 import logging
 import mimetypes
 import re
+import csv
 
 from PIL import Image
 from django.shortcuts import render, redirect, get_object_or_404
@@ -2012,6 +2013,94 @@ def all_items(request):
     }
 
     return render(request, 'repub_interface/all_items.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def export_items_csv(request):
+    """Export selected items as CSV"""
+    identifiers_str = request.POST.get('identifiers', '')
+    if not identifiers_str:
+        messages.error(request, 'No items selected for export.')
+        return redirect('all_items')
+
+    identifiers = [i.strip() for i in identifiers_str.split(',') if i.strip()]
+    if not identifiers:
+        messages.error(request, 'No items selected for export.')
+        return redirect('all_items')
+
+    # Get derived jobs for selected identifiers
+    if request.user.is_staff:
+        derived_jobs = ProcessingJob.objects.filter(
+            is_derived=True,
+            derived_identifier__in=identifiers
+        )
+    else:
+        derived_jobs = ProcessingJob.objects.filter(
+            is_derived=True,
+            derived_identifier__in=identifiers,
+            user=request.user
+        )
+
+    # Create a mapping of identifier to job info
+    identifier_to_job = {}
+    for job in derived_jobs:
+        if job.derived_identifier:
+            identifier_to_job[job.derived_identifier] = job
+
+    # Build CSV response
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="items_export.csv"'
+
+    writer = csv.writer(response)
+    # Write header
+    writer.writerow(['Identifier', 'Author', 'Owner', 'Files', 'Size', 'Last Modified'])
+
+    derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
+
+    for identifier in identifiers:
+        item_path = os.path.join(derive_base_dir, identifier)
+        if not os.path.isdir(item_path):
+            continue
+
+        # Check access for non-staff users
+        if not request.user.is_staff and identifier not in identifier_to_job:
+            continue
+
+        job = identifier_to_job.get(identifier)
+        author = job.author if job else ''
+        owner = job.user.username if job and job.user else ''
+
+        # Get directory stats
+        file_count = 0
+        total_size = 0
+        modified_time = ''
+
+        try:
+            for root, dirs, files in os.walk(item_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    file_count += 1
+                    total_size += os.path.getsize(file_path)
+
+            stat_info = os.stat(item_path)
+            modified_time = timezone.datetime.fromtimestamp(
+                stat_info.st_mtime,
+                tz=timezone.get_current_timezone()
+            ).strftime('%Y-%m-%d %H:%M:%S')
+        except OSError:
+            pass
+
+        writer.writerow([
+            identifier,
+            author,
+            owner,
+            file_count,
+            format_file_size(total_size),
+            modified_time
+        ])
+
+    return response
 
 
 @login_required
