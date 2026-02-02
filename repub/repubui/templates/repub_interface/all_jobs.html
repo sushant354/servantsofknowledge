@@ -158,6 +158,16 @@ th a:hover {
             </div>
         </a>
     </div>
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+        <a href="?status=derive_pending{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
+            <div class="card bg-dark text-white clickable-card{% if request.GET.status == 'derive_pending' %} filter-active{% endif %}">
+                <div class="card-body text-center">
+                    <h6 class="card-title">Derive Pending</h6>
+                    <h4 class="card-text">{{ derive_pending_jobs }}</h4>
+                </div>
+            </div>
+        </a>
+    </div>
 </div>
 
 <!-- Jobs Table -->
@@ -182,14 +192,34 @@ th a:hover {
                 <i class="bi bi-stop-circle"></i> Stop Selected (<span id="selectedCount">0</span>)
             </button>
         </div>
+        {% elif request.GET.status == 'completed' %}
+        <div class="d-flex gap-2 align-items-center">
+            <button type="button" id="selectAllBtn" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-check-square"></i> Select All
+            </button>
+            <button type="button" id="deriveSelectedBtn" class="btn btn-sm btn-success" disabled>
+                <i class="bi bi-box-arrow-down"></i> Derive Selected (<span id="selectedCount">0</span>)
+            </button>
+        </div>
+        {% elif request.GET.status == 'derive_pending' %}
+        <div class="d-flex gap-2 align-items-center">
+            <button type="button" id="selectAllBtn" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-check-square"></i> Select All
+            </button>
+            <button type="button" id="stopSelectedBtn" class="btn btn-sm btn-danger" disabled>
+                <i class="bi bi-stop-circle"></i> Stop Selected (<span id="selectedCount">0</span>)
+            </button>
+        </div>
         {% endif %}
     </div>
     <div class="card-body p-0">
         {% if jobs %}
             {% if request.GET.status == 'failed' %}
             <form id="bulkActionForm" method="post" action="{% url 'bulk_retry_jobs' %}">
-            {% elif request.GET.status == 'processing' or request.GET.status == 'pending' %}
+            {% elif request.GET.status == 'processing' or request.GET.status == 'pending' or request.GET.status == 'derive_pending' %}
             <form id="bulkActionForm" method="post" action="{% url 'bulk_stop_jobs' %}">
+            {% elif request.GET.status == 'completed' %}
+            <form id="bulkActionForm" method="post" action="{% url 'bulk_derive_jobs' %}">
             {% else %}
             <form id="bulkActionForm">
             {% endif %}
@@ -198,7 +228,7 @@ th a:hover {
                     <table class="table table-hover mb-0">
                         <thead class="table-light">
                             <tr>
-                                {% if request.GET.status == 'failed' or request.GET.status == 'processing' or request.GET.status == 'pending' %}
+                                {% if request.GET.status == 'failed' or request.GET.status == 'processing' or request.GET.status == 'pending' or request.GET.status == 'completed' or request.GET.status == 'derive_pending' %}
                                 <th style="width: 40px;">
                                     <input type="checkbox" id="selectAllCheckbox" class="form-check-input" title="Select all jobs">
                                 </th>
@@ -239,8 +269,8 @@ th a:hover {
                         </thead>
                         <tbody>
                         {% for job in jobs %}
-                        <tr>
-                            {% if request.GET.status == 'failed' or request.GET.status == 'processing' or request.GET.status == 'pending' %}
+                        <tr data-job-status="{{ job.status }}">
+                            {% if request.GET.status == 'failed' or request.GET.status == 'processing' or request.GET.status == 'pending' or request.GET.status == 'completed' or request.GET.status == 'derive_pending' %}
                             <td class="text-center">
                                 <input type="checkbox" name="job_ids" value="{{ job.id }}" class="form-check-input job-checkbox">
                             </td>
@@ -292,6 +322,7 @@ th a:hover {
                                     {% elif job.status == 'reviewing' %}bg-info
                                     {% elif job.status == 'finalizing' %}bg-secondary
                                     {% elif job.status == 'failed' %}bg-danger
+                                    {% elif job.status == 'derive_pending' %}bg-dark
                                     {% else %}bg-secondary{% endif %}">
                                     {% if job.status == 'pending' %}
                                         <i class="bi bi-hourglass"></i> Pending
@@ -307,6 +338,8 @@ th a:hover {
                                         <i class="bi bi-arrow-clockwise"></i> Finalizing
                                     {% elif job.status == 'failed' %}
                                         <i class="bi bi-exclamation-triangle-fill"></i> Failed
+                                    {% elif job.status == 'derive_pending' %}
+                                        <i class="bi bi-box-arrow-down"></i> Derive Pending
                                     {% else %}
                                         <i class="bi bi-clock"></i> {{ job.status|title }}
                                     {% endif %}
@@ -421,7 +454,7 @@ th a:hover {
 <script>
     // Auto-refresh for jobs that are still processing or pending
     document.addEventListener('DOMContentLoaded', function() {
-        const processingJobs = document.querySelectorAll('[data-job-status="pending"], [data-job-status="processing"], [data-job-status="preparing_review"], [data-job-status="finalizing"]');
+        const processingJobs = document.querySelectorAll('[data-job-status="pending"], [data-job-status="processing"], [data-job-status="preparing_review"], [data-job-status="finalizing"], [data-job-status="derive_pending"], [data-job-status="deriving"]');
 
         if (processingJobs.length > 0) {
             // Refresh the page every 30 seconds if there are processing or pending jobs
@@ -430,18 +463,19 @@ th a:hover {
             }, 30000);
         }
 
-        // Bulk action functionality for failed/processing/pending jobs
+        // Bulk action functionality for failed/processing/pending/completed jobs
         const selectAllCheckbox = document.getElementById('selectAllCheckbox');
         const selectAllBtn = document.getElementById('selectAllBtn');
         const retrySelectedBtn = document.getElementById('retrySelectedBtn');
         const stopSelectedBtn = document.getElementById('stopSelectedBtn');
+        const deriveSelectedBtn = document.getElementById('deriveSelectedBtn');
         const jobCheckboxes = document.querySelectorAll('.job-checkbox');
         const selectedCountSpan = document.getElementById('selectedCount');
         const bulkActionForm = document.getElementById('bulkActionForm');
 
-        if (selectAllCheckbox && selectAllBtn && (retrySelectedBtn || stopSelectedBtn)) {
-            const actionBtn = retrySelectedBtn || stopSelectedBtn;
-            const actionType = retrySelectedBtn ? 'retry' : 'stop';
+        if (selectAllCheckbox && selectAllBtn && (retrySelectedBtn || stopSelectedBtn || deriveSelectedBtn)) {
+            const actionBtn = retrySelectedBtn || stopSelectedBtn || deriveSelectedBtn;
+            const actionType = retrySelectedBtn ? 'retry' : (stopSelectedBtn ? 'stop' : 'derive');
 
             // Update selected count and button state
             function updateSelectedCount() {
@@ -482,9 +516,14 @@ th a:hover {
             actionBtn.addEventListener('click', function() {
                 const checkedCount = document.querySelectorAll('.job-checkbox:checked').length;
                 if (checkedCount > 0) {
-                    const confirmMessage = actionType === 'retry'
-                        ? `Are you sure you want to retry ${checkedCount} selected job${checkedCount > 1 ? 's' : ''}?`
-                        : `Are you sure you want to stop ${checkedCount} selected job${checkedCount > 1 ? 's' : ''}?`;
+                    let confirmMessage;
+                    if (actionType === 'retry') {
+                        confirmMessage = `Are you sure you want to retry ${checkedCount} selected job${checkedCount > 1 ? 's' : ''}?`;
+                    } else if (actionType === 'stop') {
+                        confirmMessage = `Are you sure you want to stop ${checkedCount} selected job${checkedCount > 1 ? 's' : ''}?`;
+                    } else {
+                        confirmMessage = `Are you sure you want to derive ${checkedCount} selected job${checkedCount > 1 ? 's' : ''}?`;
+                    }
 
                     if (confirm(confirmMessage)) {
                         bulkActionForm.submit();

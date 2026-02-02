@@ -119,7 +119,7 @@ def all_jobs(request):
 
     # Get status filter from query parameters
     status_filter = request.GET.get('status')
-    if status_filter and status_filter in ['pending', 'completed', 'processing', 'reviewing', 'failed', 'finalizing', 'preparing_review']:
+    if status_filter and status_filter in ['pending', 'completed', 'processing', 'reviewing', 'failed', 'finalizing', 'preparing_review', 'derive_pending']:
         jobs_list = jobs_list.filter(status=status_filter)
 
     # Get search parameters
@@ -175,6 +175,7 @@ def all_jobs(request):
         'processing_jobs': all_jobs_list.filter(status='processing').count(),
         'failed_jobs': all_jobs_list.filter(status='failed').count(),
         'reviewing_jobs': all_jobs_list.filter(status='reviewing').count(),
+        'derive_pending_jobs': all_jobs_list.filter(status='derive_pending').count(),
         'sort_by': sort_by,
         'sort_order': sort_order,
     }
@@ -654,10 +655,8 @@ def process_job(job):
     identifier = metadata.get('/Identifier')
     if identifier:
         # Check if there's already a job with this identifier being processed
-        processing_statuses = ['pending', 'processing', 'reviewing', 'finalizing', 'deriving']
         existing_job = ProcessingJob.objects.filter(
-            identifier=identifier,
-            status__in=processing_statuses
+            identifier=identifier
         ).exclude(id=job.id).first()
 
         if existing_job:
@@ -1277,7 +1276,10 @@ def adjust_width(img, avg_width):
 @require_http_methods(["POST"])
 def finalize_job(request, job_id):
     """Finalize the job after review"""
-    job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
 
     # Check if job is already being finalized to prevent duplicate submissions
     if job.status == 'finalizing':
@@ -1337,13 +1339,18 @@ def stop_single_job(job):
     Raises:
         Exception: If there's an error during stop
     """
-    if job.status not in ['pending', 'processing', 'finalizing']:
+    if job.status not in ['pending', 'processing', 'finalizing', 'derive_pending', 'deriving']:
         return False
 
     original_status = job.status
-    job.status = 'failed'
 
-    if original_status == 'pending':
+    # Derive jobs should be set to derive_failed, regular jobs to failed
+    if original_status in ['derive_pending', 'deriving']:
+        job.status = 'derive_failed'
+    else:
+        job.status = 'failed'
+
+    if original_status in ['pending', 'derive_pending']:
         job.error_message = 'Job canceled by user'
     else:
         job.error_message = 'Job stopped by user'
@@ -1447,7 +1454,7 @@ def bulk_retry_jobs(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def bulk_stop_jobs(request):
-    """Stop multiple selected processing/pending jobs"""
+    """Stop multiple selected processing/pending/derive_pending jobs"""
     job_ids = request.POST.getlist('job_ids')
 
     if not job_ids:
@@ -1456,9 +1463,9 @@ def bulk_stop_jobs(request):
 
     # Filter jobs based on user permissions
     if request.user.is_staff:
-        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['pending', 'processing', 'finalizing'])
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['pending', 'processing', 'finalizing', 'derive_pending', 'deriving'])
     else:
-        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['pending', 'processing', 'finalizing'], user=request.user)
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['pending', 'processing', 'finalizing', 'derive_pending', 'deriving'], user=request.user)
 
     stop_count = 0
     failed_count = 0
@@ -1482,7 +1489,63 @@ def bulk_stop_jobs(request):
         messages.warning(request, f'{failed_count} job{"s" if failed_count > 1 else ""} could not be stopped.')
 
     if stop_count == 0 and failed_count == 0:
-        messages.warning(request, 'No jobs were stopped. Please ensure selected jobs are in processing, pending, or finalizing status.')
+        messages.warning(request, 'No jobs were stopped. Please ensure selected jobs are in processing, pending, finalizing, derive_pending, or deriving status.')
+
+    return redirect('all_jobs')
+
+
+@login_required
+@require_http_methods(["POST"])
+@csrf_exempt
+def bulk_derive_jobs(request):
+    """Derive multiple selected completed jobs"""
+    job_ids = request.POST.getlist('job_ids')
+
+    if not job_ids:
+        messages.warning(request, 'No jobs selected for derivation.')
+        return redirect('all_jobs')
+
+    # Filter jobs based on user permissions
+    if request.user.is_staff:
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['completed', 'derive_failed'])
+    else:
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['completed', 'derive_failed'], user=request.user)
+
+    derive_count = 0
+    failed_count = 0
+
+    for job in jobs:
+        try:
+            # Check if job is already being derived to prevent duplicate submissions
+            if job.status in ['deriving', 'derive_pending']:
+                logger.warning(f"Job {job.id} is already being derived. Skipping.")
+                failed_count += 1
+                continue
+
+            # Set job status to derive_pending
+            job.status = 'derive_pending'
+            job.error_message = ''
+            job.save()
+
+            # Start derivation in background thread
+            thread = threading.Thread(target=run_derive_job, args=(job, None))
+            thread.start()
+
+            derive_count += 1
+            logger.info(f"User {request.user.username} started derivation for job {job.id}")
+        except Exception as e:
+            failed_count += 1
+            logger.error(f"Error starting derivation for job {job.id}: {str(e)}", exc_info=True)
+            messages.error(request, f'Error deriving job "{job.title or job.id}": {str(e)}')
+
+    if derive_count > 0:
+        messages.success(request, f'Successfully started derivation for {derive_count} job{"s" if derive_count > 1 else ""}.')
+
+    if failed_count > 0:
+        messages.warning(request, f'{failed_count} job{"s" if failed_count > 1 else ""} could not be derived.')
+
+    if derive_count == 0 and failed_count == 0:
+        messages.warning(request, 'No jobs were derived. Please ensure selected jobs are in completed or derive_failed status.')
 
     return redirect('all_jobs')
 
@@ -1528,124 +1591,133 @@ def api_token_management(request):
     return render(request, 'repub_interface/api_token.html', context)
 
 
+def run_derive_single_job(job, derive_reduce_factor=None):
+    """Derive a single job - core derivation logic"""
+    # Update status to deriving
+    job.status = 'deriving'
+    job.save()
+    logger.info(f"Started deriving job {job.id}")
+
+    # Get metadata to extract the Identifier
+    input_dir = job.get_input_dir()
+    scandir = Scandir(input_dir, None, None, logger)
+    metadata = scandir.metadata
+
+    identifier = metadata.get('/Identifier')
+    if not identifier:
+        job.status = 'derive_failed'
+        job.error_message = 'No identifier found in job metadata.'
+        job.save()
+        logger.error(f"No identifier found for job {job.id}")
+        return
+
+    # Create derive directory with the identifier name
+    derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
+    os.makedirs(derive_base_dir, exist_ok=True)
+
+    derive_dir = os.path.join(derive_base_dir, identifier)
+    if os.path.exists(derive_dir):
+        job.status = 'derive_failed'
+        job.error_message = f'Derive directory "{identifier}" already exists.'
+        job.save()
+        logger.error(f"Derive directory already exists: {derive_dir}")
+        return
+
+    os.makedirs(derive_dir, exist_ok=True)
+    logger.info(f"Created derive directory: {derive_dir}")
+
+    # Copy input file
+    if job.input_file and os.path.exists(job.input_file.path):
+        input_filename = os.path.basename(job.input_file.path)
+        input_dest = os.path.join(derive_dir, input_filename)
+        shutil.copy2(job.input_file.path, input_dest)
+        logger.info(f"Copied input file to: {input_dest}")
+
+    # Zip output image folder
+    output_img_dir = job.get_outimg_dir()
+    if os.path.exists(output_img_dir):
+        zip_filename = f'{identifier}_images.zip'
+        zip_path = os.path.join(derive_dir, zip_filename)
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(output_img_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, output_img_dir)
+                    zipf.write(file_path, arcname)
+        logger.info(f"Created output images zip: {zip_path}")
+
+    # Zip thumbnail folder
+    thumbnail_dir = job.get_thumbnail_dir()
+    if os.path.exists(thumbnail_dir):
+        zip_filename = f'{identifier}_thumbnails.zip'
+        zip_path = os.path.join(derive_dir, zip_filename)
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(thumbnail_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, thumbnail_dir)
+                    zipf.write(file_path, arcname)
+        logger.info(f"Created thumbnails zip: {zip_path}")
+
+    # Copy thumbnail if it exists
+    output_dir = job.get_output_dir()
+    thumb_path = os.path.join(output_dir, '__ia_thumb.jpg')
+    if os.path.exists(thumb_path):
+        thumb_dest = os.path.join(derive_dir, '__ia_thumb.jpg')
+        shutil.copy2(thumb_path, thumb_dest)
+        logger.info(f"Copied thumbnail to: {thumb_dest}")
+
+    # Check if HOCR file exists, if not regenerate PDF with OCR
+    hocr_path = os.path.join(output_dir, 'x_hocr.html.gz')
+    pdf_path = os.path.join(output_dir, 'x_final.pdf')
+    text_path = os.path.join(output_dir, 'x_text.txt')
+
+    if not os.path.exists(hocr_path) or not os.path.exists(pdf_path) or \
+            not os.path.exists(text_path):
+        logger.info(f"HOCR file not found for job {job.id}, regenerating PDF with OCR in derive directory")
+
+        # Generate PDF with OCR directly (removed the queue logic for now)
+        derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor)
+    else:
+        # Copy existing PDF if it exists
+        pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
+        shutil.copy2(pdf_path, pdf_dest)
+        logger.info(f"Copied PDF to: {pdf_dest}")
+
+        hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
+        shutil.copy2(hocr_path, hocr_dest)
+        logger.info(f"Copied HOCR to: {hocr_dest}")
+
+        text_dest = os.path.join(derive_dir, f'{identifier}_text.txt')
+        shutil.copy2(text_path, text_dest)
+        logger.info(f"Copied text file to: {text_dest}")
+
+        # Clean up output folder and related directories
+        output_base_dir = job.get_output_dir()
+        if os.path.exists(output_base_dir):
+            shutil.rmtree(output_base_dir)
+            logger.info(f"Cleaned up output directory: {output_base_dir}")
+
+        # Clean up uploads folder
+        upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
+        if os.path.exists(upload_base_dir):
+            shutil.rmtree(upload_base_dir)
+            logger.info(f"Cleaned up upload directory: {upload_base_dir}")
+
+    logger.info(f"Successfully derived job {job.id} to {derive_dir}")
+
+    job.is_derived = True
+    job.derived_identifier = identifier
+    job.derived_at = timezone.now()
+    job.status = 'derive_completed'
+    job.save()
+    logger.info(f"Updated job {job.id} with derived info: {identifier}")
+
+
 def run_derive_job(job, derive_reduce_factor=None):
     """Background thread function to derive a job"""
     try:
-        # Get metadata to extract the Identifier
-        input_dir = job.get_input_dir()
-        scandir = Scandir(input_dir, None, None, logger)
-        metadata = scandir.metadata
-
-        identifier = metadata.get('/Identifier')
-        if not identifier:
-            job.status = 'derive_failed'
-            job.error_message = 'No identifier found in job metadata.'
-            job.save()
-            logger.error(f"No identifier found for job {job.id}")
-            return
-
-        # Create derive directory with the identifier name
-        derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
-        os.makedirs(derive_base_dir, exist_ok=True)
-
-        derive_dir = os.path.join(derive_base_dir, identifier)
-        if os.path.exists(derive_dir):
-            job.status = 'derive_failed'
-            job.error_message = f'Derive directory "{identifier}" already exists.'
-            job.save()
-            logger.error(f"Derive directory already exists: {derive_dir}")
-            return
-
-        os.makedirs(derive_dir, exist_ok=True)
-        logger.info(f"Created derive directory: {derive_dir}")
-
-        # Copy input file
-        if job.input_file and os.path.exists(job.input_file.path):
-            input_filename = os.path.basename(job.input_file.path)
-            input_dest = os.path.join(derive_dir, input_filename)
-            shutil.copy2(job.input_file.path, input_dest)
-            logger.info(f"Copied input file to: {input_dest}")
-
-        # Zip output image folder
-        output_img_dir = job.get_outimg_dir()
-        if os.path.exists(output_img_dir):
-            zip_filename = f'{identifier}_images.zip'
-            zip_path = os.path.join(derive_dir, zip_filename)
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for root, dirs, files in os.walk(output_img_dir):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, output_img_dir)
-                        zipf.write(file_path, arcname)
-            logger.info(f"Created output images zip: {zip_path}")
-
-        # Zip thumbnail folder
-        thumbnail_dir = job.get_thumbnail_dir()
-        if os.path.exists(thumbnail_dir):
-            zip_filename = f'{identifier}_thumbnails.zip'
-            zip_path = os.path.join(derive_dir, zip_filename)
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for root, dirs, files in os.walk(thumbnail_dir):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, thumbnail_dir)
-                        zipf.write(file_path, arcname)
-            logger.info(f"Created thumbnails zip: {zip_path}")
-
-        # Copy thumbnail if it exists
-        output_dir = job.get_output_dir()
-        thumb_path = os.path.join(output_dir, '__ia_thumb.jpg')
-        if os.path.exists(thumb_path):
-            thumb_dest = os.path.join(derive_dir, '__ia_thumb.jpg')
-            shutil.copy2(thumb_path, thumb_dest)
-            logger.info(f"Copied thumbnail to: {thumb_dest}")
-
-        # Check if HOCR file exists, if not regenerate PDF with OCR
-        hocr_path = os.path.join(output_dir, 'x_hocr.html.gz')
-        pdf_path = os.path.join(output_dir, 'x_final.pdf')
-        text_path = os.path.join(output_dir, 'x_text.txt')
-
-        if not os.path.exists(hocr_path) or not os.path.exists(pdf_path) or \
-                not os.path.exists(text_path):
-            logger.info(f"HOCR file not found for job {job.id}, regenerating PDF with OCR in derive directory")
-
-            # Generate PDF with OCR directly (removed the queue logic for now)
-            derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor)
-        else:
-            # Copy existing PDF if it exists
-            pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
-            shutil.copy2(pdf_path, pdf_dest)
-            logger.info(f"Copied PDF to: {pdf_dest}")
-
-            hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
-            shutil.copy2(hocr_path, hocr_dest)
-            logger.info(f"Copied HOCR to: {hocr_dest}")
-
-            text_dest = os.path.join(derive_dir, f'{identifier}_text.txt')
-            shutil.copy2(text_path, text_dest)
-            logger.info(f"Copied text file to: {text_dest}")
-
-            # Clean up output folder and related directories
-            output_base_dir = job.get_output_dir()
-            if os.path.exists(output_base_dir):
-                shutil.rmtree(output_base_dir)
-                logger.info(f"Cleaned up output directory: {output_base_dir}")
-
-            # Clean up uploads folder
-            upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
-            if os.path.exists(upload_base_dir):
-                shutil.rmtree(upload_base_dir)
-                logger.info(f"Cleaned up upload directory: {upload_base_dir}")
-
-        logger.info(f"Successfully derived job {job.id} to {derive_dir}")
-
-        job.is_derived = True
-        job.derived_identifier = identifier
-        job.derived_at = timezone.now()
-        job.status = 'derive_completed'
-        job.save()
-        logger.info(f"Updated job {job.id} with derived info: {identifier}")
-
+        run_derive_single_job(job, derive_reduce_factor)
     except Exception as e:
         job.status = 'derive_failed'
         job.error_message = str(e)
@@ -1666,7 +1738,7 @@ def derive_job(request, job_id):
         return redirect('job_detail', job_id=job_id)
 
     # Check if job is already being derived to prevent duplicate submissions
-    if job.status == 'deriving':
+    if job.status in ['deriving', 'derive_pending']:
         logger.warning(f"Job {job.id} is already being derived. Ignoring duplicate request.")
         return redirect('job_detail', job_id=job_id)
 
@@ -1684,8 +1756,8 @@ def derive_job(request, job_id):
     else:
         derive_reduce_factor = None
 
-    # Set job status to deriving
-    job.status = 'deriving'
+    # Set job status to derive_pending
+    job.status = 'derive_pending'
     job.error_message = ''
     job.save()
 
