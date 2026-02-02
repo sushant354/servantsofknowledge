@@ -1677,7 +1677,7 @@ def run_derive_single_job(job, derive_reduce_factor=None):
         logger.info(f"HOCR file not found for job {job.id}, regenerating PDF with OCR in derive directory")
 
         # Generate PDF with OCR directly (removed the queue logic for now)
-        derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor)
+        run_and_monitor_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor)
     else:
         # Copy existing PDF if it exists
         pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
@@ -1770,7 +1770,7 @@ def derive_job(request, job_id):
 
     return redirect('job_detail', job_id=job_id)
 
-def run_and_monitor_pdf(job, identifier, metadata, derive_dir):
+def run_and_monitor_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
     """
     Start job processing with concurrent job limiting.
     Waits if maximum concurrent jobs are already running.
@@ -1783,14 +1783,14 @@ def run_and_monitor_pdf(job, identifier, metadata, derive_dir):
         if processing_count <= max_deriving_jobs:
             # Start processing in background thread
             logger.info(f"Starting job {job.id}. Current processing jobs: {processing_count}/{max_deriving_jobs}")
-            derive_pdf(job, identifier, metadata, derive_dir) 
+            derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor) 
             break
         else:
             # Wait before checking again
             logger.info(f"Job {job.id} waiting in queue. Current processing jobs: {processing_count}/{max_deriving_jobs}")
             time.sleep(check_interval)
 
-def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor=None):
+def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
     temp_dir = None
     try:
         # Prepare output file paths in derive directory
