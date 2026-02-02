@@ -174,43 +174,33 @@ th a:hover {
 <div class="card shadow">
     <div class="card-header bg-light d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Processing Jobs</h5>
-        {% if request.GET.status == 'failed' %}
         <div class="d-flex gap-2 align-items-center">
+            <a href="{% url 'export_jobs_csv' %}?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}{% endif %}" class="btn btn-sm btn-success">
+                <i class="bi bi-download"></i> Export As CSV
+            </a>
+        {% if request.GET.status == 'failed' or request.GET.status == 'processing' or request.GET.status == 'pending' or request.GET.status == 'completed' or request.GET.status == 'derive_pending' %}
             <button type="button" id="selectAllBtn" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-check-square"></i> Select All
             </button>
+        {% endif %}
+        {% if request.GET.status == 'failed' %}
             <button type="button" id="retrySelectedBtn" class="btn btn-sm btn-primary" disabled>
                 <i class="bi bi-arrow-clockwise"></i> Retry Selected (<span id="selectedCount">0</span>)
             </button>
-        </div>
         {% elif request.GET.status == 'processing' or request.GET.status == 'pending' %}
-        <div class="d-flex gap-2 align-items-center">
-            <button type="button" id="selectAllBtn" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-check-square"></i> Select All
-            </button>
             <button type="button" id="stopSelectedBtn" class="btn btn-sm btn-danger" disabled>
                 <i class="bi bi-stop-circle"></i> Stop Selected (<span id="selectedCount">0</span>)
             </button>
-        </div>
         {% elif request.GET.status == 'completed' %}
-        <div class="d-flex gap-2 align-items-center">
-            <button type="button" id="selectAllBtn" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-check-square"></i> Select All
-            </button>
             <button type="button" id="deriveSelectedBtn" class="btn btn-sm btn-success" disabled>
                 <i class="bi bi-box-arrow-down"></i> Derive Selected (<span id="selectedCount">0</span>)
             </button>
-        </div>
         {% elif request.GET.status == 'derive_pending' %}
-        <div class="d-flex gap-2 align-items-center">
-            <button type="button" id="selectAllBtn" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-check-square"></i> Select All
-            </button>
             <button type="button" id="stopSelectedBtn" class="btn btn-sm btn-danger" disabled>
                 <i class="bi bi-stop-circle"></i> Stop Selected (<span id="selectedCount">0</span>)
             </button>
-        </div>
         {% endif %}
+        </div>
     </div>
     <div class="card-body p-0">
         {% if jobs %}

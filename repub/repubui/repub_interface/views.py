@@ -184,6 +184,86 @@ def all_jobs(request):
     return render(request, 'repub_interface/all_jobs.html', context)
 
 
+@login_required
+def export_jobs_csv(request):
+    """Export jobs as CSV based on search parameters"""
+    # Get jobs based on user permissions
+    if request.user.is_staff:
+        jobs = ProcessingJob.objects.all()
+    else:
+        jobs = ProcessingJob.objects.filter(user=request.user)
+
+    # Get search parameters (same as all_jobs view)
+    status_filter = request.GET.get('status')
+    if status_filter and status_filter in ['pending', 'completed', 'processing', 'reviewing', 'failed', 'finalizing', 'preparing_review', 'derive_pending']:
+        jobs = jobs.filter(status=status_filter)
+
+    title_query = request.GET.get('title', '').strip()
+    identifier_query = request.GET.get('identifier', '').strip()
+    author_query = request.GET.get('author', '').strip()
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
+
+    if title_query:
+        jobs = jobs.filter(title__icontains=title_query)
+
+    if identifier_query:
+        jobs = jobs.filter(identifier__icontains=identifier_query)
+
+    if author_query:
+        jobs = jobs.filter(author__icontains=author_query)
+
+    if date_from:
+        try:
+            from_date = timezone.datetime.strptime(date_from, '%Y-%m-%d')
+            from_date = timezone.make_aware(from_date, timezone.get_current_timezone())
+            jobs = jobs.filter(created_at__gte=from_date)
+        except ValueError:
+            pass
+
+    if date_to:
+        try:
+            to_date = timezone.datetime.strptime(date_to, '%Y-%m-%d')
+            to_date = to_date.replace(hour=23, minute=59, second=59)
+            to_date = timezone.make_aware(to_date, timezone.get_current_timezone())
+            jobs = jobs.filter(created_at__lte=to_date)
+        except ValueError:
+            pass
+
+    # Order by created_at descending
+    jobs = jobs.order_by('-created_at')
+
+    # Build CSV response
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="jobs_export.csv"'
+
+    writer = csv.writer(response, quoting=csv.QUOTE_ALL)
+    # Write header
+    writer.writerow([
+        'ID', 'Title', 'Identifier', 'Author', 'Status', 'Input Type',
+        'Owner', 'Created At', 'Processing Started At',
+        'Is Derived', 'Derived Identifier', 'Derived At'
+    ])
+
+    for job in jobs:
+        writer.writerow([
+            str(job.id),
+            job.title or '',
+            job.identifier or '',
+            job.author or '',
+            job.status,
+            job.input_type,
+            job.user.username if job.user else '',
+            job.created_at.strftime('%Y-%m-%d %H:%M:%S') if job.created_at else '',
+            job.processing_started_at.strftime('%Y-%m-%d %H:%M:%S') if job.processing_started_at else '',
+            'Yes' if job.is_derived else 'No',
+            job.derived_identifier or '',
+            job.derived_at.strftime('%Y-%m-%d %H:%M:%S') if job.derived_at else '',
+        ])
+
+    return response
+
+
 @csrf_exempt
 @login_or_token_required
 def home(request):
@@ -2052,7 +2132,7 @@ def export_items_csv(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="items_export.csv"'
 
-    writer = csv.writer(response)
+    writer = csv.writer(response, quoting=csv.QUOTE_ALL)
     # Write header
     writer.writerow(['Identifier', 'Author', 'Owner', 'Files', 'Size', 'Last Modified'])
 
