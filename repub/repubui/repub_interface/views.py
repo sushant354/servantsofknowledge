@@ -1898,6 +1898,11 @@ def all_items(request):
     """View all derived items"""
     derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
 
+    # Get search parameters from request
+    search_identifier = request.GET.get('identifier', '').strip()
+    search_identifier_prefix = request.GET.get('identifier_prefix', '').strip()
+    search_author = request.GET.get('author', '').strip()
+
     # Get derived jobs - staff users see all, regular users see only their own
     if request.user.is_staff:
         derived_jobs = ProcessingJob.objects.filter(is_derived=True)
@@ -1972,9 +1977,38 @@ def all_items(request):
 
                 items.append(item_info)
 
+    # Filter items based on search criteria
+    if search_identifier or search_identifier_prefix or search_author:
+        filtered_items = []
+        for item in items:
+            # Check identifier exact match
+            if search_identifier:
+                if item['identifier'].lower() != search_identifier.lower():
+                    continue
+
+            # Check identifier prefix match
+            if search_identifier_prefix:
+                if not item['identifier'].lower().startswith(search_identifier_prefix.lower()):
+                    continue
+
+            # Check author match (case-insensitive contains)
+            if search_author:
+                author = item.get('author') or ''
+                if search_author.lower() not in author.lower():
+                    continue
+
+            filtered_items.append(item)
+        items = filtered_items
+
+    has_search = bool(search_identifier or search_identifier_prefix or search_author)
+
     context = {
         'items': items,
         'total_items': len(items),
+        'search_identifier': search_identifier,
+        'search_identifier_prefix': search_identifier_prefix,
+        'search_author': search_author,
+        'has_search': has_search,
     }
 
     return render(request, 'repub_interface/all_items.html', context)
