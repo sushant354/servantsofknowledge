@@ -36,18 +36,6 @@
     </div>
 </div>
 
-<!-- Statistics Card -->
-<div class="row mb-4 justify-content-center">
-    <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body text-center">
-                <h6 class="card-title">Total Items</h6>
-                <h4 class="card-text">{{ total_items }}</h4>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Search Panel -->
 <div class="card shadow mb-4">
     <div class="card-header bg-light">
@@ -103,7 +91,7 @@
 <!-- Items List -->
 <div class="card shadow">
     <div class="card-header bg-light">
-        <h5 class="mb-0">Derived Items</h5>
+        <h5 class="mb-0">Derived Items <span class="badge bg-primary">{{ total_items }}</span></h5>
     </div>
     <div class="card-body p-0">
         {% if items %}
