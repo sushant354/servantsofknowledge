@@ -1674,9 +1674,6 @@ def api_token_management(request):
 
 def run_derive_single_job(job, derive_reduce_factor=None):
     """Derive a single job - core derivation logic"""
-    # Update status to deriving
-    job.status = 'deriving'
-    job.save()
     logger.info(f"Started deriving job {job.id}")
 
     # Get metadata to extract the Identifier
@@ -1873,6 +1870,8 @@ def run_and_monitor_pdf(job, identifier, metadata, derive_dir, derive_reduce_fac
 
 def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
     temp_dir = None
+    job.status = 'deriving'
+    job.save()
     try:
         # Prepare output file paths in derive directory
         pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
@@ -1954,7 +1953,6 @@ def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
             shutil.rmtree(upload_base_dir)
             logger.info(f"Cleaned up upload directory: {upload_base_dir}")
 
-        # Update job status to completed
         job.status = 'derive_completed'
         job.save()
         logger.info(f"Updated job {job.id} to derive_completed after PDF generation")
