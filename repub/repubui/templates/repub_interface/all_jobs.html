@@ -46,12 +46,12 @@ th a:hover {
     padding: 0.5rem;
 }
 .stats-row .card-title {
-    font-size: 0.75rem;
+    font-size: 1rem;
     margin-bottom: 0.25rem;
     white-space: nowrap;
 }
 .stats-row .card-text {
-    font-size: 1.25rem;
+    font-size: 1.75rem;
     margin-bottom: 0;
 }
 </style>
@@ -186,6 +186,16 @@ th a:hover {
                 <div class="card-body text-center">
                     <h6 class="card-title">Derive Pending</h6>
                     <h4 class="card-text">{{ derive_pending_jobs }}</h4>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="stat-col">
+        <a href="?status=deriving{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
+            <div class="card bg-purple text-white clickable-card{% if request.GET.status == 'deriving' %} filter-active{% endif %}" style="background-color: #6f42c1 !important;">
+                <div class="card-body text-center">
+                    <h6 class="card-title">Deriving</h6>
+                    <h4 class="card-text">{{ deriving_jobs }}</h4>
                 </div>
             </div>
         </a>
