@@ -120,7 +120,7 @@ def all_jobs(request):
 
     # Get status filter from query parameters
     status_filter = request.GET.get('status')
-    if status_filter and status_filter in ['pending', 'completed', 'processing', 'reviewing', 'failed', 'finalizing', 'preparing_review', 'derive_pending', 'deriving']:
+    if status_filter and status_filter in ['pending', 'completed', 'processing', 'reviewing', 'failed', 'finalizing', 'preparing_review', 'derive_pending', 'deriving', 'derive_failed']:
         jobs_list = jobs_list.filter(status=status_filter)
 
     # Get search parameters
@@ -178,6 +178,7 @@ def all_jobs(request):
         'reviewing_jobs': all_jobs_list.filter(status='reviewing').count(),
         'derive_pending_jobs': all_jobs_list.filter(status='derive_pending').count(),
         'deriving_jobs': all_jobs_list.filter(status='deriving').count(),
+        'derive_failed_jobs': all_jobs_list.filter(status='derive_failed').count(),
         'sort_by': sort_by,
         'sort_order': sort_order,
     }
@@ -196,7 +197,7 @@ def export_jobs_csv(request):
 
     # Get search parameters (same as all_jobs view)
     status_filter = request.GET.get('status')
-    if status_filter and status_filter in ['pending', 'completed', 'processing', 'reviewing', 'failed', 'finalizing', 'preparing_review', 'derive_pending', 'deriving']:
+    if status_filter and status_filter in ['pending', 'completed', 'processing', 'reviewing', 'failed', 'finalizing', 'preparing_review', 'derive_pending', 'deriving', 'derive_failed']:
         jobs = jobs.filter(status=status_filter)
 
     title_query = request.GET.get('title', '').strip()
@@ -1696,13 +1697,8 @@ def run_derive_single_job(job, derive_reduce_factor=None):
 
     derive_dir = os.path.join(derive_base_dir, identifier)
     if os.path.exists(derive_dir):
-        job.status = 'derive_failed'
-        job.error_message = f'Derive directory "{identifier}" already exists.'
-        job.save()
-        logger.error(f"Derive directory already exists: {derive_dir}")
-        return
-    else:
         shutil.rmtree(derive_dir)
+        logger.info(f"Cleaned up existing derive directory: {derive_dir}")
     os.makedirs(derive_dir, exist_ok=True)
     logger.info(f"Created derive directory: {derive_dir}")
 
