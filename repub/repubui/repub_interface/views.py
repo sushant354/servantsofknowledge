@@ -1701,7 +1701,8 @@ def run_derive_single_job(job, derive_reduce_factor=None):
         job.save()
         logger.error(f"Derive directory already exists: {derive_dir}")
         return
-
+    else:
+        shutil.rmtree(derive_dir)
     os.makedirs(derive_dir, exist_ok=True)
     logger.info(f"Created derive directory: {derive_dir}")
 
