@@ -1969,6 +1969,7 @@ def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
         job.status = 'derive_failed'
         job.save()
         logger.error(f"Updated job {job.id} to derive_failed")
+        raise  # Re-raise to prevent run_derive_single_job from marking as successful
 
 @login_required
 def all_items(request):
@@ -1980,19 +1981,24 @@ def all_items(request):
     search_identifier_prefix = request.GET.get('identifier_prefix', '').strip()
     search_author = request.GET.get('author', '').strip()
 
+    # Get sort parameters (default: derived_at descending)
+    sort_by = request.GET.get('sort', 'derived_at')
+    sort_order = request.GET.get('order', 'desc')
+
     # Get derived jobs - staff users see all, regular users see only their own
     if request.user.is_staff:
         derived_jobs = ProcessingJob.objects.filter(is_derived=True)
     else:
         derived_jobs = ProcessingJob.objects.filter(is_derived=True, user=request.user)
 
-    # Create a mapping of identifier to job info (owner and author)
+    # Create a mapping of identifier to job info (owner, author, and derived_at)
     identifier_to_job_info = {}
     for job in derived_jobs:
         if job.derived_identifier:
             identifier_to_job_info[job.derived_identifier] = {
                 'owner': job.user,
                 'author': job.author,
+                'derived_at': job.derived_at,
             }
 
     # Check if derived directory exists
@@ -2015,6 +2021,7 @@ def all_items(request):
                     'path': item_path,
                     'owner': job_info.get('owner'),  # Add owner information
                     'author': job_info.get('author'),  # Add author information
+                    'derived_at': job_info.get('derived_at'),  # Add derived timestamp
                 }
 
                 # Get statistics about the directory
@@ -2035,6 +2042,7 @@ def all_items(request):
 
                     item_info['file_count'] = file_count
                     item_info['total_size'] = format_file_size(total_size)
+                    item_info['total_size_bytes'] = total_size
                     item_info['modified'] = modified_time
 
                     # Check for thumbnail
@@ -2079,6 +2087,22 @@ def all_items(request):
 
     has_search = bool(search_identifier or search_identifier_prefix or search_author)
 
+    # Sort items based on sort parameters
+    reverse_order = (sort_order == 'desc')
+    if sort_by == 'identifier':
+        items.sort(key=lambda x: (x.get('identifier') or '').lower(), reverse=reverse_order)
+    elif sort_by == 'author':
+        items.sort(key=lambda x: (x.get('author') or '').lower(), reverse=reverse_order)
+    elif sort_by == 'owner':
+        items.sort(key=lambda x: (x.get('owner').username if x.get('owner') else '').lower(), reverse=reverse_order)
+    elif sort_by == 'size':
+        items.sort(key=lambda x: x.get('total_size_bytes', 0), reverse=reverse_order)
+    elif sort_by == 'files':
+        items.sort(key=lambda x: x.get('file_count', 0), reverse=reverse_order)
+    else:  # Default: derived_at
+        sort_by = 'derived_at'
+        items.sort(key=lambda x: x.get('derived_at') or timezone.datetime.min.replace(tzinfo=timezone.utc), reverse=reverse_order)
+
     context = {
         'items': items,
         'total_items': len(items),
@@ -2086,6 +2110,8 @@ def all_items(request):
         'search_identifier_prefix': search_identifier_prefix,
         'search_author': search_author,
         'has_search': has_search,
+        'sort_by': sort_by,
+        'sort_order': sort_order,
     }
 
     return render(request, 'repub_interface/all_items.html', context)

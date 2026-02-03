@@ -20,6 +20,13 @@
     transform: scale(1.1);
     box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 }
+.sortable-header {
+    cursor: pointer;
+    user-select: none;
+}
+.sortable-header:hover {
+    background-color: #e9ecef;
+}
 </style>
 {% endblock %}
 
@@ -112,12 +119,56 @@
                                 <input type="checkbox" class="form-check-input" id="select-all" title="Select all">
                             </th>
                             <th style="width: 140px;">Preview</th>
-                            <th>Identifier</th>
-                            <th>Author</th>
-                            {% if user.is_staff %}<th>Owner</th>{% endif %}
-                            <th>Files</th>
-                            <th>Size</th>
-                            <th>Last Modified</th>
+                            <th>
+                                <a href="?sort=identifier&order={% if sort_by == 'identifier' and sort_order == 'asc' %}desc{% else %}asc{% endif %}{% if search_identifier %}&identifier={{ search_identifier }}{% endif %}{% if search_identifier_prefix %}&identifier_prefix={{ search_identifier_prefix }}{% endif %}{% if search_author %}&author={{ search_author }}{% endif %}" class="text-decoration-none text-dark">
+                                    Identifier
+                                    {% if sort_by == 'identifier' %}
+                                        <i class="bi bi-caret-{% if sort_order == 'asc' %}up{% else %}down{% endif %}-fill"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?sort=author&order={% if sort_by == 'author' and sort_order == 'asc' %}desc{% else %}asc{% endif %}{% if search_identifier %}&identifier={{ search_identifier }}{% endif %}{% if search_identifier_prefix %}&identifier_prefix={{ search_identifier_prefix }}{% endif %}{% if search_author %}&author={{ search_author }}{% endif %}" class="text-decoration-none text-dark">
+                                    Author
+                                    {% if sort_by == 'author' %}
+                                        <i class="bi bi-caret-{% if sort_order == 'asc' %}up{% else %}down{% endif %}-fill"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            {% if user.is_staff %}
+                            <th>
+                                <a href="?sort=owner&order={% if sort_by == 'owner' and sort_order == 'asc' %}desc{% else %}asc{% endif %}{% if search_identifier %}&identifier={{ search_identifier }}{% endif %}{% if search_identifier_prefix %}&identifier_prefix={{ search_identifier_prefix }}{% endif %}{% if search_author %}&author={{ search_author }}{% endif %}" class="text-decoration-none text-dark">
+                                    Owner
+                                    {% if sort_by == 'owner' %}
+                                        <i class="bi bi-caret-{% if sort_order == 'asc' %}up{% else %}down{% endif %}-fill"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            {% endif %}
+                            <th>
+                                <a href="?sort=files&order={% if sort_by == 'files' and sort_order == 'desc' %}asc{% else %}desc{% endif %}{% if search_identifier %}&identifier={{ search_identifier }}{% endif %}{% if search_identifier_prefix %}&identifier_prefix={{ search_identifier_prefix }}{% endif %}{% if search_author %}&author={{ search_author }}{% endif %}" class="text-decoration-none text-dark">
+                                    Files
+                                    {% if sort_by == 'files' %}
+                                        <i class="bi bi-caret-{% if sort_order == 'asc' %}up{% else %}down{% endif %}-fill"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?sort=size&order={% if sort_by == 'size' and sort_order == 'desc' %}asc{% else %}desc{% endif %}{% if search_identifier %}&identifier={{ search_identifier }}{% endif %}{% if search_identifier_prefix %}&identifier_prefix={{ search_identifier_prefix }}{% endif %}{% if search_author %}&author={{ search_author }}{% endif %}" class="text-decoration-none text-dark">
+                                    Size
+                                    {% if sort_by == 'size' %}
+                                        <i class="bi bi-caret-{% if sort_order == 'asc' %}up{% else %}down{% endif %}-fill"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?sort=derived_at&order={% if sort_by == 'derived_at' and sort_order == 'desc' %}asc{% else %}desc{% endif %}{% if search_identifier %}&identifier={{ search_identifier }}{% endif %}{% if search_identifier_prefix %}&identifier_prefix={{ search_identifier_prefix }}{% endif %}{% if search_author %}&author={{ search_author }}{% endif %}" class="text-decoration-none text-dark">
+                                    Derived At
+                                    {% if sort_by == 'derived_at' %}
+                                        <i class="bi bi-caret-{% if sort_order == 'asc' %}up{% else %}down{% endif %}-fill"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -182,9 +233,9 @@
                                 <span>{{ item.total_size }}</span>
                             </td>
                             <td>
-                                {% if item.modified %}
-                                    <span title="{{ item.modified }}">{{ item.modified|timesince }} ago</span>
-                                    <small class="d-block text-muted">{{ item.modified|date:"M d, Y H:i" }}</small>
+                                {% if item.derived_at %}
+                                    <span title="{{ item.derived_at }}">{{ item.derived_at|timesince }} ago</span>
+                                    <small class="d-block text-muted">{{ item.derived_at|date:"M d, Y H:i" }}</small>
                                 {% else %}
                                     <span class="text-muted">Unknown</span>
                                 {% endif %}
