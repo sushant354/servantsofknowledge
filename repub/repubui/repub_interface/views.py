@@ -1589,18 +1589,18 @@ def bulk_derive_jobs(request):
 
     # Filter jobs based on user permissions
     if request.user.is_staff:
-        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['completed', 'derive_failed'])
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['completed', 'derive_failed', 'deriving'])
     else:
-        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['completed', 'derive_failed'], user=request.user)
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['completed', 'derive_failed', 'deriving'], user=request.user)
 
     derive_count = 0
     failed_count = 0
 
     for job in jobs:
         try:
-            # Check if job is already being derived to prevent duplicate submissions
-            if job.status in ['deriving', 'derive_pending']:
-                logger.warning(f"Job {job.id} is already being derived. Skipping.")
+            # Check if job is already queued to prevent duplicate submissions
+            if job.status == 'derive_pending':
+                logger.warning(f"Job {job.id} is already queued for derivation. Skipping.")
                 failed_count += 1
                 continue
 
@@ -1627,7 +1627,7 @@ def bulk_derive_jobs(request):
         messages.warning(request, f'{failed_count} job{"s" if failed_count > 1 else ""} could not be derived.')
 
     if derive_count == 0 and failed_count == 0:
-        messages.warning(request, 'No jobs were derived. Please ensure selected jobs are in completed or derive_failed status.')
+        messages.warning(request, 'No jobs were derived. Please ensure selected jobs are in completed, derive_failed, or deriving status.')
 
     return redirect('all_jobs')
 
