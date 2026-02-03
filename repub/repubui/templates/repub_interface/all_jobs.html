@@ -32,6 +32,28 @@ th a {
 th a:hover {
     text-decoration: underline !important;
 }
+.stats-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    overflow-x: auto;
+}
+.stats-row .stat-col {
+    flex: 1;
+    min-width: 0;
+}
+.stats-row .card-body {
+    padding: 0.5rem;
+}
+.stats-row .card-title {
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+}
+.stats-row .card-text {
+    font-size: 1.25rem;
+    margin-bottom: 0;
+}
 </style>
 {% endblock %}
 
@@ -97,8 +119,8 @@ th a:hover {
 </div>
 
 <!-- Statistics Cards -->
-<div class="row mb-4 justify-content-center">
-    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+<div class="stats-row mb-4">
+    <div class="stat-col">
         <a href="?{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}" class="text-decoration-none">
             <div class="card bg-primary text-white clickable-card{% if not request.GET.status %} filter-active{% endif %}">
                 <div class="card-body text-center">
@@ -108,7 +130,7 @@ th a:hover {
             </div>
         </a>
     </div>
-    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+    <div class="stat-col">
         <a href="?status=pending{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-secondary text-white clickable-card{% if request.GET.status == 'pending' %} filter-active{% endif %}">
                 <div class="card-body text-center">
@@ -118,7 +140,7 @@ th a:hover {
             </div>
         </a>
     </div>
-    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+    <div class="stat-col">
         <a href="?status=completed{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-success text-white clickable-card{% if request.GET.status == 'completed' %} filter-active{% endif %}">
                 <div class="card-body text-center">
@@ -128,7 +150,7 @@ th a:hover {
             </div>
         </a>
     </div>
-    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+    <div class="stat-col">
         <a href="?status=processing{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-warning text-white clickable-card{% if request.GET.status == 'processing' %} filter-active{% endif %}">
                 <div class="card-body text-center">
@@ -138,7 +160,7 @@ th a:hover {
             </div>
         </a>
     </div>
-    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+    <div class="stat-col">
         <a href="?status=reviewing{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-info text-white clickable-card{% if request.GET.status == 'reviewing' %} filter-active{% endif %}">
                 <div class="card-body text-center">
@@ -148,7 +170,7 @@ th a:hover {
             </div>
         </a>
     </div>
-    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+    <div class="stat-col">
         <a href="?status=failed{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-danger text-white clickable-card{% if request.GET.status == 'failed' %} filter-active{% endif %}">
                 <div class="card-body text-center">
@@ -158,7 +180,7 @@ th a:hover {
             </div>
         </a>
     </div>
-    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+    <div class="stat-col">
         <a href="?status=derive_pending{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-dark text-white clickable-card{% if request.GET.status == 'derive_pending' %} filter-active{% endif %}">
                 <div class="card-body text-center">
