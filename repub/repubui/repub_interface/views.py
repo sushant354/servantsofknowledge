@@ -1702,6 +1702,38 @@ def run_derive_single_job(job, derive_reduce_factor=None):
     os.makedirs(derive_dir, exist_ok=True)
     logger.info(f"Created derive directory: {derive_dir}")
 
+    # Copy thumbnail if it exists
+    output_dir = job.get_output_dir()
+    thumb_path = os.path.join(output_dir, '__ia_thumb.jpg')
+    if os.path.exists(thumb_path):
+        thumb_dest = os.path.join(derive_dir, '__ia_thumb.jpg')
+        shutil.copy2(thumb_path, thumb_dest)
+        logger.info(f"Copied thumbnail to: {thumb_dest}")
+
+    # Check if HOCR file exists, if not regenerate PDF with OCR
+    hocr_path = os.path.join(output_dir, 'x_hocr.html.gz')
+    pdf_path = os.path.join(output_dir, 'x_final.pdf')
+    text_path = os.path.join(output_dir, 'x_text.txt')
+
+    if not os.path.exists(hocr_path) or not os.path.exists(pdf_path) or \
+            not os.path.exists(text_path):
+        logger.info(f"HOCR file not found for job {job.id}, regenerating PDF with OCR in derive directory")
+
+        run_and_monitor_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor)
+    else:
+        # Copy existing PDF if it exists
+        pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
+        shutil.copy2(pdf_path, pdf_dest)
+        logger.info(f"Copied PDF to: {pdf_dest}")
+
+        hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
+        shutil.copy2(hocr_path, hocr_dest)
+        logger.info(f"Copied HOCR to: {hocr_dest}")
+
+        text_dest = os.path.join(derive_dir, f'{identifier}_text.txt')
+        shutil.copy2(text_path, text_dest)
+        logger.info(f"Copied text file to: {text_dest}")
+
     # Copy input file
     if job.input_file and os.path.exists(job.input_file.path):
         input_filename = os.path.basename(job.input_file.path)
@@ -1735,50 +1767,17 @@ def run_derive_single_job(job, derive_reduce_factor=None):
                     zipf.write(file_path, arcname)
         logger.info(f"Created thumbnails zip: {zip_path}")
 
-    # Copy thumbnail if it exists
-    output_dir = job.get_output_dir()
-    thumb_path = os.path.join(output_dir, '__ia_thumb.jpg')
-    if os.path.exists(thumb_path):
-        thumb_dest = os.path.join(derive_dir, '__ia_thumb.jpg')
-        shutil.copy2(thumb_path, thumb_dest)
-        logger.info(f"Copied thumbnail to: {thumb_dest}")
+    # Clean up output folder and related directories
+    output_base_dir = job.get_output_dir()
+    if os.path.exists(output_base_dir):
+        shutil.rmtree(output_base_dir)
+        logger.info(f"Cleaned up output directory: {output_base_dir}")
 
-    # Check if HOCR file exists, if not regenerate PDF with OCR
-    hocr_path = os.path.join(output_dir, 'x_hocr.html.gz')
-    pdf_path = os.path.join(output_dir, 'x_final.pdf')
-    text_path = os.path.join(output_dir, 'x_text.txt')
-
-    if not os.path.exists(hocr_path) or not os.path.exists(pdf_path) or \
-            not os.path.exists(text_path):
-        logger.info(f"HOCR file not found for job {job.id}, regenerating PDF with OCR in derive directory")
-
-        # Generate PDF with OCR directly (removed the queue logic for now)
-        run_and_monitor_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor)
-    else:
-        # Copy existing PDF if it exists
-        pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
-        shutil.copy2(pdf_path, pdf_dest)
-        logger.info(f"Copied PDF to: {pdf_dest}")
-
-        hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
-        shutil.copy2(hocr_path, hocr_dest)
-        logger.info(f"Copied HOCR to: {hocr_dest}")
-
-        text_dest = os.path.join(derive_dir, f'{identifier}_text.txt')
-        shutil.copy2(text_path, text_dest)
-        logger.info(f"Copied text file to: {text_dest}")
-
-        # Clean up output folder and related directories
-        output_base_dir = job.get_output_dir()
-        if os.path.exists(output_base_dir):
-            shutil.rmtree(output_base_dir)
-            logger.info(f"Cleaned up output directory: {output_base_dir}")
-
-        # Clean up uploads folder
-        upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
-        if os.path.exists(upload_base_dir):
-            shutil.rmtree(upload_base_dir)
-            logger.info(f"Cleaned up upload directory: {upload_base_dir}")
+    # Clean up uploads folder
+    upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
+    if os.path.exists(upload_base_dir):
+        shutil.rmtree(upload_base_dir)
+        logger.info(f"Cleaned up upload directory: {upload_base_dir}")
 
     logger.info(f"Successfully derived job {job.id} to {derive_dir}")
 
@@ -1938,22 +1937,6 @@ def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
         if temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
             logger.info(f"Cleaned up temporary directory: {temp_dir}")
-
-        # Clean up output folder and related directories after successful PDF generation
-        output_base_dir = job.get_output_dir()
-        if os.path.exists(output_base_dir):
-            shutil.rmtree(output_base_dir)
-            logger.info(f"Cleaned up output directory: {output_base_dir}")
-
-        # Clean up uploads folder
-        upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
-        if os.path.exists(upload_base_dir):
-            shutil.rmtree(upload_base_dir)
-            logger.info(f"Cleaned up upload directory: {upload_base_dir}")
-
-        job.status = 'derive_completed'
-        job.save()
-        logger.info(f"Updated job {job.id} to derive_completed after PDF generation")
 
     except Exception as e:
         logger.error(f"Error generating PDF for job {job.id}: {str(e)}", exc_info=True)
