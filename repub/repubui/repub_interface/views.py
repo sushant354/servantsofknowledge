@@ -1580,6 +1580,50 @@ def bulk_stop_jobs(request):
 @login_required
 @require_http_methods(["POST"])
 @csrf_exempt
+def bulk_set_derive_failed(request):
+    """Set multiple selected deriving jobs to derive_failed status"""
+    job_ids = request.POST.getlist('job_ids')
+
+    if not job_ids:
+        messages.warning(request, 'No jobs selected.')
+        return redirect('all_jobs')
+
+    # Filter jobs based on user permissions
+    if request.user.is_staff:
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status='deriving')
+    else:
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status='deriving', user=request.user)
+
+    updated_count = 0
+    failed_count = 0
+
+    for job in jobs:
+        try:
+            job.status = 'derive_failed'
+            job.error_message = 'Manually set to derive_failed by user.'
+            job.save()
+            updated_count += 1
+            logger.info(f"User {request.user.username} set job {job.id} to derive_failed")
+        except Exception as e:
+            failed_count += 1
+            logger.error(f"Error setting job {job.id} to derive_failed: {str(e)}", exc_info=True)
+            messages.error(request, f'Error updating job "{job.title or job.id}": {str(e)}')
+
+    if updated_count > 0:
+        messages.success(request, f'Successfully set {updated_count} job{"s" if updated_count > 1 else ""} to derive_failed.')
+
+    if failed_count > 0:
+        messages.warning(request, f'{failed_count} job{"s" if failed_count > 1 else ""} could not be updated.')
+
+    if updated_count == 0 and failed_count == 0:
+        messages.warning(request, 'No jobs were updated. Please ensure selected jobs are in deriving status.')
+
+    return redirect('all_jobs')
+
+
+@login_required
+@require_http_methods(["POST"])
+@csrf_exempt
 def bulk_derive_jobs(request):
     """Derive multiple selected completed jobs"""
     job_ids = request.POST.getlist('job_ids')

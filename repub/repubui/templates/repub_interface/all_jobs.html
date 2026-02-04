@@ -241,7 +241,11 @@ th a:hover {
             <button type="button" id="stopSelectedBtn" class="btn btn-sm btn-danger" disabled>
                 <i class="bi bi-stop-circle"></i> Stop Selected (<span id="selectedCount">0</span>)
             </button>
-        {% elif request.GET.status == 'deriving' or request.GET.status == 'derive_failed' %}
+        {% elif request.GET.status == 'deriving' %}
+            <button type="button" id="setDeriveFailedBtn" class="btn btn-sm btn-danger" disabled>
+                <i class="bi bi-x-circle"></i> Set Derive Failed (<span id="selectedCount">0</span>)
+            </button>
+        {% elif request.GET.status == 'derive_failed' %}
             <button type="button" id="retryDeriveSelectedBtn" class="btn btn-sm btn-primary" disabled>
                 <i class="bi bi-arrow-clockwise"></i> Retry Selected (<span id="selectedCount">0</span>)
             </button>
@@ -254,8 +258,10 @@ th a:hover {
             <form id="bulkActionForm" method="post" action="{% url 'bulk_retry_jobs' %}">
             {% elif request.GET.status == 'processing' or request.GET.status == 'pending' or request.GET.status == 'derive_pending' %}
             <form id="bulkActionForm" method="post" action="{% url 'bulk_stop_jobs' %}">
-            {% elif request.GET.status == 'completed' or request.GET.status == 'deriving' or request.GET.status == 'derive_failed' %}
+            {% elif request.GET.status == 'completed' or request.GET.status == 'derive_failed' %}
             <form id="bulkActionForm" method="post" action="{% url 'bulk_derive_jobs' %}">
+            {% elif request.GET.status == 'deriving' %}
+            <form id="bulkActionForm" method="post" action="{% url 'bulk_set_derive_failed' %}">
             {% else %}
             <form id="bulkActionForm">
             {% endif %}
@@ -506,13 +512,14 @@ th a:hover {
         const stopSelectedBtn = document.getElementById('stopSelectedBtn');
         const deriveSelectedBtn = document.getElementById('deriveSelectedBtn');
         const retryDeriveSelectedBtn = document.getElementById('retryDeriveSelectedBtn');
+        const setDeriveFailedBtn = document.getElementById('setDeriveFailedBtn');
         const jobCheckboxes = document.querySelectorAll('.job-checkbox');
         const selectedCountSpan = document.getElementById('selectedCount');
         const bulkActionForm = document.getElementById('bulkActionForm');
 
-        if (selectAllCheckbox && selectAllBtn && (retrySelectedBtn || stopSelectedBtn || deriveSelectedBtn || retryDeriveSelectedBtn)) {
-            const actionBtn = retrySelectedBtn || stopSelectedBtn || deriveSelectedBtn || retryDeriveSelectedBtn;
-            const actionType = retrySelectedBtn ? 'retry' : (stopSelectedBtn ? 'stop' : (deriveSelectedBtn ? 'derive' : 'retry_derive'));
+        if (selectAllCheckbox && selectAllBtn && (retrySelectedBtn || stopSelectedBtn || deriveSelectedBtn || retryDeriveSelectedBtn || setDeriveFailedBtn)) {
+            const actionBtn = retrySelectedBtn || stopSelectedBtn || deriveSelectedBtn || retryDeriveSelectedBtn || setDeriveFailedBtn;
+            const actionType = retrySelectedBtn ? 'retry' : (stopSelectedBtn ? 'stop' : (deriveSelectedBtn ? 'derive' : (retryDeriveSelectedBtn ? 'retry_derive' : 'set_derive_failed')));
 
             // Update selected count and button state
             function updateSelectedCount() {
@@ -560,6 +567,8 @@ th a:hover {
                         confirmMessage = `Are you sure you want to stop ${checkedCount} selected job${checkedCount > 1 ? 's' : ''}?`;
                     } else if (actionType === 'retry_derive') {
                         confirmMessage = `Are you sure you want to retry derivation for ${checkedCount} selected job${checkedCount > 1 ? 's' : ''}?`;
+                    } else if (actionType === 'set_derive_failed') {
+                        confirmMessage = `Are you sure you want to set ${checkedCount} selected job${checkedCount > 1 ? 's' : ''} to derive failed?`;
                     } else {
                         confirmMessage = `Are you sure you want to derive ${checkedCount} selected job${checkedCount > 1 ? 's' : ''}?`;
                     }
