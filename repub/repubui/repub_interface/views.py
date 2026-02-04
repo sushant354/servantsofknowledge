@@ -8,6 +8,7 @@ import logging
 import mimetypes
 import re
 import csv
+import datetime 
 
 from PIL import Image
 from django.shortcuts import render, redirect, get_object_or_404
@@ -685,6 +686,10 @@ def process_job(job):
     # Clear any existing handlers
     job_logger.handlers.clear()
 
+    # Prevent propagation to parent loggers to avoid writing to closed streams
+    # in uwsgi background threads
+    job_logger.propagate = False
+
     # Create file handler
     file_handler = logging.StreamHandler(loghandle)
 
@@ -1281,15 +1286,21 @@ def run_finalize_job(job):
         loghandle = open(logfile, 'a', encoding='utf-8')
 
         finalize_logger = logging.getLogger(f'repub.finalize.{job.id}')
-        finalize_logger.info(f"Starting finalization for job {job.id}")
+
         # Clear any existing handlers
         finalize_logger.handlers.clear()
+
+        # Prevent propagation to parent loggers to avoid writing to closed streams
+        # in uwsgi background threads
+        finalize_logger.propagate = False
 
         # Create file handler
         file_handler = logging.StreamHandler(loghandle)
 
         # Add handler to logger
         finalize_logger.addHandler(file_handler)
+
+        finalize_logger.info(f"Starting finalization for job {job.id}")
 
         input_dir = job.get_input_dir()
         args = Args(job, input_dir, output_dir)
@@ -1911,6 +1922,7 @@ def run_and_monitor_pdf(job, identifier, metadata, derive_dir, derive_reduce_fac
 
 def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
     temp_dir = None
+    derive_loghandle = None
     job.status = 'deriving'
     job.save()
     try:
@@ -1932,6 +1944,20 @@ def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
 
         # Create a logger for the OCR process
         derive_logger = logging.getLogger(f'repub.derive.{job.id}')
+
+        # Clear any existing handlers
+        derive_logger.handlers.clear()
+
+        # Prevent propagation to parent loggers to avoid writing to closed streams
+        # in uwsgi background threads
+        derive_logger.propagate = False
+
+        # Create file handler for derive log
+        derive_logfile = os.path.join(derive_dir, 'derive.log')
+        derive_loghandle = open(derive_logfile, 'a', encoding='utf-8')
+        derive_file_handler = logging.StreamHandler(derive_loghandle)
+        derive_logger.addHandler(derive_file_handler)
+
         derive_logger.info(f"Regenerating PDF with OCR for {len(outfiles)} pages")
 
         # If reduce_factor is specified, create reduced images
@@ -1982,6 +2008,10 @@ def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
             shutil.rmtree(temp_dir)
             logger.info(f"Cleaned up temporary directory: {temp_dir}")
 
+        # Close the derive log file handle
+        if derive_loghandle:
+            derive_loghandle.close()
+
     except Exception as e:
         logger.error(f"Error generating PDF for job {job.id}: {str(e)}", exc_info=True)
 
@@ -1992,6 +2022,10 @@ def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
                 logger.info(f"Cleaned up temporary directory: {temp_dir}")
             except Exception as cleanup_error:
                 logger.error(f"Error cleaning up temporary directory: {str(cleanup_error)}")
+
+        # Close the derive log file handle
+        if derive_loghandle:
+            derive_loghandle.close()
 
         job.status = 'derive_failed'
         job.save()
@@ -2128,7 +2162,7 @@ def all_items(request):
         items.sort(key=lambda x: x.get('file_count', 0), reverse=reverse_order)
     else:  # Default: derived_at
         sort_by = 'derived_at'
-        items.sort(key=lambda x: x.get('derived_at') or timezone.datetime.min.replace(tzinfo=timezone.utc), reverse=reverse_order)
+        items.sort(key=lambda x: x.get('derived_at') or timezone.datetime.min.replace(tzinfo=datetime.timezone.utc), reverse=reverse_order)
 
     context = {
         'items': items,
