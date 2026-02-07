@@ -1,12 +1,10 @@
 from django.urls import path
-from . import views, review, items, directory
+from . import views, review, items, directory, users
 
 urlpatterns = [
     path('', views.home, name='home'),
     path('jobs/', views.all_jobs, name='all_jobs'),
     path('jobs/export-csv/', views.export_jobs_csv, name='export_jobs_csv'),
-    path('register/', views.register, name='register'),
-    path('activate/<str:uidb64>/<str:token>/', views.activate_account, name='activate_account'),
     path('job/<uuid:job_id>/', views.job_detail, name='job_detail'),
     path('job/<uuid:job_id>/download/', views.job_download, name='job_download'),
     path('job/<uuid:job_id>/finalize/', views.finalize_job, name='finalize_job'),
@@ -20,7 +18,6 @@ urlpatterns = [
     path('jobs/bulk-set-derive-failed/', views.bulk_set_derive_failed, name='bulk_set_derive_failed'),
     path('job/<uuid:job_id>/cleanup/', views.cleanup_job, name='cleanup_job'),
     path('job/<uuid:job_id>/delete/', views.delete_job, name='delete_job'),
-    path('api-token/', views.api_token_management, name='api_token'),
     path('items/', items.all_items, name='all_items'),
     path('items/export-csv/', items.export_items_csv, name='export_items_csv'),
     path('item/<str:identifier>/delete/', items.delete_item, name='delete_item'),
@@ -34,4 +31,7 @@ urlpatterns = [
     path('job/<uuid:job_id>/output-directory/<path:subpath>/', directory.job_output_directory, name='job_output_directory_subpath'),
     path('job/<uuid:job_id>/input-directory/', directory.job_input_directory, name='job_input_directory'),
     path('job/<uuid:job_id>/input-directory/<path:subpath>/', directory.job_input_directory, name='job_input_directory_subpath'),
+    path('register/', users.register, name='register'),
+    path('api-token/', users.api_token_management, name='api_token'),
+    path('activate/<str:uidb64>/<str:token>/', users.activate_account, name='activate_account'),
 ]
