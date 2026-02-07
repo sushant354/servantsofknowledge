@@ -176,6 +176,7 @@ CELERY_TIMEZONE = 'Asia/Kolkata'
 CELERY_ENABLE_UTC = True
 CELERY_TASK_ROUTES = {
     'repub_interface.tasks.derive_job_task': {'queue': 'derive'},
+    'repub_interface.tasks.run_job_task': {'queue': 'processing'},
 }
 
 # Security settings - only enabled in production (when DEBUG=False)

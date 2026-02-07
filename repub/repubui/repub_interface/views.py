@@ -42,11 +42,10 @@ from repub import process_raw
 from repub.imgfuncs.dewarp import dewarp
 from repub.utils.scandir import Scandir
 from repub.utils import pdfs
+from .tasks import Args
 
 
 max_deriving_jobs   = settings.MAX_DERIVING_JOBS
-max_concurrent_jobs = settings.MAX_CONCURRENT_JOBS
-check_interval      = settings.JOB_QUEUE_CHECK_INTERVAL
 
 def authenticate_user(request):
     """Custom authentication that supports both session and token auth"""
@@ -342,10 +341,10 @@ def home(request):
         job.user = request.user
         job.save()
         logger.info(f"Created job {job.id} with file: {job.input_file}")
-        thread = threading.Thread(target=run_and_monitor_job, args=(job,))
-        thread.start()
+        from .tasks import run_job_task
+        run_job_task.delay(str(job.id))
 
-        logger.info(f"Started processing job {job.id} in background thread")
+        logger.info(f"Submitted processing job {job.id} to celery")
         messages.success(request, f'Job "{job.title or "Untitled"}" has been submitted and is being processed.')
         return redirect('job_detail', job_id=job.id)
 
@@ -353,36 +352,6 @@ def home(request):
         'form': form,
         'jobs': jobs
     })
-
-def run_and_monitor_job(job):
-    """
-    Start job processing with concurrent job limiting.
-    Waits if maximum concurrent jobs are already running.
-    """
-
-    # Wait until there are fewer than max concurrent jobs processing
-    while True:
-        processing_count = ProcessingJob.objects.filter(status='processing').count()
-
-        if processing_count <= max_concurrent_jobs:
-            # Start processing in background thread
-            logger.info(f"Starting job {job.id}. Current processing jobs: {processing_count}/{max_concurrent_jobs}")
-            run_job(job)
-            break
-        else:
-            # Wait before checking again
-            logger.info(f"Job {job.id} waiting in queue. Current processing jobs: {processing_count}/{max_concurrent_jobs}")
-            time.sleep(check_interval)
-
-def run_job(job):
-    logger = logging.getLogger('repubui')
-    try:
-        process_job(job)
-    except Exception as e:
-        logger.exception('Error in process_job %s error: %s', job.id, e)
-        job.status = 'failed'
-        job.error_message = str(e)
-        job.save()
 
 @login_required
 def job_detail(request, job_id):
@@ -625,183 +594,6 @@ def create_thumbnail(image_path, max_size=(300, 300)):
         logger.error(f"Error creating thumbnail for {image_path}: {str(e)}", exc_info=True)
         return None
 
-
-class Args:
-    def __init__(self, job, input_dir, output_dir):
-        img_dir = os.path.join(output_dir, 'output')
-        os.makedirs(img_dir, exist_ok=True)
-
-        thumbnaildir = os.path.join(output_dir, 'thumbnails')
-        os.makedirs(thumbnaildir, exist_ok=True)
-
-        self.indir  = input_dir
-        self.outdir = img_dir
-        self.outpdf = os.path.join(output_dir, "x_final.pdf")
-        self.langs  = job.language
-
-        self.thumbnaildir = thumbnaildir
-        self.thumbnail    = os.path.join(output_dir, '__ia_thumb.jpg')
-
-        self.maxcontours  = job.maxcontours
-        self.xmax         = job.xmaximum
-        self.ymax         = job.ymax
-        self.mingray      = job.mingray
-        self.crop         = job.crop
-        self.deskew       = job.deskew
-        self.do_ocr       = job.ocr
-
-        if self.do_ocr:
-            self.outhocr = os.path.join(output_dir, 'x_hocr.html.gz')
-            self.outtxt  = os.path.join(output_dir, 'x_text.txt')
-        else:
-            self.outhocr = None     
-            self.outtxt  = None
-
-        self.dewarp       = job.dewarp
-        self.drawcontours = job.draw_contours
-        self.gray         = job.gray
-        self.rotate_type  = job.rotate_type
-        self.factor       = job.reduce_factor
-        self.pagenums     = None
-
-def process_job(job):
-    job.status = 'processing'
-    job.processing_started_at = timezone.now()
-    job.output_file = None
-    job.save()
-
-    # Get the input and output directories/files
-    input_file_path = job.input_file.path if job.input_file else None
-    input_dir       = job.get_input_dir()
-    output_dir      = job.get_output_dir()
-
-    os.makedirs(input_dir, exist_ok=True)
-    os.makedirs(output_dir, exist_ok=True)
-
-    logfile   = os.path.join(output_dir, 'processing.log')
-    loghandle = open(logfile, 'a', encoding='utf-8')
-
-    # Create a logger that writes to the log file
-    job_logger = logging.getLogger('repub.job')
-
-    # Clear any existing handlers
-    job_logger.handlers.clear()
-
-    # Prevent propagation to parent loggers to avoid writing to closed streams
-    # in uwsgi background threads
-    job_logger.propagate = False
-
-    # Create file handler
-    file_handler = logging.StreamHandler(loghandle)
-
-    # Add handler to logger
-    job_logger.addHandler(file_handler)
-
-    job_logger.info(f"Processing job ID: {job.id}")
-    job_logger.info(f"Input file: {input_file_path}")
-    job_logger.info(f"Input file exists: {os.path.exists(input_file_path) if input_file_path else False}")
-    job_logger.info(f"Input directory: {input_dir}")
-
-    # Process based on input type
-    if job.input_type == 'pdf':
-        job_logger.info("Input type: PDF")
-        if not input_file_path or not os.path.exists(input_file_path):
-            raise ValueError(f"PDF file not found at: {input_file_path}")
-        # Extract images from PDF
-        pdfs.pdf_to_images(input_file_path, input_dir)
-    elif job.input_type == 'images':
-        job_logger.info("Input type: Images")
-        if not input_file_path or not os.path.exists(input_file_path):
-            raise ValueError(f"Image file not found at: {input_file_path}")
-        # If it's a ZIP file, extract it
-        if input_file_path.lower().endswith('.zip'):
-            job_logger.info("Extracting ZIP file")
-            with zipfile.ZipFile(input_file_path, 'r') as zip_ref:
-                zip_ref.extractall(input_dir)
-
-            # List all extracted files for debugging
-            n = 0
-            for root, dirs, files in os.walk(input_dir):
-                for file in files:
-                    n += 1
-            job_logger.info(f"Extracted {n} files from ZIP")
-
-            # If it's a single image, copy it to the input directory
-        elif input_file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
-            job_logger.info("Processing single image file")
-            filename = os.path.basename(input_file_path)
-            destination = os.path.join(input_dir, filename)
-            shutil.copy(input_file_path, destination)
-
-    args = Args(job, input_dir, output_dir)
-    scandir = Scandir(args.indir, args.outdir, args.pagenums, job_logger)
-    if job.input_type == 'pdf':
-        metadata = pdfs.get_metadata(input_file_path)
-    else:
-        metadata = scandir.metadata
-
-    # Check if identifier is already being processed or derived
-    identifier = metadata.get('/Identifier')
-    if identifier:
-        # Check if there's already a job with this identifier being processed
-        existing_job = ProcessingJob.objects.filter(
-            identifier=identifier
-        ).exclude(id=job.id).first()
-
-        if existing_job:
-            job.status = 'failed'
-            job.error_message = f'Job rejected: Identifier "{identifier}" is already being processed by <a href="/job/{existing_job.id}/">another job</a>.'
-            job.save()
-            job_logger.error(f"Job rejected: Identifier '{identifier}' is already being processed by job {existing_job.id}")
-            loghandle.close()
-            return
-
-        derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
-        derive_dir = os.path.join(derive_base_dir, identifier)
-
-        if os.path.exists(derive_dir):
-            job.status = 'failed'
-            job.error_message = f'Job rejected: The identifier "<a href="/item/{identifier}/">{identifier}</a>" has already been derived.'
-            job.save()
-            job_logger.error(f"Job rejected: Identifier '{identifier}' already exists in derived directory: {derive_dir}")
-            loghandle.close()
-            return
-
-    title = metadata.get('/Title')
-    if title:
-        job.title = title
-        job.save()
-
-    # Save author to job
-    author = metadata.get('/Creator')
-    if author:
-        job.author = author
-
-    # Save identifier to job
-    job.identifier = identifier
-    job.save()
-
-    if args.drawcontours:
-        args.thumbnaildir = job.get_thumbnail_dir()
-        outfiles = process_raw.draw_contours(scandir, args, job_logger)
-    elif args.gray:
-        args.thumbnaildir = job.get_thumbnail_dir()
-        outfiles = process_raw.gray_images(scandir, args, job_logger)
-    elif args.deskew and not args.crop:
-        outfiles = process_raw.deskew_images(scandir, args, job_logger)
-    else:
-        outfiles = process_raw.process_images(scandir, args, job_logger)
-        if args.outpdf:
-            pdfs.save_pdf(outfiles, metadata, args.langs, args.outpdf, \
-                          args.do_ocr, args.outhocr, args.outtxt, job_logger)
-            relative_path = os.path.relpath(args.outpdf, settings.MEDIA_ROOT)
-            job.output_file = relative_path
-
-    job.status = 'completed'
-    job.save()
-
-    # Close the log file handle
-    loghandle.close()
 
 @require_http_methods(["GET"])
 @login_or_token_required
@@ -1479,8 +1271,8 @@ def retry_single_job(job):
         thumbnaildir = os.path.join(output_dir, 'thumbnails')
         os.makedirs(thumbnaildir, exist_ok=True)
 
-    thread = threading.Thread(target=run_and_monitor_job, args=(job,))
-    thread.start()
+    from .tasks import run_job_task
+    run_job_task.delay(str(job.id))
 
 
 @login_required
