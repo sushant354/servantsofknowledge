@@ -230,6 +230,10 @@
                                 <small><strong>Identifier:</strong> {{ job.derived_identifier }}</small>
                                 <br>
                                 <small><strong>Derived At:</strong> {{ job.derived_at }}</small>
+                                {% if job.derive_reduce_factor %}
+                                <br>
+                                <small><strong>Derive Reduce Factor:</strong> {{ job.derive_reduce_factor }}</small>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endif %}
@@ -590,7 +594,8 @@
                             <strong>Reduce Factor (Optional)</strong>
                         </label>
                         <input type="number" class="form-control" id="derive_reduce_factor" name="derive_reduce_factor"
-                               step="0.01" min="0.01" max="1.0" placeholder="Leave empty to use original size">
+                               step="0.01" min="0.01" max="1.0" placeholder="Leave empty to use original size"
+                               {% if job.derive_reduce_factor %}value="{{ job.derive_reduce_factor }}"{% endif %}>
                         <div class="form-text">
                             Current job reduce factor: <strong>{{ job.reduce_factor }}</strong>
                             <br>

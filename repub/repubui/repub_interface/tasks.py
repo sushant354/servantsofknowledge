@@ -123,13 +123,14 @@ def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
 
 
 @shared_task
-def derive_job_task(job_id, derive_reduce_factor=None):
+def derive_job_task(job_id):
     """Celery task to derive a job - runs outside the uwsgi worker lifecycle"""
     try:
         job = ProcessingJob.objects.get(id=job_id)
     except ProcessingJob.DoesNotExist:
         logger.error(f"Job {job_id} does not exist, skipping derive task")
         return
+    derive_reduce_factor = job.derive_reduce_factor
     # Create a logger for the OCR process
     logger = logging.getLogger(f'repub.derive.{job.id}')
 

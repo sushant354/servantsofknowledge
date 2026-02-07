@@ -1667,7 +1667,7 @@ def bulk_derive_jobs(request):
             job.save()
 
             # Enqueue derivation as a Celery task
-            derive_job_task.delay(str(job.id), None)
+            derive_job_task.delay(str(job.id))
 
             derive_count += 1
             logger.info(f"User {request.user.username} started derivation for job {job.id}")
@@ -1763,11 +1763,12 @@ def derive_job(request, job_id):
 
     # Set job status to derive_pending
     job.status = 'derive_pending'
+    job.derive_reduce_factor = derive_reduce_factor
     job.error_message = ''
     job.save()
 
     # Enqueue derivation as a Celery task
-    derive_job_task.delay(str(job.id), derive_reduce_factor)
+    derive_job_task.delay(str(job.id))
 
     logger.info(f"Enqueued derivation for job {job.id} with reduce_factor={derive_reduce_factor}")
     messages.success(request, f'Job "{job.title or "Untitled"}" is being derived.')
