@@ -87,6 +87,7 @@ class ProcessingJob(models.Model):
     # Derive tracking
     is_derived = models.BooleanField(default=False)
     derived_identifier = models.CharField(max_length=255, blank=True, null=True)
+    derive_started = models.DateTimeField(blank=True, null=True)
     derived_at = models.DateTimeField(blank=True, null=True)
     derive_reduce_factor = models.FloatField(null=True, blank=True)
 

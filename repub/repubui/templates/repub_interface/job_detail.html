@@ -228,6 +228,10 @@
                                 <span class="badge bg-success">Derived</span>
                                 <br>
                                 <small><strong>Identifier:</strong> {{ job.derived_identifier }}</small>
+                                {% if job.derive_started %}
+                                <br>
+                                <small><strong>Derive Started:</strong> {{ job.derive_started }}</small>
+                                {% endif %}
                                 <br>
                                 <small><strong>Derived At:</strong> {{ job.derived_at }}</small>
                                 {% if job.derive_reduce_factor %}

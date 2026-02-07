@@ -31,6 +31,7 @@ def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor, logg
     temp_dir = None
     derive_loghandle = None
     job.status = 'deriving'
+    job.derive_started = timezone.now()
     job.save()
     try:
         # Prepare output file paths in derive directory
