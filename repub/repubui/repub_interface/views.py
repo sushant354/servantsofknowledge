@@ -32,6 +32,7 @@ from django.utils.safestring import mark_safe
 from rest_framework.authtoken.models import Token
 from .models import ProcessingJob, UserProfile
 from .forms import ProcessingJobForm, UserRegistrationForm, ProcessingOptionsForm
+from .tasks import derive_job_task
 
 # Set up logger for this module
 logger = logging.getLogger('repubui.views')
@@ -1665,9 +1666,8 @@ def bulk_derive_jobs(request):
             job.error_message = ''
             job.save()
 
-            # Start derivation in background thread
-            thread = threading.Thread(target=run_derive_job, args=(job, None))
-            thread.start()
+            # Enqueue derivation as a Celery task
+            derive_job_task.delay(str(job.id), None)
 
             derive_count += 1
             logger.info(f"User {request.user.username} started derivation for job {job.id}")
@@ -1729,131 +1729,6 @@ def api_token_management(request):
     return render(request, 'repub_interface/api_token.html', context)
 
 
-def run_derive_single_job(job, derive_reduce_factor=None):
-    """Derive a single job - core derivation logic"""
-    logger.info(f"Started deriving job {job.id}")
-
-    # Get metadata to extract the Identifier
-    input_dir = job.get_input_dir()
-    scandir = Scandir(input_dir, None, None, logger)
-    metadata = scandir.metadata
-
-    identifier = metadata.get('/Identifier')
-    if not identifier:
-        job.status = 'derive_failed'
-        job.error_message = 'No identifier found in job metadata.'
-        job.save()
-        logger.error(f"No identifier found for job {job.id}")
-        return
-
-    # Create derive directory with the identifier name
-    derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
-    os.makedirs(derive_base_dir, exist_ok=True)
-
-    derive_dir = os.path.join(derive_base_dir, identifier)
-    if os.path.exists(derive_dir):
-        shutil.rmtree(derive_dir)
-        logger.info(f"Cleaned up existing derive directory: {derive_dir}")
-    os.makedirs(derive_dir, exist_ok=True)
-    logger.info(f"Created derive directory: {derive_dir}")
-
-    # Copy thumbnail if it exists
-    output_dir = job.get_output_dir()
-    thumb_path = os.path.join(output_dir, '__ia_thumb.jpg')
-    if os.path.exists(thumb_path):
-        thumb_dest = os.path.join(derive_dir, '__ia_thumb.jpg')
-        shutil.copy2(thumb_path, thumb_dest)
-        logger.info(f"Copied thumbnail to: {thumb_dest}")
-
-    # Check if HOCR file exists, if not regenerate PDF with OCR
-    hocr_path = os.path.join(output_dir, 'x_hocr.html.gz')
-    pdf_path = os.path.join(output_dir, 'x_final.pdf')
-    text_path = os.path.join(output_dir, 'x_text.txt')
-
-    if not os.path.exists(hocr_path) or not os.path.exists(pdf_path) or \
-            not os.path.exists(text_path):
-        logger.info(f"HOCR file not found for job {job.id}, regenerating PDF with OCR in derive directory")
-
-        run_and_monitor_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor)
-    else:
-        # Copy existing PDF if it exists
-        pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
-        shutil.copy2(pdf_path, pdf_dest)
-        logger.info(f"Copied PDF to: {pdf_dest}")
-
-        hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
-        shutil.copy2(hocr_path, hocr_dest)
-        logger.info(f"Copied HOCR to: {hocr_dest}")
-
-        text_dest = os.path.join(derive_dir, f'{identifier}_text.txt')
-        shutil.copy2(text_path, text_dest)
-        logger.info(f"Copied text file to: {text_dest}")
-
-    # Copy input file
-    if job.input_file and os.path.exists(job.input_file.path):
-        input_filename = os.path.basename(job.input_file.path)
-        input_dest = os.path.join(derive_dir, input_filename)
-        shutil.copy2(job.input_file.path, input_dest)
-        logger.info(f"Copied input file to: {input_dest}")
-
-    # Zip output image folder
-    output_img_dir = job.get_outimg_dir()
-    if os.path.exists(output_img_dir):
-        zip_filename = f'{identifier}_images.zip'
-        zip_path = os.path.join(derive_dir, zip_filename)
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for root, dirs, files in os.walk(output_img_dir):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    arcname = os.path.relpath(file_path, output_img_dir)
-                    zipf.write(file_path, arcname)
-        logger.info(f"Created output images zip: {zip_path}")
-
-    # Zip thumbnail folder
-    thumbnail_dir = job.get_thumbnail_dir()
-    if os.path.exists(thumbnail_dir):
-        zip_filename = f'{identifier}_thumbnails.zip'
-        zip_path = os.path.join(derive_dir, zip_filename)
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for root, dirs, files in os.walk(thumbnail_dir):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    arcname = os.path.relpath(file_path, thumbnail_dir)
-                    zipf.write(file_path, arcname)
-        logger.info(f"Created thumbnails zip: {zip_path}")
-
-    # Clean up output folder and related directories
-    output_base_dir = job.get_output_dir()
-    if os.path.exists(output_base_dir):
-        shutil.rmtree(output_base_dir)
-        logger.info(f"Cleaned up output directory: {output_base_dir}")
-
-    # Clean up uploads folder
-    upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
-    if os.path.exists(upload_base_dir):
-        shutil.rmtree(upload_base_dir)
-        logger.info(f"Cleaned up upload directory: {upload_base_dir}")
-
-    logger.info(f"Successfully derived job {job.id} to {derive_dir}")
-
-    job.is_derived = True
-    job.derived_identifier = identifier
-    job.derived_at = timezone.now()
-    job.status = 'derive_completed'
-    job.save()
-    logger.info(f"Updated job {job.id} with derived info: {identifier}")
-
-
-def run_derive_job(job, derive_reduce_factor=None):
-    """Background thread function to derive a job"""
-    try:
-        run_derive_single_job(job, derive_reduce_factor)
-    except Exception as e:
-        job.status = 'derive_failed'
-        job.error_message = str(e)
-        job.save()
-        logger.error(f"Error deriving job {job.id}: {str(e)}", exc_info=True)
-
 @login_required
 @require_http_methods(["POST"])
 def derive_job(request, job_id):
@@ -1891,146 +1766,13 @@ def derive_job(request, job_id):
     job.error_message = ''
     job.save()
 
-    # Start derivation in background thread
-    thread = threading.Thread(target=run_derive_job, args=(job, derive_reduce_factor))
-    thread.start()
+    # Enqueue derivation as a Celery task
+    derive_job_task.delay(str(job.id), derive_reduce_factor)
 
-    logger.info(f"Started derivation for job {job.id} in background thread with reduce_factor={derive_reduce_factor}")
+    logger.info(f"Enqueued derivation for job {job.id} with reduce_factor={derive_reduce_factor}")
     messages.success(request, f'Job "{job.title or "Untitled"}" is being derived.')
 
     return redirect('job_detail', job_id=job_id)
-
-def run_and_monitor_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
-    """
-    Start job processing with concurrent job limiting.
-    Waits if maximum concurrent jobs are already running.
-    """
-
-    # Wait until there are fewer than max concurrent jobs processing
-    while True:
-        processing_count = ProcessingJob.objects.filter(status='deriving').count()
-
-        if processing_count <= max_deriving_jobs:
-            # Start processing in background thread
-            logger.info(f"Starting job {job.id}. Current processing jobs: {processing_count}/{max_deriving_jobs}")
-            derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor) 
-            break
-        else:
-            # Wait before checking again
-            logger.info(f"Job {job.id} waiting in queue. Current processing jobs: {processing_count}/{max_deriving_jobs}")
-            time.sleep(check_interval)
-
-def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
-    temp_dir = None
-    derive_loghandle = None
-    job.status = 'deriving'
-    job.save()
-    try:
-        # Prepare output file paths in derive directory
-        pdf_dest = os.path.join(derive_dir, f'{identifier}.pdf')
-        hocr_dest = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
-        text_dest = os.path.join(derive_dir, f'{identifier}_text.txt')
-
-        # Get list of output images
-        output_img_dir = job.get_outimg_dir()
-        outfiles = []
-        for filename in sorted(os.listdir(output_img_dir)):
-            outfile = os.path.join(output_img_dir, filename)
-            pagenum = get_pagenum(filename)
-            if pagenum is not None:
-                outfiles.append((pagenum, outfile))
-
-        outfiles.sort(key=lambda x: x[0])
-
-        # Create a logger for the OCR process
-        derive_logger = logging.getLogger(f'repub.derive.{job.id}')
-
-        # Clear any existing handlers
-        derive_logger.handlers.clear()
-
-        # Prevent propagation to parent loggers to avoid writing to closed streams
-        # in uwsgi background threads
-        derive_logger.propagate = False
-
-        # Create file handler for derive log
-        derive_logfile = os.path.join(derive_dir, 'derive.log')
-        derive_loghandle = open(derive_logfile, 'a', encoding='utf-8')
-        derive_file_handler = logging.StreamHandler(derive_loghandle)
-        derive_logger.addHandler(derive_file_handler)
-
-        derive_logger.info(f"Regenerating PDF with OCR for {len(outfiles)} pages")
-
-        # If reduce_factor is specified, create reduced images
-        if derive_reduce_factor is not None:
-            import tempfile
-            temp_dir = tempfile.mkdtemp(prefix=f'derive_reduced_{job.id}_')
-            derive_logger.info(f"Reducing images by factor {derive_reduce_factor} in temporary directory: {temp_dir}")
-
-            reduced_outfiles = []
-            for pagenum, outfile in outfiles:
-                # Read the image
-                img = cv2.imread(outfile)
-                if img is None:
-                    derive_logger.warning(f"Failed to read image {outfile}, using original")
-                    reduced_outfiles.append((pagenum, outfile))
-                    continue
-
-                # Calculate new dimensions
-                height, width = img.shape[:2]
-                new_width = int(width * derive_reduce_factor)
-                new_height = int(height * derive_reduce_factor)
-
-                # Resize the image
-                reduced_img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
-
-                # Save reduced image to temp directory
-                filename = os.path.basename(outfile)
-                reduced_path = os.path.join(temp_dir, filename)
-                cv2.imwrite(reduced_path, reduced_img)
-
-                reduced_outfiles.append((pagenum, reduced_path))
-                derive_logger.info(f"Reduced page {pagenum} from {width}x{height} to {new_width}x{new_height}")
-
-            # Use reduced images for PDF generation
-            outfiles = reduced_outfiles
-            derive_logger.info(f"Using {len(outfiles)} reduced images for PDF generation")
-
-        # Generate PDF with OCR, HOCR, and text
-        pdfs.save_pdf(outfiles, metadata, job.language, pdf_dest,
-                      True, hocr_dest, text_dest, derive_logger)
-
-        logger.info(f"Generated PDF with OCR in derive directory: {pdf_dest}")
-        logger.info(f"Generated HOCR in derive directory: {hocr_dest}")
-        logger.info(f"Generated text in derive directory: {text_dest}")
-
-        # Clean up temporary directory if it was created
-        if temp_dir and os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-            logger.info(f"Cleaned up temporary directory: {temp_dir}")
-
-        # Close the derive log file handle
-        if derive_loghandle:
-            derive_loghandle.close()
-
-    except Exception as e:
-        logger.error(f"Error generating PDF for job {job.id}: {str(e)}", exc_info=True)
-
-        # Clean up temporary directory if it exists
-        if temp_dir and os.path.exists(temp_dir):
-            try:
-                shutil.rmtree(temp_dir)
-                logger.info(f"Cleaned up temporary directory: {temp_dir}")
-            except Exception as cleanup_error:
-                logger.error(f"Error cleaning up temporary directory: {str(cleanup_error)}")
-
-        # Close the derive log file handle
-        if derive_loghandle:
-            derive_loghandle.close()
-
-        job.status = 'derive_failed'
-        job.save()
-        logger.error(f"Updated job {job.id} to derive_failed")
-        raise  # Re-raise to prevent run_derive_single_job from marking as successful
 
 @login_required
 def all_items(request):
