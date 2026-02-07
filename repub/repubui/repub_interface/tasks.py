@@ -26,7 +26,7 @@ def get_pagenum(filename):
     return pagenum
 
 
-def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
+def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor, logger):
     temp_dir = None
     derive_loghandle = None
     job.status = 'deriving'
@@ -48,19 +48,19 @@ def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
 
         outfiles.sort(key=lambda x: x[0])
 
-        derive_logger.info(f"Regenerating PDF with OCR for {len(outfiles)} pages")
+        logger.info(f"Regenerating PDF with OCR for {len(outfiles)} pages")
 
         # If reduce_factor is specified, create reduced images
         if derive_reduce_factor is not None:
             temp_dir = tempfile.mkdtemp(prefix=f'derive_reduced_{job.id}_')
-            derive_logger.info(f"Reducing images by factor {derive_reduce_factor} in temporary directory: {temp_dir}")
+            logger.info(f"Reducing images by factor {derive_reduce_factor} in temporary directory: {temp_dir}")
 
             reduced_outfiles = []
             for pagenum, outfile in outfiles:
                 # Read the image
                 img = cv2.imread(outfile)
                 if img is None:
-                    derive_logger.warning(f"Failed to read image {outfile}, using original")
+                    logger.warning(f"Failed to read image {outfile}, using original")
                     reduced_outfiles.append((pagenum, outfile))
                     continue
 
@@ -78,15 +78,15 @@ def derive_pdf(job, identifier, metadata, derive_dir, derive_reduce_factor):
                 cv2.imwrite(reduced_path, reduced_img)
 
                 reduced_outfiles.append((pagenum, reduced_path))
-                derive_logger.info(f"Reduced page {pagenum} from {width}x{height} to {new_width}x{new_height}")
+                logger.info(f"Reduced page {pagenum} from {width}x{height} to {new_width}x{new_height}")
 
             # Use reduced images for PDF generation
             outfiles = reduced_outfiles
-            derive_logger.info(f"Using {len(outfiles)} reduced images for PDF generation")
+            logger.info(f"Using {len(outfiles)} reduced images for PDF generation")
 
         # Generate PDF with OCR, HOCR, and text
         pdfs.save_pdf(outfiles, metadata, job.language, pdf_dest,
-                      True, hocr_dest, text_dest, derive_logger)
+                      True, hocr_dest, text_dest, logger)
 
         logger.info(f"Generated PDF with OCR in derive directory: {pdf_dest}")
         logger.info(f"Generated HOCR in derive directory: {hocr_dest}")
@@ -128,25 +128,14 @@ def derive_job_task(job_id):
     try:
         job = ProcessingJob.objects.get(id=job_id)
     except ProcessingJob.DoesNotExist:
+        logger = logging.getLogger('repub.derive')
         logger.error(f"Job {job_id} does not exist, skipping derive task")
         return
     derive_reduce_factor = job.derive_reduce_factor
-    # Create a logger for the OCR process
+
     logger = logging.getLogger(f'repub.derive.{job.id}')
 
-    # Clear any existing handlers
-    logger.handlers.clear()
-
-    # Prevent propagation to parent loggers to avoid writing to closed streams
-    logger.propagate = False
-
-    # Create file handler for derive log
-    derive_logfile = os.path.join(derive_dir, 'derive.log')
-    derive_loghandle = open(derive_logfile, 'a', encoding='utf-8')
-    derive_file_handler = logging.StreamHandler(derive_loghandle)
-    logger.addHandler(derive_file_handler)
-
-    derive_logger.info(f"Started deriving job {job.id}")
+    logger.info(f"Started deriving job {job.id}")
     try:
         # Get metadata to extract the Identifier
         input_dir = job.get_input_dir()
@@ -170,6 +159,18 @@ def derive_job_task(job_id):
             shutil.rmtree(derive_dir)
             logger.info(f"Cleaned up existing derive directory: {derive_dir}")
         os.makedirs(derive_dir, exist_ok=True)
+        # Clear any existing handlers
+        logger.handlers.clear()
+
+        # Prevent propagation to parent loggers to avoid writing to closed streams
+        logger.propagate = False
+
+        # Create file handler for derive log
+        derive_logfile = os.path.join(derive_dir, 'derive.log')
+        derive_loghandle = open(derive_logfile, 'a', encoding='utf-8')
+        derive_file_handler = logging.StreamHandler(derive_loghandle)
+        logger.addHandler(derive_file_handler)
+
         logger.info(f"Created derive directory: {derive_dir}")
 
         # Copy thumbnail if it exists
