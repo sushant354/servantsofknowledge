@@ -1,0 +1,16 @@
+[Unit]
+Description=Celery worker for REPUB processing tasks
+After=redis.service
+Wants=redis.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/servantsofknowledge/repub/repubui
+Environment=PYTHONPATH=%h/servantsofknowledge/repub
+Environment=DJANGO_SETTINGS_MODULE=repubui.settings
+ExecStart=%h/.repub/bin/python -m celery -A repubui worker -Q processing --concurrency 30 -l info
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
