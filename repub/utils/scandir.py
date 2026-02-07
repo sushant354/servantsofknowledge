@@ -6,6 +6,14 @@ import logging
 
 from repub.utils import xml_ops
 
+def get_pagenum(filename):
+    pagenum = None
+    reobj = re.match('(?P<pagenum>\\d{4})\\.', filename)
+    if reobj:
+        groupdict = reobj.groupdict('pagenum')
+        pagenum   = int(groupdict['pagenum'])
+    return pagenum
+
 def read_image(scaninfo, infile):
     img = cv2.imread(infile)
 
