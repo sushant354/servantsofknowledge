@@ -221,6 +221,12 @@
                             <th style="width: 30%">Created</th>
                             <td>{{ job.created_at }}</td>
                         </tr>
+                        {% if job.processing_started_at %}
+                        <tr>
+                            <th>Processing Started</th>
+                            <td>{{ job.processing_started_at }}</td>
+                        </tr>
+                        {% endif %}
                         {% if job.is_derived %}
                         <tr>
                             <th>Derived Status</th>
