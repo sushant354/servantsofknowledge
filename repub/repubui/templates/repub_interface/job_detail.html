@@ -163,6 +163,10 @@
                     <a href="{% url 'item_directory' job.derived_identifier %}" class="btn btn-primary btn-lg mb-4 me-3">
                         <i class="bi bi-folder2-open"></i> View Derived Files
                     </a>
+
+                    <button type="button" class="btn btn-warning btn-lg mb-4 me-3" data-bs-toggle="modal" data-bs-target="#revertDeriveModal">
+                        <i class="bi bi-arrow-counterclockwise"></i> Go Back to Completed
+                    </button>
                 {% elif job.status == 'derive_failed' %}
                     <div class="alert alert-danger">
                         <h4 class="alert-heading">Derive failed!</h4>
@@ -665,6 +669,41 @@
                     {% csrf_token %}
                     <button type="submit" class="btn btn-warning">
                         <i class="bi bi-trash"></i> Confirm Cleanup
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Revert Derive Modal -->
+<div class="modal fade" id="revertDeriveModal" tabindex="-1" aria-labelledby="revertDeriveModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="revertDeriveModalLabel">
+                    <i class="bi bi-arrow-counterclockwise me-2"></i>Go Back to Completed
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <h6 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i>Are you sure you want to revert this derived job?</h6>
+                    <ul class="mb-0">
+                        <li><strong>Derive directory</strong> (<code>{{ job.derived_identifier }}</code>) will be deleted</li>
+                        <li><strong>Uploads and processed files</strong> will be restored from the derive archive</li>
+                        <li><strong>Job status</strong> will be changed back to "completed"</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <form method="post" action="{% url 'revert_derive' job.id %}" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-arrow-counterclockwise"></i> Confirm Revert
                     </button>
                 </form>
             </div>

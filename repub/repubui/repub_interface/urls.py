@@ -14,6 +14,7 @@ urlpatterns = [
     path('job/<uuid:job_id>/stop/', jobs.stop_job, name='stop_job'),
     path('jobs/bulk-stop/', jobs.bulk_stop_jobs, name='bulk_stop_jobs'),
     path('job/<uuid:job_id>/derive/', jobs.derive_job, name='derive_job'),
+    path('job/<uuid:job_id>/revert-derive/', jobs.revert_derive, name='revert_derive'),
     path('jobs/bulk-derive/', jobs.bulk_derive_jobs, name='bulk_derive_jobs'),
     path('jobs/bulk-set-derive-failed/', jobs.bulk_set_derive_failed, name='bulk_set_derive_failed'),
     path('job/<uuid:job_id>/cleanup/', jobs.cleanup_job, name='cleanup_job'),

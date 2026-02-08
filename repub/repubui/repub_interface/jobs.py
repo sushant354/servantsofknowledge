@@ -1,6 +1,7 @@
 import os
 import shutil
 import threading
+import zipfile
 import cv2
 import logging
 import csv
@@ -901,6 +902,111 @@ def derive_job(request, job_id):
     messages.success(request, f'Job "{job.title or "Untitled"}" is being derived.')
 
     return redirect('job_detail', job_id=job_id)
+
+
+@login_required
+@require_http_methods(["POST"])
+def revert_derive(request, job_id):
+    """Revert a derived job back to completed status by restoring files from the derive directory"""
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+
+    if job.status != 'derive_completed' or not job.is_derived:
+        messages.error(request, 'Can only revert jobs that have been derived.')
+        return redirect('job_detail', job_id=job_id)
+
+    derive_dir = job.get_derived_dir()
+    identifier = job.derived_identifier
+
+    if not derive_dir or not os.path.exists(derive_dir):
+        messages.error(request, 'Derive directory not found. Cannot revert.')
+        return redirect('job_detail', job_id=job_id)
+
+    # Restore uploads directory
+    upload_base_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(job.id))
+    os.makedirs(upload_base_dir, exist_ok=True)
+
+    if job.input_file:
+        input_filename = os.path.basename(job.input_file.name)
+        input_src = os.path.join(derive_dir, input_filename)
+        if os.path.exists(input_src):
+            input_dest = os.path.join(upload_base_dir, input_filename)
+            shutil.copy2(input_src, input_dest)
+            logger.info(f"Restored input file: {input_dest}")
+
+            input_dir = job.get_input_dir()
+            os.makedirs(input_dir, exist_ok=True)
+
+            if job.input_type == 'images' and input_filename.lower().endswith('.zip'):
+                with zipfile.ZipFile(input_dest, 'r') as zip_ref:
+                    zip_ref.extractall(input_dir)
+                logger.info(f"Extracted ZIP to input dir: {input_dir}")
+            elif job.input_type == 'pdf':
+                pdfs.pdf_to_images(input_dest, input_dir)
+                logger.info(f"Extracted PDF pages to input dir: {input_dir}")
+
+    # Restore processed directory
+    output_dir = job.get_output_dir()
+    outimg_dir = job.get_outimg_dir()
+    thumbnail_dir = job.get_thumbnail_dir()
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(outimg_dir, exist_ok=True)
+    os.makedirs(thumbnail_dir, exist_ok=True)
+
+    # Extract images zip
+    images_zip = os.path.join(derive_dir, f'{identifier}_images.zip')
+    if os.path.exists(images_zip):
+        with zipfile.ZipFile(images_zip, 'r') as zip_ref:
+            zip_ref.extractall(outimg_dir)
+        logger.info(f"Restored output images to: {outimg_dir}")
+
+    # Extract thumbnails zip
+    thumbnails_zip = os.path.join(derive_dir, f'{identifier}_thumbnails.zip')
+    if os.path.exists(thumbnails_zip):
+        with zipfile.ZipFile(thumbnails_zip, 'r') as zip_ref:
+            zip_ref.extractall(thumbnail_dir)
+        logger.info(f"Restored thumbnails to: {thumbnail_dir}")
+
+    # Copy thumbnail
+    thumb_src = os.path.join(derive_dir, '__ia_thumb.jpg')
+    if os.path.exists(thumb_src):
+        shutil.copy2(thumb_src, os.path.join(output_dir, '__ia_thumb.jpg'))
+
+    # Copy PDF
+    pdf_src = os.path.join(derive_dir, f'{identifier}.pdf')
+    if os.path.exists(pdf_src):
+        shutil.copy2(pdf_src, os.path.join(output_dir, 'x_final.pdf'))
+
+    # Copy HOCR if exists
+    hocr_src = os.path.join(derive_dir, f'{identifier}_hocr.html.gz')
+    if os.path.exists(hocr_src):
+        shutil.copy2(hocr_src, os.path.join(output_dir, 'x_hocr.html.gz'))
+
+    # Copy text file if exists
+    text_src = os.path.join(derive_dir, f'{identifier}_text.txt')
+    if os.path.exists(text_src):
+        shutil.copy2(text_src, os.path.join(output_dir, 'x_text.txt'))
+
+    # Delete derive directory
+    shutil.rmtree(derive_dir)
+    logger.info(f"Deleted derive directory: {derive_dir}")
+
+    # Reset DB fields
+    job.is_derived = False
+    job.derived_identifier = None
+    job.derived_at = None
+    job.derive_started = None
+    job.derive_reduce_factor = None
+    job.status = 'completed'
+    job.save()
+
+    logger.info(f"Reverted job {job.id} from derived to completed")
+    messages.success(request, f'Job "{job.title or "Untitled"}" has been reverted to completed status.')
+
+    return redirect('job_detail', job_id=job_id)
+
 
 @login_required
 @require_http_methods(["POST"])
