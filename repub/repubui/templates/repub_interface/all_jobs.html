@@ -222,6 +222,16 @@ th a:hover {
             </div>
         </a>
     </div>
+    <div class="stat-col">
+        <a href="?status=derive_completed{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
+            <div class="card text-white clickable-card{% if request.GET.status == 'derive_completed' %} filter-active{% endif %}" style="background-color: #198754 !important;">
+                <div class="card-body text-center">
+                    <h6 class="card-title">Derive Completed</h6>
+                    <h4 class="card-text">{{ derive_completed_jobs }}</h4>
+                </div>
+            </div>
+        </a>
+    </div>
 </div>
 
 <!-- Jobs Table -->
