@@ -43,12 +43,12 @@ def all_jobs(request):
     sort_order = request.GET.get('sort_order', 'desc')
 
     # Validate sort_by parameter
-    allowed_sort_fields = ['created_at', 'processing_started_at', 'derive_started']
+    allowed_sort_fields = ['created_at', 'processing_started_at', 'derive_started', 'derived_at']
     if sort_by not in allowed_sort_fields:
         sort_by = 'created_at'
 
     # Apply sorting - nullable fields need special handling for nulls_last
-    nullable_sort_fields = ['processing_started_at', 'derive_started']
+    nullable_sort_fields = ['processing_started_at', 'derive_started', 'derived_at']
     if sort_order == 'asc':
         if sort_by in nullable_sort_fields:
             jobs_list = jobs_list.order_by(models.F(sort_by).asc(nulls_last=True))

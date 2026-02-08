@@ -329,6 +329,20 @@ th a:hover {
                                         {% endif %}
                                     </a>
                                 </th>
+                                {% elif request.GET.status == 'derive_completed' %}
+                                <th>
+                                    <a href="?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}sort_by=derived_at&sort_order={% if sort_by == 'derived_at' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
+                                       class="text-decoration-none text-dark">
+                                        Derived At
+                                        {% if sort_by == 'derived_at' %}
+                                            {% if sort_order == 'asc' %}
+                                                <i class="bi bi-arrow-up"></i>
+                                            {% else %}
+                                                <i class="bi bi-arrow-down"></i>
+                                            {% endif %}
+                                        {% endif %}
+                                    </a>
+                                </th>
                                 {% else %}
                                 <th>
                                     <a href="?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}sort_by=processing_started_at&sort_order={% if sort_by == 'processing_started_at' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
@@ -443,6 +457,13 @@ th a:hover {
                                     {% if job.derive_started %}
                                         <span title="{{ job.derive_started }}">{{ job.derive_started|timesince }} ago</span>
                                         <small class="d-block text-muted">{{ job.derive_started|date:"M d, Y H:i" }}</small>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                {% elif request.GET.status == 'derive_completed' %}
+                                    {% if job.derived_at %}
+                                        <span title="{{ job.derived_at }}">{{ job.derived_at|timesince }} ago</span>
+                                        <small class="d-block text-muted">{{ job.derived_at|date:"M d, Y H:i" }}</small>
                                     {% else %}
                                         <span class="text-muted">—</span>
                                     {% endif %}
