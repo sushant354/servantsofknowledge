@@ -676,7 +676,7 @@ def retry_job(request, job_id):
 @require_http_methods(["POST"])
 @csrf_exempt
 def bulk_retry_jobs(request):
-    """Retry multiple selected failed jobs"""
+    """Retry multiple selected failed or pending jobs"""
     job_ids = request.POST.getlist('job_ids')
 
     if not job_ids:
@@ -685,9 +685,9 @@ def bulk_retry_jobs(request):
 
     # Filter jobs based on user permissions
     if request.user.is_staff:
-        jobs = ProcessingJob.objects.filter(id__in=job_ids, status='failed')
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['failed', 'pending'])
     else:
-        jobs = ProcessingJob.objects.filter(id__in=job_ids, status='failed', user=request.user)
+        jobs = ProcessingJob.objects.filter(id__in=job_ids, status__in=['failed', 'pending'], user=request.user)
 
     retry_count = 0
     failed_count = 0
@@ -709,7 +709,7 @@ def bulk_retry_jobs(request):
         messages.warning(request, f'{failed_count} job{"s" if failed_count > 1 else ""} could not be retried.')
 
     if retry_count == 0 and failed_count == 0:
-        messages.warning(request, 'No jobs were retried. Please ensure selected jobs are in failed status.')
+        messages.warning(request, 'No jobs were retried. Please ensure selected jobs are in failed or pending status.')
 
     return redirect('all_jobs')
 

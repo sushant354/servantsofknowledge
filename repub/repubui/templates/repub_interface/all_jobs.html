@@ -251,7 +251,14 @@ th a:hover {
             <button type="button" id="retrySelectedBtn" class="btn btn-sm btn-primary" disabled>
                 <i class="bi bi-arrow-clockwise"></i> Retry Selected (<span id="selectedCount">0</span>)
             </button>
-        {% elif request.GET.status == 'processing' or request.GET.status == 'pending' %}
+        {% elif request.GET.status == 'pending' %}
+            <button type="button" id="retrySelectedBtn" class="btn btn-sm btn-primary" disabled>
+                <i class="bi bi-arrow-clockwise"></i> Retry Selected (<span id="selectedCount">0</span>)
+            </button>
+            <button type="button" id="stopSelectedBtn" class="btn btn-sm btn-danger" disabled>
+                <i class="bi bi-stop-circle"></i> Stop Selected (<span id="selectedCount2">0</span>)
+            </button>
+        {% elif request.GET.status == 'processing' %}
             <button type="button" id="stopSelectedBtn" class="btn btn-sm btn-danger" disabled>
                 <i class="bi bi-stop-circle"></i> Stop Selected (<span id="selectedCount">0</span>)
             </button>
@@ -276,9 +283,9 @@ th a:hover {
     </div>
     <div class="card-body p-0">
         {% if jobs %}
-            {% if request.GET.status == 'failed' %}
+            {% if request.GET.status == 'failed' or request.GET.status == 'pending' %}
             <form id="bulkActionForm" method="post" action="{% url 'bulk_retry_jobs' %}">
-            {% elif request.GET.status == 'processing' or request.GET.status == 'pending' or request.GET.status == 'derive_pending' %}
+            {% elif request.GET.status == 'processing' or request.GET.status == 'derive_pending' %}
             <form id="bulkActionForm" method="post" action="{% url 'bulk_stop_jobs' %}">
             {% elif request.GET.status == 'completed' or request.GET.status == 'derive_failed' %}
             <form id="bulkActionForm" method="post" action="{% url 'bulk_derive_jobs' %}">
@@ -583,7 +590,10 @@ th a:hover {
         const setDeriveFailedBtn = document.getElementById('setDeriveFailedBtn');
         const jobCheckboxes = document.querySelectorAll('.job-checkbox');
         const selectedCountSpan = document.getElementById('selectedCount');
+        const selectedCountSpan2 = document.getElementById('selectedCount2');
         const bulkActionForm = document.getElementById('bulkActionForm');
+        const bulkStopUrl = '{% url "bulk_stop_jobs" %}';
+        const bulkRetryUrl = '{% url "bulk_retry_jobs" %}';
 
         if (selectAllCheckbox && selectAllBtn && (retrySelectedBtn || stopSelectedBtn || deriveSelectedBtn || retryDeriveSelectedBtn || setDeriveFailedBtn)) {
             const actionBtn = retrySelectedBtn || stopSelectedBtn || deriveSelectedBtn || retryDeriveSelectedBtn || setDeriveFailedBtn;
@@ -593,7 +603,9 @@ th a:hover {
             function updateSelectedCount() {
                 const checkedCount = document.querySelectorAll('.job-checkbox:checked').length;
                 selectedCountSpan.textContent = checkedCount;
+                if (selectedCountSpan2) selectedCountSpan2.textContent = checkedCount;
                 actionBtn.disabled = checkedCount === 0;
+                if (stopSelectedBtn && retrySelectedBtn) stopSelectedBtn.disabled = checkedCount === 0;
 
                 // Update select all checkbox state
                 const allChecked = checkedCount === jobCheckboxes.length && jobCheckboxes.length > 0;
@@ -624,6 +636,15 @@ th a:hover {
                 checkbox.addEventListener('change', updateSelectedCount);
             });
 
+            // Helper to submit form with confirmation
+            function submitWithConfirmation(confirmMessage, actionUrl) {
+                const checkedCount = document.querySelectorAll('.job-checkbox:checked').length;
+                if (checkedCount > 0 && confirm(confirmMessage)) {
+                    if (actionUrl) bulkActionForm.action = actionUrl;
+                    bulkActionForm.submit();
+                }
+            }
+
             // Action button handler
             actionBtn.addEventListener('click', function() {
                 const checkedCount = document.querySelectorAll('.job-checkbox:checked').length;
@@ -641,11 +662,22 @@ th a:hover {
                         confirmMessage = `Are you sure you want to derive ${checkedCount} selected job${checkedCount > 1 ? 's' : ''}?`;
                     }
 
-                    if (confirm(confirmMessage)) {
-                        bulkActionForm.submit();
-                    }
+                    submitWithConfirmation(confirmMessage);
                 }
             });
+
+            // Stop button handler for pending status (when both retry and stop are shown)
+            if (stopSelectedBtn && retrySelectedBtn) {
+                stopSelectedBtn.addEventListener('click', function() {
+                    const checkedCount = document.querySelectorAll('.job-checkbox:checked').length;
+                    if (checkedCount > 0) {
+                        submitWithConfirmation(
+                            `Are you sure you want to stop ${checkedCount} selected job${checkedCount > 1 ? 's' : ''}?`,
+                            bulkStopUrl
+                        );
+                    }
+                });
+            }
 
             // Initialize count
             updateSelectedCount();
