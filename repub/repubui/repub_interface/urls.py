@@ -31,6 +31,7 @@ urlpatterns = [
     path('job/<uuid:job_id>/output-directory/<path:subpath>/', directory.job_output_directory, name='job_output_directory_subpath'),
     path('job/<uuid:job_id>/input-directory/', directory.job_input_directory, name='job_input_directory'),
     path('job/<uuid:job_id>/input-directory/<path:subpath>/', directory.job_input_directory, name='job_input_directory_subpath'),
+    path('api/check-identifier/', jobs.check_identifier, name='check_identifier'),
     path('register/', users.register, name='register'),
     path('api-token/', users.api_token_management, name='api_token'),
     path('activate/<str:uidb64>/<str:token>/', users.activate_account, name='activate_account'),

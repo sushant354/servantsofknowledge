@@ -361,6 +361,41 @@ def create_thumbnail(image_path, max_size=(300, 300)):
 
 
 @require_http_methods(["GET"])
+@csrf_exempt
+@login_or_token_required
+def check_identifier(request):
+    """
+    API endpoint to check if an identifier already exists.
+    Checks both ProcessingJob records and derived item directories.
+    """
+    identifier = request.GET.get('identifier', '').strip()
+    if not identifier:
+        return JsonResponse({'success': False, 'error': 'identifier parameter is required'}, status=400)
+
+    # Check existing jobs
+    existing_job = ProcessingJob.objects.filter(identifier=identifier).first()
+    if existing_job:
+        return JsonResponse({
+            'success': True,
+            'exists': True,
+            'identifier': identifier,
+            'detail': f'Identifier is already used by job {existing_job.id}'
+        })
+
+    # Check derived directory
+    derive_dir = os.path.join(settings.MEDIA_ROOT, 'derived', identifier)
+    if os.path.exists(derive_dir):
+        return JsonResponse({
+            'success': True,
+            'exists': True,
+            'identifier': identifier,
+            'detail': 'Identifier already exists as a derived item'
+        })
+
+    return JsonResponse({'success': True, 'exists': False, 'identifier': identifier})
+
+
+@require_http_methods(["GET"])
 @login_or_token_required
 def job_status(request, job_id):
     """

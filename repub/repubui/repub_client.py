@@ -54,6 +54,29 @@ class REPUBClient:
         return None
     
     
+    def check_identifier(self, identifier: str) -> Dict[str, Any]:
+        """
+        Check if an identifier already exists on the server.
+
+        Args:
+            identifier: The identifier to check
+
+        Returns:
+            Dict containing 'exists' (bool), 'identifier' (str), and optionally 'detail' (str)
+        """
+        try:
+            response = self.session.get(
+                f"{self.base_url}/api/check-identifier/",
+                params={'identifier': identifier}
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f'Failed to check identifier: {str(e)}'
+            }
+
     def submit_job(self,
                    file_path: Union[str, Path],
                    title: Optional[str] = None,
@@ -326,6 +349,7 @@ class REPUBClient:
         CSV columns (all optional except file_path):
             - file_path (required): Path to the file
             - title: Job title
+            - identifier: Pre-check identifier before submitting (skips file if exists)
             - language: OCR language (e.g., eng, eng+asm)
             - input_type: pdf or images
             - crop: true/false, yes/no, 1/0, on/off
@@ -384,6 +408,7 @@ class REPUBClient:
                         file_info = {
                             'file_path': file_path,
                             'title': row.get('title', '').strip() or file_path.stem,
+                            'identifier': row.get('identifier', '').strip() or None,
                             'processing_options': {}
                         }
 
@@ -427,6 +452,7 @@ class REPUBClient:
                                 file_data.append({
                                     'file_path': file_path,
                                     'title': file_path.stem,  # Use filename as title
+                                    'identifier': None,
                                     'processing_options': {}  # No processing options in text format, use defaults
                                 })
                             else:
@@ -448,6 +474,7 @@ class REPUBClient:
             'total_files': len(file_data),
             'successful_submissions': 0,
             'failed_submissions': 0,
+            'skipped_existing': 0,
             'completed_jobs': 0,
             'failed_jobs': 0,
             'results': [],
@@ -461,7 +488,22 @@ class REPUBClient:
             for file_info in file_data:
                 file_path = file_info['file_path']
                 title = file_info['title']
+                identifier = file_info.get('identifier')
                 processing_options = file_info['processing_options']
+
+                # Pre-check identifier if provided
+                if identifier:
+                    check_result = self.check_identifier(identifier)
+                    if check_result.get('exists'):
+                        detail = check_result.get('detail', 'already exists')
+                        self.logger.warning(f"Skipping {file_path}: identifier '{identifier}' {detail}")
+                        results['skipped_existing'] += 1
+                        results['errors'].append({
+                            'file_path': str(file_path),
+                            'title': title,
+                            'error': f"Identifier '{identifier}' already exists: {detail}"
+                        })
+                        continue
 
                 # Generate output path if output_dir is specified
                 file_output_path = None
@@ -528,6 +570,8 @@ class REPUBClient:
         self.logger.info(f"  Total files: {results['total_files']}")
         self.logger.info(f"  Successful submissions: {results['successful_submissions']}")
         self.logger.info(f"  Failed submissions: {results['failed_submissions']}")
+        if results['skipped_existing'] > 0:
+            self.logger.info(f"  Skipped (existing identifier): {results['skipped_existing']}")
         if wait_for_completion:
             self.logger.info(f"  Completed jobs: {results['completed_jobs']}")
             self.logger.info(f"  Failed jobs: {results['failed_jobs']}")
@@ -608,6 +652,8 @@ def main():
                        help='Maximum number of parallel workers for batch processing (default: 4)')
     parser.add_argument('--title',
                        help='Job title (optional)')
+    parser.add_argument('--check-identifier',
+                       help='Check if identifier exists before submitting (single file mode)')
 
     # Processing options
     parser.add_argument('--input-type', choices=['pdf', 'images'], default='images',
@@ -680,6 +726,15 @@ def main():
     
     # Process document(s)
     if args.file:
+        # Pre-check identifier if provided
+        if args.check_identifier:
+            check_result = client.check_identifier(args.check_identifier)
+            if check_result.get('exists'):
+                detail = check_result.get('detail', 'already exists')
+                print(f"Identifier '{args.check_identifier}' already exists: {detail}")
+                exit(1)
+            logger.info(f"Identifier '{args.check_identifier}' is available")
+
         # Single file processing
         result = client.process_document(
             file_path=args.file,
@@ -740,7 +795,9 @@ def main():
         print(f"  Total files: {result['total_files']}")
         print(f"  Successful submissions: {result['successful_submissions']}")
         print(f"  Failed submissions: {result['failed_submissions']}")
-        
+        if result.get('skipped_existing', 0) > 0:
+            print(f"  Skipped (existing identifier): {result['skipped_existing']}")
+
         if not args.no_wait:
             print(f"  Completed jobs: {result['completed_jobs']}")
             print(f"  Failed jobs: {result['failed_jobs']}")
