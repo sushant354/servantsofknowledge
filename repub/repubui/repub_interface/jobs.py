@@ -69,6 +69,7 @@ def all_jobs(request):
     title_query = request.GET.get('title', '').strip()
     identifier_query = request.GET.get('identifier', '').strip()
     author_query = request.GET.get('author', '').strip()
+    owner_query = request.GET.get('owner', '').strip()
     date_from = request.GET.get('date_from', '').strip()
     date_to = request.GET.get('date_to', '').strip()
 
@@ -77,7 +78,10 @@ def all_jobs(request):
         jobs_list = jobs_list.filter(title__icontains=title_query)
 
     if identifier_query:
-        jobs_list = jobs_list.filter(identifier__icontains=identifier_query)
+        jobs_list = jobs_list.filter(identifier__istartswith=identifier_query)
+
+    if owner_query and request.user.is_staff:
+        jobs_list = jobs_list.filter(user__username__icontains=owner_query)
 
     if author_query:
         jobs_list = jobs_list.filter(author__icontains=author_query)
@@ -145,6 +149,7 @@ def export_jobs_csv(request):
     title_query = request.GET.get('title', '').strip()
     identifier_query = request.GET.get('identifier', '').strip()
     author_query = request.GET.get('author', '').strip()
+    owner_query = request.GET.get('owner', '').strip()
     date_from = request.GET.get('date_from', '').strip()
     date_to = request.GET.get('date_to', '').strip()
 
@@ -152,7 +157,10 @@ def export_jobs_csv(request):
         jobs = jobs.filter(title__icontains=title_query)
 
     if identifier_query:
-        jobs = jobs.filter(identifier__icontains=identifier_query)
+        jobs = jobs.filter(identifier__istartswith=identifier_query)
+
+    if owner_query and request.user.is_staff:
+        jobs = jobs.filter(user__username__icontains=owner_query)
 
     if author_query:
         jobs = jobs.filter(author__icontains=author_query)

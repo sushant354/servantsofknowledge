@@ -84,15 +84,22 @@ th a:hover {
                            value="{{ request.GET.title }}" placeholder="Search by title">
                 </div>
                 <div class="col-md-2">
-                    <label for="identifier" class="form-label">Identifier</label>
+                    <label for="identifier" class="form-label">Identifier Prefix</label>
                     <input type="text" class="form-control" id="identifier" name="identifier"
-                           value="{{ request.GET.identifier }}" placeholder="Search by identifier">
+                           value="{{ request.GET.identifier }}" placeholder="Search by identifier prefix">
                 </div>
                 <div class="col-md-2">
                     <label for="author" class="form-label">Author</label>
                     <input type="text" class="form-control" id="author" name="author"
                            value="{{ request.GET.author }}" placeholder="Search by author">
                 </div>
+                {% if user.is_staff %}
+                <div class="col-md-2">
+                    <label for="owner" class="form-label">Owner</label>
+                    <input type="text" class="form-control" id="owner" name="owner"
+                           value="{{ request.GET.owner }}" placeholder="Search by owner">
+                </div>
+                {% endif %}
                 <div class="col-md-2">
                     <label for="date_from" class="form-label">From Date</label>
                     <input type="date" class="form-control" id="date_from" name="date_from"
@@ -121,7 +128,7 @@ th a:hover {
 <!-- Statistics Cards -->
 <div class="stats-row mb-4">
     <div class="stat-col">
-        <a href="?{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}" class="text-decoration-none">
+        <a href="?{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}" class="text-decoration-none">
             <div class="card bg-primary text-white clickable-card{% if not request.GET.status %} filter-active{% endif %}">
                 <div class="card-body text-center">
                     <h6 class="card-title">Total Jobs</h6>
@@ -131,7 +138,7 @@ th a:hover {
         </a>
     </div>
     <div class="stat-col">
-        <a href="?status=pending{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
+        <a href="?status=pending{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-secondary text-white clickable-card{% if request.GET.status == 'pending' %} filter-active{% endif %}">
                 <div class="card-body text-center">
                     <h6 class="card-title">Pending</h6>
@@ -141,7 +148,7 @@ th a:hover {
         </a>
     </div>
     <div class="stat-col">
-        <a href="?status=completed{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
+        <a href="?status=completed{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-success text-white clickable-card{% if request.GET.status == 'completed' %} filter-active{% endif %}">
                 <div class="card-body text-center">
                     <h6 class="card-title">Completed</h6>
@@ -151,7 +158,7 @@ th a:hover {
         </a>
     </div>
     <div class="stat-col">
-        <a href="?status=processing{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
+        <a href="?status=processing{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-warning text-white clickable-card{% if request.GET.status == 'processing' %} filter-active{% endif %}">
                 <div class="card-body text-center">
                     <h6 class="card-title">Processing</h6>
@@ -161,7 +168,7 @@ th a:hover {
         </a>
     </div>
     <div class="stat-col">
-        <a href="?status=reviewing{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
+        <a href="?status=reviewing{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-info text-white clickable-card{% if request.GET.status == 'reviewing' %} filter-active{% endif %}">
                 <div class="card-body text-center">
                     <h6 class="card-title">Under Review</h6>
@@ -171,7 +178,7 @@ th a:hover {
         </a>
     </div>
     <div class="stat-col">
-        <a href="?status=failed{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
+        <a href="?status=failed{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-danger text-white clickable-card{% if request.GET.status == 'failed' %} filter-active{% endif %}">
                 <div class="card-body text-center">
                     <h6 class="card-title">Failed</h6>
@@ -181,7 +188,7 @@ th a:hover {
         </a>
     </div>
     <div class="stat-col">
-        <a href="?status=derive_pending{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
+        <a href="?status=derive_pending{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-dark text-white clickable-card{% if request.GET.status == 'derive_pending' %} filter-active{% endif %}">
                 <div class="card-body text-center">
                     <h6 class="card-title">Derive Pending</h6>
@@ -191,7 +198,7 @@ th a:hover {
         </a>
     </div>
     <div class="stat-col">
-        <a href="?status=deriving{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
+        <a href="?status=deriving{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card bg-purple text-white clickable-card{% if request.GET.status == 'deriving' %} filter-active{% endif %}" style="background-color: #6f42c1 !important;">
                 <div class="card-body text-center">
                     <h6 class="card-title">Deriving</h6>
@@ -201,7 +208,7 @@ th a:hover {
         </a>
     </div>
     <div class="stat-col">
-        <a href="?status=derive_failed{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
+        <a href="?status=derive_failed{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" class="text-decoration-none">
             <div class="card text-white clickable-card{% if request.GET.status == 'derive_failed' %} filter-active{% endif %}" style="background-color: #dc3545 !important;">
                 <div class="card-body text-center">
                     <h6 class="card-title">Derive Failed</h6>
@@ -217,7 +224,7 @@ th a:hover {
     <div class="card-header bg-light d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Processing Jobs</h5>
         <div class="d-flex gap-2 align-items-center">
-            <a href="{% url 'export_jobs_csv' %}?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}{% endif %}" class="btn btn-sm btn-success">
+            <a href="{% url 'export_jobs_csv' %}?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}{% endif %}" class="btn btn-sm btn-success">
                 <i class="bi bi-download"></i> Export As CSV
             </a>
         {% if request.GET.status == 'failed' or request.GET.status == 'processing' or request.GET.status == 'pending' or request.GET.status == 'completed' or request.GET.status == 'derive_pending' or request.GET.status == 'deriving' or request.GET.status == 'derive_failed' %}
@@ -281,7 +288,7 @@ th a:hover {
                                 <th>Status</th>
                                 <th>Input Type</th>
                                 <th>
-                                    <a href="?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}sort_by=created_at&sort_order={% if sort_by == 'created_at' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
+                                    <a href="?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}sort_by=created_at&sort_order={% if sort_by == 'created_at' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
                                        class="text-decoration-none text-dark">
                                         Created
                                         {% if sort_by == 'created_at' %}
@@ -295,7 +302,7 @@ th a:hover {
                                 </th>
                                 {% if request.GET.status == 'derive_pending' or request.GET.status == 'deriving' or request.GET.status == 'derive_failed' %}
                                 <th>
-                                    <a href="?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}sort_by=derive_started&sort_order={% if sort_by == 'derive_started' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
+                                    <a href="?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}sort_by=derive_started&sort_order={% if sort_by == 'derive_started' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
                                        class="text-decoration-none text-dark">
                                         Derive Started
                                         {% if sort_by == 'derive_started' %}
@@ -309,7 +316,7 @@ th a:hover {
                                 </th>
                                 {% else %}
                                 <th>
-                                    <a href="?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}sort_by=processing_started_at&sort_order={% if sort_by == 'processing_started_at' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
+                                    <a href="?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}sort_by=processing_started_at&sort_order={% if sort_by == 'processing_started_at' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
                                        class="text-decoration-none text-dark">
                                         Processing Started
                                         {% if sort_by == 'processing_started_at' %}
@@ -469,10 +476,10 @@ th a:hover {
                         <ul class="pagination justify-content-center mb-0">
                             {% if jobs.has_previous %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?page=1{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">First</a>
+                                    <a class="page-link" href="?page=1{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">First</a>
                                 </li>
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ jobs.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">Previous</a>
+                                    <a class="page-link" href="?page={{ jobs.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">Previous</a>
                                 </li>
                             {% endif %}
 
@@ -483,17 +490,17 @@ th a:hover {
                                     </li>
                                 {% elif i > jobs.number|add:'-3' and i < jobs.number|add:'3' %}
                                     <li class="page-item">
-                                        <a class="page-link" href="?page={{ i }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">{{ i }}</a>
+                                        <a class="page-link" href="?page={{ i }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">{{ i }}</a>
                                     </li>
                                 {% endif %}
                             {% endfor %}
 
                             {% if jobs.has_next %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ jobs.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">Next</a>
+                                    <a class="page-link" href="?page={{ jobs.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">Next</a>
                                 </li>
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ jobs.paginator.num_pages }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">Last</a>
+                                    <a class="page-link" href="?page={{ jobs.paginator.num_pages }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.title %}&title={{ request.GET.title }}{% endif %}{% if request.GET.identifier %}&identifier={{ request.GET.identifier }}{% endif %}{% if request.GET.author %}&author={{ request.GET.author }}{% endif %}{% if request.GET.owner %}&owner={{ request.GET.owner }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">Last</a>
                                 </li>
                             {% endif %}
                         </ul>
