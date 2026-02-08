@@ -4,6 +4,11 @@
 
 {% block extra_head %}
 <style>
+@media (min-width: 992px) {
+    .main-content > .container {
+        max-width: 95%;
+    }
+}
 .clickable-card {
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
@@ -77,41 +82,41 @@ th a:hover {
     </div>
     <div class="card-body">
         <form method="get" action="" id="searchForm">
-            <div class="row g-3">
-                <div class="col-md-2">
+            <div class="row g-3 flex-nowrap align-items-end">
+                <div class="col">
                     <label for="title" class="form-label">Title</label>
                     <input type="text" class="form-control" id="title" name="title"
                            value="{{ request.GET.title }}" placeholder="Search by title">
                 </div>
-                <div class="col-md-2">
+                <div class="col">
                     <label for="identifier" class="form-label">Identifier Prefix</label>
                     <input type="text" class="form-control" id="identifier" name="identifier"
-                           value="{{ request.GET.identifier }}" placeholder="Search by identifier prefix">
+                           value="{{ request.GET.identifier }}" placeholder="Search by prefix">
                 </div>
-                <div class="col-md-2">
+                <div class="col">
                     <label for="author" class="form-label">Author</label>
                     <input type="text" class="form-control" id="author" name="author"
                            value="{{ request.GET.author }}" placeholder="Search by author">
                 </div>
                 {% if user.is_staff %}
-                <div class="col-md-2">
+                <div class="col">
                     <label for="owner" class="form-label">Owner</label>
                     <input type="text" class="form-control" id="owner" name="owner"
                            value="{{ request.GET.owner }}" placeholder="Search by owner">
                 </div>
                 {% endif %}
-                <div class="col-md-2">
+                <div class="col">
                     <label for="date_from" class="form-label">From Date</label>
                     <input type="date" class="form-control" id="date_from" name="date_from"
                            value="{{ request.GET.date_from }}">
                 </div>
-                <div class="col-md-2">
+                <div class="col">
                     <label for="date_to" class="form-label">To Date</label>
                     <input type="date" class="form-control" id="date_to" name="date_to"
                            value="{{ request.GET.date_to }}">
                 </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <div class="btn-group w-100" role="group">
+                <div class="col-auto d-flex align-items-end">
+                    <div class="btn-group" role="group">
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-search"></i> Search
                         </button>
