@@ -293,6 +293,7 @@ th a:hover {
                                         {% endif %}
                                     </a>
                                 </th>
+                                {% if request.GET.status == 'derive_pending' or request.GET.status == 'deriving' or request.GET.status == 'derive_failed' %}
                                 <th>
                                     <a href="?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}sort_by=derive_started&sort_order={% if sort_by == 'derive_started' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
                                        class="text-decoration-none text-dark">
@@ -306,6 +307,21 @@ th a:hover {
                                         {% endif %}
                                     </a>
                                 </th>
+                                {% else %}
+                                <th>
+                                    <a href="?{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.title %}title={{ request.GET.title }}&{% endif %}{% if request.GET.identifier %}identifier={{ request.GET.identifier }}&{% endif %}{% if request.GET.author %}author={{ request.GET.author }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}sort_by=processing_started_at&sort_order={% if sort_by == 'processing_started_at' and sort_order == 'asc' %}desc{% else %}asc{% endif %}"
+                                       class="text-decoration-none text-dark">
+                                        Processing Started
+                                        {% if sort_by == 'processing_started_at' %}
+                                            {% if sort_order == 'asc' %}
+                                                <i class="bi bi-arrow-up"></i>
+                                            {% else %}
+                                                <i class="bi bi-arrow-down"></i>
+                                            {% endif %}
+                                        {% endif %}
+                                    </a>
+                                </th>
+                                {% endif %}
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -401,11 +417,20 @@ th a:hover {
                                 <small class="d-block text-muted">{{ job.created_at|date:"M d, Y H:i" }}</small>
                             </td>
                             <td>
-                                {% if job.derive_started %}
-                                    <span title="{{ job.derive_started }}">{{ job.derive_started|timesince }} ago</span>
-                                    <small class="d-block text-muted">{{ job.derive_started|date:"M d, Y H:i" }}</small>
+                                {% if request.GET.status == 'derive_pending' or request.GET.status == 'deriving' or request.GET.status == 'derive_failed' %}
+                                    {% if job.derive_started %}
+                                        <span title="{{ job.derive_started }}">{{ job.derive_started|timesince }} ago</span>
+                                        <small class="d-block text-muted">{{ job.derive_started|date:"M d, Y H:i" }}</small>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
                                 {% else %}
-                                    <span class="text-muted">—</span>
+                                    {% if job.processing_started_at %}
+                                        <span title="{{ job.processing_started_at }}">{{ job.processing_started_at|timesince }} ago</span>
+                                        <small class="d-block text-muted">{{ job.processing_started_at|date:"M d, Y H:i" }}</small>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
                                 {% endif %}
                             </td>
                             <td>
