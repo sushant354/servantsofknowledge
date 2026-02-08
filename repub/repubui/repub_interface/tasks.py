@@ -152,6 +152,17 @@ def derive_job_task(job_id):
             logger.error(f"No identifier found for job {job.id}")
             return
 
+        # Check if another job already has this identifier derived
+        existing = ProcessingJob.objects.filter(
+            derived_identifier=identifier, is_derived=True
+        ).exclude(id=job.id).first()
+        if existing:
+            job.status = 'derive_failed'
+            job.error_message = f'Identifier "{identifier}" is already derived by job {existing.id}.'
+            job.save()
+            logger.error(f"Job {job.id}: identifier '{identifier}' already derived by job {existing.id}")
+            return
+
         # Create derive directory with the identifier name
         derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
         os.makedirs(derive_base_dir, exist_ok=True)

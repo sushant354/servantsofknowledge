@@ -822,6 +822,8 @@ def bulk_derive_jobs(request):
     derive_count = 0
     failed_count = 0
 
+    skipped_duplicates = []
+
     for job in jobs:
         try:
             # Check if job is already queued to prevent duplicate submissions
@@ -829,6 +831,16 @@ def bulk_derive_jobs(request):
                 logger.warning(f"Job {job.id} is already queued for derivation. Skipping.")
                 failed_count += 1
                 continue
+
+            # Check if another job with the same identifier is already derived
+            if job.identifier:
+                existing = ProcessingJob.objects.filter(
+                    derived_identifier=job.identifier, is_derived=True
+                ).exclude(id=job.id).first()
+                if existing:
+                    logger.warning(f"Job {job.id}: identifier '{job.identifier}' already derived by job {existing.id}. Skipping.")
+                    skipped_duplicates.append(job)
+                    continue
 
             # Set job status to derive_pending
             job.status = 'derive_pending'
@@ -851,7 +863,11 @@ def bulk_derive_jobs(request):
     if failed_count > 0:
         messages.warning(request, f'{failed_count} job{"s" if failed_count > 1 else ""} could not be derived.')
 
-    if derive_count == 0 and failed_count == 0:
+    if skipped_duplicates:
+        skipped_count = len(skipped_duplicates)
+        messages.warning(request, f'{skipped_count} job{"s" if skipped_count > 1 else ""} skipped because {"their identifiers are" if skipped_count > 1 else "its identifier is"} already derived.')
+
+    if derive_count == 0 and failed_count == 0 and not skipped_duplicates:
         messages.warning(request, 'No jobs were derived. Please ensure selected jobs are in completed, derive_failed, or deriving status.')
 
     return redirect('all_jobs')
@@ -874,6 +890,18 @@ def derive_job(request, job_id):
     if job.status in ['deriving', 'derive_pending']:
         logger.warning(f"Job {job.id} is already being derived. Ignoring duplicate request.")
         return redirect('job_detail', job_id=job_id)
+
+    # Check if another job with the same identifier is already derived
+    if job.identifier:
+        existing = ProcessingJob.objects.filter(
+            derived_identifier=job.identifier, is_derived=True
+        ).exclude(id=job.id).first()
+        if existing:
+            messages.error(
+                request,
+                f'Identifier "{job.identifier}" is already derived by job "{existing.title or existing.id}".'
+            )
+            return redirect('job_detail', job_id=job_id)
 
     # Extract derive_reduce_factor from POST request
     derive_reduce_factor = request.POST.get('derive_reduce_factor', '').strip()
