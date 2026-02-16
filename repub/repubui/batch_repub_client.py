@@ -1,209 +1,235 @@
 #!/usr/bin/env python3
-"""
-Batch upload script for REPUB:
-- Scans folders under one or more source roots.
-- Extracts identifier from identifier.txt inside each folder.
-- If --only-file is used: only process folders whose identifier matches entries from the file.
-- Creates a zip containing the folder contents under a top-level <identifier>/ directory.
-- Submits via REPUBClient (using the bulk processing capabilities).
-- Success = API returns "success": true.
-- On success → zip is deleted.
-- On failure → zip is retained for reruns.
-- Retries supported with --retries and --auto-retry.
-
-"""
 
 from pathlib import Path
-import argparse, logging, sys, xml.etree.ElementTree as ET, zipfile, os, datetime, json, csv, time
-from repub_client import REPUBClient
+import argparse, logging, sys, xml.etree.ElementTree as ET
+import zipfile, os, subprocess, json, time, re, threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# ───────── CONFIG ─────────
+
+DEFAULT_TOKEN = ""
 DEFAULT_ROOT = "/home/scribe/scribe_books"
-DEFAULT_TEMP_DIR = "/tmp/repub_zips"
-DEFAULT_LOG_DIR = "/home/scribe/scripts/logs"
-DEFAULT_MAIN_LOG = "/home/scribe/scripts/batch_repub.log"
-DEFAULT_SUCCESS_LIST = "/home/scribe/scripts/success_list.txt"
-DEFAULT_FAILURE_LIST = "/home/scribe/scripts/failure_list.txt"
-DEFAULT_SUMMARY_CSV = "/home/scribe/scripts/batch_summary.csv"
-DEFAULT_OUTPUT = "output"
+DEFAULT_TEMP = "/tmp/repub_zips"
+DEFAULT_LOG = "/home/scribe/scripts/batch_repub.log"
+DEFAULT_SUCCESS = "/home/scribe/scripts/success.txt"
+DEFAULT_FAIL = "/home/scribe/scripts/failure.txt"
+DEFAULT_SKIP = "/home/scribe/scripts/skipped.txt"
 DEFAULT_URL = "https://repub.servantsofknowledge.in"
+DEFAULT_REPUB = "/home/scribe/scripts/repub_client.py"
+DEFAULT_WORKERS = 5
+CHECKPOINT_FILE = "repub_checkpoint.json"
 
-def setup_logging(log_path: Path):
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s: %(message)s",
-        handlers=[logging.FileHandler(str(log_path)), logging.StreamHandler(sys.stdout)],
-    )
+print_lock = threading.Lock()
+completed_lock = threading.Lock()
 
-def read_identifier(folder: Path):
-    p = folder / "identifier.txt"
-    if not p.exists(): return None
-    try: return p.read_text().strip() or None
-    except: return None
+completed_count = 0
+start_time = time.time()
 
-def read_title_language(folder: Path):
-    m = folder / "metadata.xml"
-    if not m.exists(): return folder.name, "eng"
+# ───────── PRINT SAFE ─────────
+
+def safe_print(msg):
+    with print_lock:
+        print(msg, flush=True)
+
+# ───────── IDENTIFIER ─────────
+
+def read_identifier(folder):
+    f = folder/"identifier.txt"
+    return f.read_text().strip() if f.exists() else None
+
+def read_meta(folder):
+    xmlp = folder/"metadata.xml"
+    if not xmlp.exists():
+        return folder.name,"eng"
     try:
-        root = ET.parse(m).getroot()
+        root = ET.parse(xmlp).getroot()
         title = root.findtext(".//title","").strip() or folder.name
-        lang = root.findtext(".//language","").strip().lower().replace(" ","")
-        lang = f"eng+{lang}" if lang else "eng"
-        return title, lang
+        lang = root.findtext(".//language","").strip().lower()
+        return title,(f"eng+{lang}" if lang else "eng")
     except:
-        return folder.name, "eng"
+        return folder.name,"eng"
 
-def make_zip(folder: Path, identifier: str, tempdir: Path) -> Path:
-    tempdir.mkdir(parents=True, exist_ok=True)
-    safe = "".join(c if c.isalnum() or c in "-._" else "_" for c in identifier)
-    zp = tempdir / f"{safe}.zip"
+# ───────── ZIP ─────────
+
+def make_zip(folder,identifier,tempdir):
+    tempdir.mkdir(parents=True,exist_ok=True)
+    safe="".join(c if c.isalnum() or c in "-._" else "_" for c in identifier)
+    zp=tempdir/f"{safe}.zip"
     if zp.exists():
-        zp = tempdir / f"{safe}__{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.zip"
-    with zipfile.ZipFile(zp,"w",zipfile.ZIP_DEFLATED) as zf:
+        return zp
+    with zipfile.ZipFile(zp,"w",zipfile.ZIP_DEFLATED) as z:
         for root,_,files in os.walk(folder):
-            rp = Path(root).relative_to(folder)
+            rp=Path(root).relative_to(folder)
             for f in files:
-                ap = Path(root)/f
-                arc = (Path(identifier)/rp/f if str(rp)!="." else Path(identifier)/f).as_posix()
-                zf.write(str(ap), arc)
-    logging.info(f"Created zip: {zp}")
+                ap=Path(root)/f
+                arc=(Path(identifier)/rp/f if str(rp)!="." else Path(identifier)/f).as_posix()
+                z.write(ap,arc)
     return zp
 
-def submit_job_with_client(client: REPUBClient, zipfile: Path, title: str, language: str, log_path: Path):
-    """
-    Submit a job using REPUBClient and log the result
+# ───────── CHECKPOINT ─────────
 
-    Args:
-        client: REPUBClient instance
-        zipfile: Path to the zip file to submit
-        title: Job title
-        language: OCR language
-        log_path: Path to log file for this job
+def load_checkpoint():
+    if Path(CHECKPOINT_FILE).exists():
+        return set(json.loads(Path(CHECKPOINT_FILE).read_text()))
+    return set()
 
-    Returns:
-        Tuple of (success: bool, message: str, job_id: str or None)
-    """
+def save_checkpoint(done):
+    Path(CHECKPOINT_FILE).write_text(json.dumps(list(done)))
+
+# ───────── IDENTIFIER CHECK ─────────
+
+def identifier_exists(identifier,args):
+
+    cmd=[
+        "python3",args.repub_path,
+        "--file","/dev/null",
+        "--check-identifier",identifier,
+        "--token",args.token,
+        "--url",args.url
+    ]
+
     try:
-        result = client.submit_job(
-            file_path=zipfile,
-            title=title,
-            language=language,
-            input_type='images',
-            crop=True,
-            deskew=True,
-            ocr=False,
-            wait_for_completion=False
-        )
+        p=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        output=(p.stdout+p.stderr).lower()
 
-        # Log the result
-        with open(log_path, "a") as lf:
-            lf.write("=== " + datetime.datetime.now().isoformat() + " ===\n")
-            lf.write(f"File: {zipfile}\n")
-            lf.write(f"Title: {title}\n")
-            lf.write(f"Language: {language}\n")
-            lf.write(f"Result: {json.dumps(result, indent=2)}\n\n")
+        # detect existence phrase
+        if "already exists" in output:
+            return True
 
-        success = result.get("success", False)
-        message = result.get("message", "Unknown error")
-        job_id = result.get("job_id")
+        return False
 
-        return success, message, job_id
+    except Exception:
+        return False
 
-    except Exception as e:
-        error_msg = f"Exception during submission: {str(e)}"
-        with open(log_path, "a") as lf:
-            lf.write("=== " + datetime.datetime.now().isoformat() + " ===\n")
-            lf.write(f"File: {zipfile}\n")
-            lf.write(f"ERROR: {error_msg}\n\n")
-        return False, error_msg, None
+# ───────── PROGRESS BAR ─────────
 
-def write_summary(csv_path, header_written, **row):
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    new = not csv_path.exists() or not header_written
-    with open(csv_path,"a",newline="",encoding="utf-8") as f:
-        w=csv.writer(f)
-        if new: w.writerow(["timestamp","folder","identifier","status","message"])
-        w.writerow([datetime.datetime.now().isoformat(), row["folder"], row["identifier"], row["status"], row["message"]])
-    return True
+def progress_bar(done,total):
+
+    pct=done/total*100 if total else 100
+    filled=int(pct/2)
+    bar="#"*filled+"-"*(50-filled)
+
+    elapsed=time.time()-start_time
+    rate=done/elapsed if elapsed else 0
+    eta=(total-done)/rate if rate else 0
+
+    return f"[{bar}] {pct:5.1f}% | {done}/{total} | {rate:.2f}/s | ETA {eta:.1f}s"
+
+# ───────── LOAD DONE ─────────
+
+def load_done(*files):
+    s=set()
+    for f in files:
+        if Path(f).exists():
+            s|={x.strip().split()[0] for x in Path(f).read_text().splitlines() if x.strip()}
+    return s
+
+# ───────── WORKER ─────────
+
+def worker(folder,args):
+
+    identifier=read_identifier(folder)
+    if not identifier:
+        return ("SKIP","no_identifier",None,0)
+
+    title,lang=read_meta(folder)
+
+    start=time.time()
+    zipf=make_zip(folder,identifier,Path(args.temp_dir))
+
+    cmd=[
+        "python3",args.repub_path,
+        "--output","output",
+        "--file",str(zipf),
+        "--title",title,
+        "--token",args.token,
+        "--language",lang,
+        "--url",args.url,
+        "--no-wait"
+    ]
+
+    p=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+
+    success="success" in p.stdout.lower()
+
+    if success:
+        size=zipf.stat().st_size
+        duration=time.time()-start
+        speed=size/duration/1024/1024 if duration>0 else 0
+        zipf.unlink(missing_ok=True)
+        return ("SUCCESS","submitted",identifier,speed)
+
+    return ("FAIL","upload_failed",identifier,0)
+
+# ───────── MAIN ─────────
 
 def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("--root", default=DEFAULT_ROOT)
-    p.add_argument("--roots")
-    p.add_argument("--token", required=True)
-    p.add_argument("--output", default=DEFAULT_OUTPUT)
-    p.add_argument("--url", default=DEFAULT_URL)
-    p.add_argument("--temp-dir", default=DEFAULT_TEMP_DIR)
-    p.add_argument("--log-dir", default=DEFAULT_LOG_DIR)
-    p.add_argument("--main-log", default=DEFAULT_MAIN_LOG)
-    p.add_argument("--success-list", default=DEFAULT_SUCCESS_LIST)
-    p.add_argument("--failure-list", default=DEFAULT_FAILURE_LIST)
-    p.add_argument("--summary-csv", default=DEFAULT_SUMMARY_CSV)
-    p.add_argument("--only-file", help="Path to ids.txt containing identifiers")
-    p.add_argument("--retries", type=int, default=0)
-    p.add_argument("--auto-retry", action="store_true")
-    args = p.parse_args()
 
-    setup_logging(Path(args.main_log))
-    tempdir = Path(args.temp_dir)
-    logdir = Path(args.log_dir)
-    logdir.mkdir(parents=True, exist_ok=True)
+    p=argparse.ArgumentParser()
+    p.add_argument("--token",default=DEFAULT_TOKEN)
+    p.add_argument("--root",default=DEFAULT_ROOT)
+    p.add_argument("--workers",type=int,default=DEFAULT_WORKERS)
+    p.add_argument("--temp-dir",default=DEFAULT_TEMP)
+    p.add_argument("--url",default=DEFAULT_URL)
+    p.add_argument("--repub-path",default=DEFAULT_REPUB)
+    args=p.parse_args()
 
-    # Create REPUB client
-    client = REPUBClient(base_url=args.url, token=args.token, logger=logging.getLogger())
+    if not args.token:
+        print("Token missing");sys.exit(1)
 
-    # Load identifier whitelist if provided
-    whitelist = None
-    if args.only_file:
-        whitelist = set(x.strip() for x in Path(args.only_file).read_text().splitlines() if x.strip() and not x.startswith("#"))
-        logging.info(f"Loaded {len(whitelist)} identifiers from {args.only_file}")
+    done=load_done(DEFAULT_SUCCESS,DEFAULT_SKIP)|load_checkpoint()
 
-    roots = [Path(args.root)] if not args.roots else [Path(r.strip()) for r in args.roots.split(",")]
+    root=Path(args.root)
+    folders=[f for f in sorted(root.iterdir()) if f.is_dir()]
 
-    header_written=False
-    for rt in roots:
-        if not rt.exists(): continue
-        for folder in sorted(rt.iterdir()):
-            if not folder.is_dir(): continue
+    safe_print("\nChecking identifiers...\n")
 
-            identifier = read_identifier(folder)
-            if not identifier:
-                logging.warning(f"Skipping {folder} (no identifier.txt)")
-                continue
+    jobs=[]
 
-            if whitelist and identifier not in whitelist:
-                continue  # << match by identifier ONLY
+    for f in folders:
+        identifier=read_identifier(f)
+        if not identifier:
+            continue
+        if identifier in done:
+            continue
+        if identifier_exists(identifier,args):
+            safe_print(f"SKIP exists → {identifier}")
+            done.add(identifier)
+            continue
+        jobs.append(f)
 
-            title, lang = read_title_language(folder)
-            zipf = make_zip(folder, identifier, tempdir)
-            per_log = logdir / f"{identifier}__{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+    total=len(jobs)
+    safe_print(f"\nReady for upload: {total}\n")
 
-            success = False
-            job_id = None
-            for attempt in range(1, args.retries+2):
-                logging.info(f"[{identifier}] Attempt {attempt}")
-                ok, msg, job_id = submit_job_with_client(client, zipf, title, lang, per_log)
-                if ok:
-                    success = True
-                    logging.info(f"[{identifier}] SUCCESS: {msg} (Job ID: {job_id})")
-                    zipf.unlink(missing_ok=True)
-                    write_summary(Path(args.summary_csv), header_written, folder=str(folder), identifier=identifier, status="SUBMITTED", message=f"{msg} (Job ID: {job_id})")
-                    with open(args.success_list, "a") as f:
-                        f.write(f"{identifier}\t{job_id}\n")
-                    break
-                else:
-                    logging.warning(f"[{identifier}] FAILED: {msg}")
-                    if attempt >= args.retries+1 or not args.auto_retry:
-                        write_summary(Path(args.summary_csv), header_written, folder=str(folder), identifier=identifier, status="FAILED", message=msg)
-                        with open(args.failure_list, "a") as f:
-                            f.write(identifier+"\n")
-                    else:
-                        # Wait before retry
-                        time.sleep(2)
+    results=[]
+    global completed_count
 
-            header_written=True
+    with ThreadPoolExecutor(max_workers=args.workers) as exe:
 
-    logging.info("Done.")
+        futures={exe.submit(worker,f,args):f for f in jobs}
 
-if __name__ == "__main__":
+        for fut in as_completed(futures):
+
+            status,msg,identifier,speed=fut.result()
+
+            with completed_lock:
+                completed_count+=1
+                done.add(identifier)
+                save_checkpoint(done)
+
+            safe_print(f"{identifier} → {status} ({speed:.2f} MB/s)")
+            safe_print(progress_bar(completed_count,total))
+
+            results.append((status,identifier))
+
+    success=sum(1 for r in results if r[0]=="SUCCESS")
+    failed=sum(1 for r in results if r[0]=="FAIL")
+
+    safe_print("\n──────── SUMMARY ────────")
+    safe_print(f"Total   : {total}")
+    safe_print(f"Success : {success}")
+    safe_print(f"Failed  : {failed}")
+    safe_print("─────────────────────────\n")
+
+if __name__=="__main__":
     main()
