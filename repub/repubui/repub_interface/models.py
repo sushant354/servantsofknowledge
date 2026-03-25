@@ -115,6 +115,12 @@ class ProcessingJob(models.Model):
         if os.path.exists(thumb_path):
             relative_path = os.path.relpath(thumb_path, settings.MEDIA_ROOT)
             return f"{settings.MEDIA_URL}{relative_path}"
+        derived_dir = self.get_derived_dir()
+        if derived_dir:
+            thumb_path = os.path.join(derived_dir, '__ia_thumb.jpg')
+            if os.path.exists(thumb_path):
+                relative_path = os.path.relpath(thumb_path, settings.MEDIA_ROOT)
+                return f"{settings.MEDIA_URL}{relative_path}"
         return None
 
     def get_derived_dir(self):
