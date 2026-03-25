@@ -18,6 +18,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.utils.safestring import mark_safe
+from django.contrib.auth.models import User
 from .models import ProcessingJob
 from .forms import ProcessingJobForm, ProcessingOptionsForm
 from .tasks import derive_job_task
@@ -337,11 +338,55 @@ def job_detail(request, job_id):
         os.path.exists(review_dir)
     )
 
+    all_users = User.objects.all().order_by('username') if request.user.is_staff else []
+
     return render(request, 'repub_interface/job_detail.html', {
         'job': job,
         'form': form,
-        'has_directories_to_cleanup': has_directories_to_cleanup
+        'has_directories_to_cleanup': has_directories_to_cleanup,
+        'all_users': all_users,
     })
+
+@login_required
+@require_http_methods(["POST"])
+def edit_job(request, job_id):
+    """Edit job identifier and owner. Staff only."""
+    if not request.user.is_staff:
+        messages.error(request, 'You do not have permission to edit jobs.')
+        return redirect('job_detail', job_id=job_id)
+
+    job = get_object_or_404(ProcessingJob, id=job_id)
+
+    new_identifier = request.POST.get('identifier', '').strip()
+    new_owner_id = request.POST.get('owner', '').strip()
+
+    # Update identifier
+    if new_identifier != (job.identifier or ''):
+        job.identifier = new_identifier
+
+        # Update identifier.txt in the resolved input directory
+        input_dir = job.get_input_dir()
+        if os.path.exists(input_dir):
+            scandir = Scandir(input_dir, None, None, logger)
+            identifier_path = os.path.join(scandir.indir, 'identifier.txt')
+            with open(identifier_path, 'w', encoding='utf-8') as f:
+                f.write(new_identifier)
+            messages.success(request, f'Identifier updated to "{new_identifier}" (identifier.txt also updated).')
+        else:
+            messages.success(request, f'Identifier updated to "{new_identifier}" (input directory not found, identifier.txt not updated).')
+
+    # Update owner
+    if new_owner_id:
+        new_owner = get_object_or_404(User, id=int(new_owner_id))
+        if job.user != new_owner:
+            job.user = new_owner
+            messages.success(request, f'Owner updated to "{new_owner.username}".')
+    elif job.user is not None:
+        job.user = None
+        messages.success(request, 'Owner removed.')
+
+    job.save()
+    return redirect('job_detail', job_id=job.id)
 
 @login_or_token_required
 def job_download(request, job_id):

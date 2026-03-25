@@ -218,7 +218,14 @@
                     </a>
                 {% endif %}
 
-                <h4 class="mt-4 mb-3">Job Details</h4>
+                <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+                    <h4 class="mb-0">Job Details</h4>
+                    {% if request.user.is_staff %}
+                    <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editJobModal">
+                        <i class="bi bi-pencil-square"></i> Edit
+                    </button>
+                    {% endif %}
+                </div>
                 <table class="table table-bordered">
                     <tbody>
                         {% if job.title %}
@@ -473,6 +480,49 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Job Modal -->
+{% if request.user.is_staff %}
+<div class="modal fade" id="editJobModal" tabindex="-1" aria-labelledby="editJobModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="{% url 'edit_job' job.id %}">
+                {% csrf_token %}
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="editJobModalLabel">
+                        <i class="bi bi-pencil-square me-2"></i>Edit Job Details
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit-identifier" class="form-label">Identifier</label>
+                        <input type="text" class="form-control" id="edit-identifier" name="identifier" value="{{ job.identifier|default:'' }}">
+                        <div class="form-text">Changing the identifier will also update identifier.txt in the input directory.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-owner" class="form-label">Owner</label>
+                        <select class="form-select" id="edit-owner" name="owner">
+                            <option value="">-- No owner --</option>
+                            {% for user in all_users %}
+                            <option value="{{ user.id }}" {% if job.user_id == user.id %}selected{% endif %}>{{ user.username }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Review Pages Modal -->
 <div class="modal fade" id="reviewPagesModal" tabindex="-1" aria-labelledby="reviewPagesModalLabel" aria-hidden="true">
