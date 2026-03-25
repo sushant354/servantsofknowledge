@@ -22,6 +22,7 @@ urlpatterns = [
     path('job/<uuid:job_id>/delete/', jobs.delete_job, name='delete_job'),
     path('items/', items.all_items, name='all_items'),
     path('items/export-csv/', items.export_items_csv, name='export_items_csv'),
+    path('items/download-pdf/', items.download_items_pdf, name='download_items_pdf'),
     path('item/<str:identifier>/delete/', items.delete_item, name='delete_item'),
     path('item/<str:identifier>/', items.item_directory, name='item_directory'),
     path('item/<str:identifier>/<path:subpath>/', items.item_directory, name='item_directory_subpath'),

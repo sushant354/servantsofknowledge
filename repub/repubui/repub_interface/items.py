@@ -1,9 +1,11 @@
 import os
 import logging
 import shutil
-import datetime 
+import datetime
 import csv
 import mimetypes
+import zipfile
+import io
 
 from django.shortcuts import render, redirect
 from django.conf import settings
@@ -259,6 +261,64 @@ def export_items_csv(request):
             modified_time
         ])
 
+    return response
+
+
+@login_required
+@require_http_methods(["POST"])
+def download_items_pdf(request):
+    """Download PDFs for selected derived items"""
+    identifiers_str = request.POST.get('identifiers', '')
+    if not identifiers_str:
+        messages.error(request, 'No items selected for download.')
+        return redirect('all_items')
+
+    identifiers = [i.strip() for i in identifiers_str.split(',') if i.strip()]
+    if not identifiers:
+        messages.error(request, 'No items selected for download.')
+        return redirect('all_items')
+
+    # Check access for non-staff users
+    if not request.user.is_staff:
+        allowed_identifiers = set(
+            ProcessingJob.objects.filter(
+                is_derived=True,
+                derived_identifier__in=identifiers,
+                user=request.user
+            ).values_list('derived_identifier', flat=True)
+        )
+        identifiers = [i for i in identifiers if i in allowed_identifiers]
+
+    derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
+
+    # Collect valid PDF paths
+    pdf_files = []
+    for identifier in identifiers:
+        pdf_path = os.path.join(derive_base_dir, identifier, f'{identifier}.pdf')
+        if os.path.isfile(pdf_path):
+            pdf_files.append((identifier, pdf_path))
+
+    if not pdf_files:
+        messages.error(request, 'No PDFs found for the selected items.')
+        return redirect('all_items')
+
+    # Single PDF: serve directly
+    if len(pdf_files) == 1:
+        identifier, pdf_path = pdf_files[0]
+        with open(pdf_path, 'rb') as f:
+            response = HttpResponse(f.read(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{identifier}.pdf"'
+        return response
+
+    # Multiple PDFs: serve as zip
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_STORED) as zf:
+        for identifier, pdf_path in pdf_files:
+            zf.write(pdf_path, f'{identifier}.pdf')
+    buffer.seek(0)
+
+    response = HttpResponse(buffer.read(), content_type='application/zip')
+    response['Content-Disposition'] = 'attachment; filename="items_pdfs.zip"'
     return response
 
 

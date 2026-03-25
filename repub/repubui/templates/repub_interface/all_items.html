@@ -111,9 +111,14 @@
     <div class="card-header bg-light d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Derived Items <span class="badge bg-primary">{{ total_items }}</span></h5>
         {% if items %}
-        <button type="button" class="btn btn-success btn-sm" id="export-csv-btn" disabled>
-            <i class="bi bi-download"></i> Export As CSV (<span id="selected-count">0</span>)
-        </button>
+        <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-success" id="export-csv-btn" disabled>
+                <i class="bi bi-filetype-csv"></i> Export CSV (<span id="selected-count">0</span>)
+            </button>
+            <button type="button" class="btn btn-primary" id="download-pdf-btn" disabled>
+                <i class="bi bi-file-earmark-pdf"></i> Download PDF (<span id="selected-count-pdf">0</span>)
+            </button>
+        </div>
         {% endif %}
     </div>
     <div class="card-body p-0">
@@ -121,6 +126,10 @@
             <form id="export-form" method="post" action="{% url 'export_items_csv' %}">
                 {% csrf_token %}
                 <input type="hidden" name="identifiers" id="identifiers-input">
+            </form>
+            <form id="download-pdf-form" method="post" action="{% url 'download_items_pdf' %}">
+                {% csrf_token %}
+                <input type="hidden" name="identifiers" id="pdf-identifiers-input">
             </form>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
@@ -291,15 +300,25 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectAllCheckbox = document.getElementById('select-all');
     const itemCheckboxes = document.querySelectorAll('.item-checkbox');
     const exportBtn = document.getElementById('export-csv-btn');
+    const downloadPdfBtn = document.getElementById('download-pdf-btn');
     const selectedCountSpan = document.getElementById('selected-count');
+    const selectedCountPdfSpan = document.getElementById('selected-count-pdf');
     const exportForm = document.getElementById('export-form');
     const identifiersInput = document.getElementById('identifiers-input');
+    const downloadPdfForm = document.getElementById('download-pdf-form');
+    const pdfIdentifiersInput = document.getElementById('pdf-identifiers-input');
+
+    function getSelectedIdentifiers() {
+        const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+        return Array.from(checkedBoxes).map(cb => cb.value);
+    }
 
     function updateSelectedCount() {
-        const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
-        const count = checkedBoxes.length;
-        selectedCountSpan.textContent = count;
-        exportBtn.disabled = count === 0;
+        const count = getSelectedIdentifiers().length;
+        if (selectedCountSpan) selectedCountSpan.textContent = count;
+        if (selectedCountPdfSpan) selectedCountPdfSpan.textContent = count;
+        if (exportBtn) exportBtn.disabled = count === 0;
+        if (downloadPdfBtn) downloadPdfBtn.disabled = count === 0;
     }
 
     function updateSelectAllState() {
@@ -328,10 +347,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (exportBtn) {
         exportBtn.addEventListener('click', function() {
-            const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
-            const identifiers = Array.from(checkedBoxes).map(cb => cb.value);
-            identifiersInput.value = identifiers.join(',');
+            identifiersInput.value = getSelectedIdentifiers().join(',');
             exportForm.submit();
+        });
+    }
+
+    if (downloadPdfBtn) {
+        downloadPdfBtn.addEventListener('click', function() {
+            pdfIdentifiersInput.value = getSelectedIdentifiers().join(',');
+            downloadPdfForm.submit();
         });
     }
 });
