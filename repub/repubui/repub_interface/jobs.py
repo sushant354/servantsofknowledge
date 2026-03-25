@@ -887,6 +887,22 @@ def bulk_derive_jobs(request):
                     skipped_duplicates.append(job)
                     continue
 
+                # Check if a pending/in-progress derive exists for the same identifier
+                pending = ProcessingJob.objects.filter(
+                    identifier=job.identifier, status__in=['derive_pending', 'deriving']
+                ).exclude(id=job.id).first()
+                if pending:
+                    logger.warning(f"Job {job.id}: identifier '{job.identifier}' is already being derived by job {pending.id}. Skipping.")
+                    skipped_duplicates.append(job)
+                    continue
+
+                # Check if a derived directory already exists on disk
+                derive_dir = os.path.join(settings.MEDIA_ROOT, 'derived', job.identifier)
+                if os.path.exists(derive_dir):
+                    logger.warning(f"Job {job.id}: derived directory for '{job.identifier}' already exists on disk. Skipping.")
+                    skipped_duplicates.append(job)
+                    continue
+
             # Set job status to derive_pending
             job.status = 'derive_pending'
             job.error_message = ''
@@ -945,6 +961,26 @@ def derive_job(request, job_id):
             messages.error(
                 request,
                 f'Identifier "{job.identifier}" is already derived by job "{existing.title or existing.id}".'
+            )
+            return redirect('job_detail', job_id=job_id)
+
+        # Check if a pending/in-progress derive exists for the same identifier
+        pending = ProcessingJob.objects.filter(
+            identifier=job.identifier, status__in=['derive_pending', 'deriving']
+        ).exclude(id=job.id).first()
+        if pending:
+            messages.error(
+                request,
+                f'Identifier "{job.identifier}" is already being derived by job "{pending.title or pending.id}".'
+            )
+            return redirect('job_detail', job_id=job_id)
+
+        # Check if a derived directory already exists on disk
+        derive_dir = os.path.join(settings.MEDIA_ROOT, 'derived', job.identifier)
+        if os.path.exists(derive_dir):
+            messages.error(
+                request,
+                f'A derived directory for identifier "{job.identifier}" already exists on disk.'
             )
             return redirect('job_detail', job_id=job_id)
 

@@ -163,14 +163,31 @@ def derive_job_task(job_id):
             logger.error(f"Job {job.id}: identifier '{identifier}' already derived by job {existing.id}")
             return
 
+        # Check if another job is currently deriving the same identifier
+        pending = ProcessingJob.objects.filter(
+            identifier=identifier, status__in=['derive_pending', 'deriving']
+        ).exclude(id=job.id).first()
+        if pending:
+            job.status = 'derive_failed'
+            job.error_message = f'Identifier "{identifier}" is already being derived by job {pending.id}.'
+            job.save()
+            logger.error(f"Job {job.id}: identifier '{identifier}' already being derived by job {pending.id}")
+            return
+
+        # Check if a derived directory already exists on disk
+        derive_base_dir_check = os.path.join(settings.MEDIA_ROOT, 'derived', identifier)
+        if os.path.exists(derive_base_dir_check):
+            job.status = 'derive_failed'
+            job.error_message = f'A derived directory for identifier "{identifier}" already exists on disk.'
+            job.save()
+            logger.error(f"Job {job.id}: derived directory for '{identifier}' already exists on disk")
+            return
+
         # Create derive directory with the identifier name
         derive_base_dir = os.path.join(settings.MEDIA_ROOT, 'derived')
         os.makedirs(derive_base_dir, exist_ok=True)
 
         derive_dir = os.path.join(derive_base_dir, identifier)
-        if os.path.exists(derive_dir):
-            shutil.rmtree(derive_dir)
-            logger.info(f"Cleaned up existing derive directory: {derive_dir}")
         os.makedirs(derive_dir, exist_ok=True)
         # Clear any existing handlers
         logger.handlers.clear()
