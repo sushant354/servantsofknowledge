@@ -194,6 +194,22 @@ def derive_job_task(job_id):
             shutil.copy2(thumb_path, thumb_dest)
             logger.info(f"Copied thumbnail to: {thumb_dest}")
 
+        # Copy metadata.xml and scandata.json from the resolved input dir
+        # (Scandir.find_input_dir may traverse into subdirectories)
+        resolved_input_dir = scandir.indir
+
+        metadata_path = os.path.join(resolved_input_dir, 'metadata.xml')
+        if os.path.exists(metadata_path):
+            metadata_dest = os.path.join(derive_dir, 'metadata.xml')
+            shutil.copy2(metadata_path, metadata_dest)
+            logger.info(f"Copied metadata.xml to: {metadata_dest}")
+
+        scandata_path = os.path.join(resolved_input_dir, 'scandata.json')
+        if os.path.exists(scandata_path):
+            scandata_dest = os.path.join(derive_dir, 'scandata.json')
+            shutil.copy2(scandata_path, scandata_dest)
+            logger.info(f"Copied scandata.json to: {scandata_dest}")
+
         # Check if HOCR file exists, if not regenerate PDF with OCR
         hocr_path = os.path.join(output_dir, 'x_hocr.html.gz')
         pdf_path = os.path.join(output_dir, 'x_final.pdf')
