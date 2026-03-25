@@ -221,6 +221,30 @@
                 <h4 class="mt-4 mb-3">Job Details</h4>
                 <table class="table table-bordered">
                     <tbody>
+                        {% if job.title %}
+                        <tr>
+                            <th style="width: 30%">Title</th>
+                            <td>{{ job.title }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if job.identifier %}
+                        <tr>
+                            <th style="width: 30%">Identifier</th>
+                            <td>{{ job.identifier }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if job.author %}
+                        <tr>
+                            <th style="width: 30%">Author</th>
+                            <td>{{ job.author }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if job.user %}
+                        <tr>
+                            <th style="width: 30%">Owner</th>
+                            <td>{{ job.user.username }}</td>
+                        </tr>
+                        {% endif %}
                         <tr>
                             <th style="width: 30%">Created</th>
                             <td>{{ job.created_at }}</td>
