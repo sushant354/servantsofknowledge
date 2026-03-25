@@ -28,6 +28,7 @@ def all_items(request):
     search_identifier = request.GET.get('identifier', '').strip()
     search_identifier_prefix = request.GET.get('identifier_prefix', '').strip()
     search_author = request.GET.get('author', '').strip()
+    search_owner = request.GET.get('owner', '').strip()
 
     # Get sort parameters (default: derived_at descending)
     sort_by = request.GET.get('sort', 'derived_at')
@@ -111,7 +112,7 @@ def all_items(request):
                 items.append(item_info)
 
     # Filter items based on search criteria
-    if search_identifier or search_identifier_prefix or search_author:
+    if search_identifier or search_identifier_prefix or search_author or search_owner:
         filtered_items = []
         for item in items:
             # Check identifier exact match
@@ -130,10 +131,17 @@ def all_items(request):
                 if search_author.lower() not in author.lower():
                     continue
 
+            # Check owner match (case-insensitive contains on username)
+            if search_owner:
+                owner = item.get('owner')
+                owner_username = owner.username if owner else ''
+                if search_owner.lower() not in owner_username.lower():
+                    continue
+
             filtered_items.append(item)
         items = filtered_items
 
-    has_search = bool(search_identifier or search_identifier_prefix or search_author)
+    has_search = bool(search_identifier or search_identifier_prefix or search_author or search_owner)
 
     # Sort items based on sort parameters
     reverse_order = (sort_order == 'desc')
@@ -157,6 +165,7 @@ def all_items(request):
         'search_identifier': search_identifier,
         'search_identifier_prefix': search_identifier_prefix,
         'search_author': search_author,
+        'search_owner': search_owner,
         'has_search': has_search,
         'sort_by': sort_by,
         'sort_order': sort_order,
