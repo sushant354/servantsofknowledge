@@ -2,7 +2,6 @@ import os
 import cv2
 import time
 import logging
-import threading
 import shutil
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -16,42 +15,10 @@ from django.http import JsonResponse
 
 from .models import ProcessingJob
 from repub import process_raw
-from repub.utils.scandir import Scandir, get_pagenum
+from repub.utils.scandir import get_pagenum
 from repub.imgfuncs.dewarp import dewarp
 
 logger = logging.getLogger('repubui.review')
-
-def generate_files_for_review(scandir, thumbdir, job):
-    for img, infile, outfile, pagenum in scandir.get_scanned_pages():
-        filename =  os.path.basename(outfile)
-        cv2.imwrite(outfile, img)
-
-        thumbnail = process_raw.get_thumbnail(img)
-        thumbfile = os.path.join(thumbdir, filename)
-        cv2.imwrite(thumbfile, thumbnail)
-
-def prepare_review_in_background(job):
-    """Background thread function to prepare review files"""
-    try:
-        indir       = job.get_input_dir()
-        reviewdir   = job.get_review_dir()
-
-        imgdir   = os.path.join(reviewdir, 'images')
-        thumbdir = os.path.join(reviewdir, 'thumbnails')
-
-        os.makedirs(imgdir, exist_ok=True)
-        os.makedirs(thumbdir, exist_ok=True)
-
-        scandir  = Scandir(indir, imgdir, None)
-        generate_files_for_review(scandir, thumbdir, job)
-
-        job.status = 'reviewing'
-        job.save()
-        logger.info(f"Review preparation completed for job {job.id}")
-    except Exception as e:
-        logger.error(f"Error preparing review for job {job.id}: {str(e)}")
-        job.status = job.status  # Keep previous status
-        job.save()
 
 @login_required
 def job_review(request, job_id):
@@ -71,12 +38,12 @@ def job_review(request, job_id):
         if job.status == 'reviewing' or job.status == 'finalizing':
             logger.warning(f"Job {job.id} is already in {job.status} status. Skipping review directory generation.")
         else:
-            # Set status to 'preparing_review' and start background preparation
+            # Set status to 'preparing_review' and start Celery task
             job.status = 'preparing_review'
             job.save()
 
-            thread = threading.Thread(target=prepare_review_in_background, args=(job,))
-            thread.start()
+            from .tasks import prepare_review_task
+            prepare_review_task.delay(str(job.id))
 
             messages.success(request, f'Preparing review for job "{job.title or "Untitled"}". Please wait...')
             return redirect('job_detail', job_id=job_id)

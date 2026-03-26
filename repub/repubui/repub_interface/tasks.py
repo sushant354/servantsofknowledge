@@ -491,6 +491,46 @@ def process_job(job):
 
 
 @shared_task
+def prepare_review_task(job_id):
+    """Celery task to prepare review files for a job"""
+    try:
+        job = ProcessingJob.objects.get(id=job_id)
+    except ProcessingJob.DoesNotExist:
+        logger.error(f"Job {job_id} does not exist, skipping prepare_review task")
+        return
+
+    logger.info(f"Starting prepare_review_task for job {job.id}")
+    try:
+        indir       = job.get_input_dir()
+        reviewdir   = job.get_review_dir()
+
+        imgdir   = os.path.join(reviewdir, 'images')
+        thumbdir = os.path.join(reviewdir, 'thumbnails')
+
+        os.makedirs(imgdir, exist_ok=True)
+        os.makedirs(thumbdir, exist_ok=True)
+
+        scandir  = Scandir(indir, imgdir, None)
+
+        for img, infile, outfile, pagenum in scandir.get_scanned_pages():
+            filename = os.path.basename(outfile)
+            cv2.imwrite(outfile, img)
+
+            thumbnail = process_raw.get_thumbnail(img)
+            thumbfile = os.path.join(thumbdir, filename)
+            cv2.imwrite(thumbfile, thumbnail)
+
+        job.status = 'reviewing'
+        job.save()
+        logger.info(f"Review preparation completed for job {job.id}")
+    except Exception as e:
+        logger.exception(f"Error preparing review for job {job.id}: {e}")
+        job.status = 'failed'
+        job.error_message = f'Review preparation failed: {str(e)}'
+        job.save()
+
+
+@shared_task
 def run_job_task(job_id):
     """Celery task to run a processing job"""
     try:
