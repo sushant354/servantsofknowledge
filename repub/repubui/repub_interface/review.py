@@ -17,7 +17,7 @@ from django.http import JsonResponse, FileResponse
 
 from .models import ProcessingJob
 from repub import process_raw
-from repub.utils.scandir import get_pagenum
+from repub.utils.scandir import get_pagenum, Scandir
 from repub.imgfuncs.dewarp import dewarp
 
 logger = logging.getLogger('repubui.review')
@@ -402,6 +402,10 @@ def submit_correction_zip(request, job_id):
     if not os.path.exists(input_dir):
         os.makedirs(input_dir, exist_ok=True)
 
+    # Resolve the actual input directory (Scandir traverses into subdirectories)
+    scandir = Scandir(input_dir, None, None)
+    resolved_input_dir = scandir.indir
+
     # Save the uploaded zip temporarily
     import tempfile
     with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp:
@@ -417,14 +421,14 @@ def submit_correction_zip(request, job_id):
                     continue
                 # Only process image files
                 basename = os.path.basename(member)
-                if not basename.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
+                if not basename.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff', '.jp2')):
                     continue
-                # Extract image data and write to input directory
+                # Extract image data and write to resolved input directory
                 with zf.open(member) as src:
-                    dest_path = os.path.join(input_dir, basename)
+                    dest_path = os.path.join(resolved_input_dir, basename)
                     with open(dest_path, 'wb') as dst:
                         shutil.copyfileobj(src, dst)
-                logger.info(f"Copied corrected image {basename} to input dir for job {job.id}")
+                logger.info(f"Copied corrected image {basename} to {resolved_input_dir} for job {job.id}")
     except zipfile.BadZipFile:
         messages.error(request, 'The uploaded file is not a valid ZIP file.')
         os.unlink(tmp_path)
