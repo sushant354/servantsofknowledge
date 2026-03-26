@@ -16,6 +16,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse, FileResponse
 
 from .models import ProcessingJob
+from .users import login_or_token_required
 from repub import process_raw
 from repub.utils.scandir import get_pagenum, Scandir
 from repub.imgfuncs.dewarp import dewarp
@@ -376,27 +377,17 @@ def download_corrections(request, job_id):
     return response
 
 
-@login_required
-@require_http_methods(["POST"])
-def submit_correction_zip(request, job_id):
-    """Accept a zip file of corrected images, copy to input directory, and resubmit for processing"""
-    if request.user.is_staff:
-        job = get_object_or_404(ProcessingJob, id=job_id)
-    else:
-        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+def _process_correction_zip(job, correction_file):
+    """
+    Core logic: extract corrected images from zip into the resolved input directory,
+    clean up review/output dirs, and resubmit the job for processing.
 
-    if job.status != 'under_correction':
-        messages.error(request, 'Job is not under correction.')
-        return redirect('job_detail', job_id=job_id)
-
-    correction_file = request.FILES.get('correction_zip')
-    if not correction_file:
-        messages.error(request, 'No correction file uploaded.')
-        return redirect('job_detail', job_id=job_id)
+    Returns (success: bool, error_message: str or None, files_copied: int)
+    """
+    import tempfile
 
     if not correction_file.name.endswith('.zip'):
-        messages.error(request, 'Please upload a ZIP file.')
-        return redirect('job_detail', job_id=job_id)
+        return False, 'Please upload a ZIP file.', 0
 
     input_dir = job.get_input_dir()
     if not os.path.exists(input_dir):
@@ -407,12 +398,12 @@ def submit_correction_zip(request, job_id):
     resolved_input_dir = scandir.indir
 
     # Save the uploaded zip temporarily
-    import tempfile
     with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp:
         for chunk in correction_file.chunks():
             tmp.write(chunk)
         tmp_path = tmp.name
 
+    files_copied = 0
     try:
         with zipfile.ZipFile(tmp_path, 'r') as zf:
             for member in zf.namelist():
@@ -428,11 +419,11 @@ def submit_correction_zip(request, job_id):
                     dest_path = os.path.join(resolved_input_dir, basename)
                     with open(dest_path, 'wb') as dst:
                         shutil.copyfileobj(src, dst)
+                files_copied += 1
                 logger.info(f"Copied corrected image {basename} to {resolved_input_dir} for job {job.id}")
     except zipfile.BadZipFile:
-        messages.error(request, 'The uploaded file is not a valid ZIP file.')
         os.unlink(tmp_path)
-        return redirect('job_detail', job_id=job_id)
+        return False, 'The uploaded file is not a valid ZIP file.', 0
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
@@ -462,5 +453,70 @@ def submit_correction_zip(request, job_id):
     run_job_task.delay(str(job.id))
 
     logger.info(f"Job {job.id} correction submitted, requeued for processing")
+    return True, None, files_copied
+
+
+@login_required
+@require_http_methods(["POST"])
+def submit_correction_zip(request, job_id):
+    """Accept a zip file of corrected images, copy to input directory, and resubmit for processing"""
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+
+    if job.status != 'under_correction':
+        messages.error(request, 'Job is not under correction.')
+        return redirect('job_detail', job_id=job_id)
+
+    correction_file = request.FILES.get('correction_zip')
+    if not correction_file:
+        messages.error(request, 'No correction file uploaded.')
+        return redirect('job_detail', job_id=job_id)
+
+    success, error, _ = _process_correction_zip(job, correction_file)
+    if not success:
+        messages.error(request, error)
+        return redirect('job_detail', job_id=job_id)
+
     messages.success(request, f'Corrections uploaded. Job "{job.title or "Untitled"}" has been resubmitted for processing.')
     return redirect('job_detail', job_id=job_id)
+
+
+@csrf_exempt
+@login_or_token_required
+@require_http_methods(["POST"])
+def api_submit_correction_zip(request, job_id):
+    """API endpoint: submit a corrections zip file for a job under correction.
+
+    Expects a multipart/form-data POST with a 'correction_zip' file field.
+    Authenticated via session or Authorization: Token <token> header.
+    """
+    if request.user.is_staff:
+        job = ProcessingJob.objects.filter(id=job_id).first()
+    else:
+        job = ProcessingJob.objects.filter(id=job_id, user=request.user).first()
+
+    if not job:
+        return JsonResponse({'success': False, 'error': 'Job not found'}, status=404)
+
+    if job.status != 'under_correction':
+        return JsonResponse({
+            'success': False,
+            'error': f'Job is not under correction. Current status: {job.status}'
+        }, status=400)
+
+    correction_file = request.FILES.get('correction_zip')
+    if not correction_file:
+        return JsonResponse({'success': False, 'error': 'No correction_zip file provided'}, status=400)
+
+    success, error, files_copied = _process_correction_zip(job, correction_file)
+    if not success:
+        return JsonResponse({'success': False, 'error': error}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Corrections uploaded. {files_copied} file(s) copied. Job resubmitted for processing.',
+        'job_id': str(job.id),
+        'status': job.status
+    })
