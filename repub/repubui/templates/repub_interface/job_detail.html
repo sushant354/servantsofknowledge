@@ -71,6 +71,10 @@
                         </div>
                     </div>
 
+                    <button type="button" class="btn btn-danger btn-sm mb-3 me-3" data-bs-toggle="modal" data-bs-target="#stopJobModal">
+                        <i class="bi bi-stop-fill"></i> Stop Preparing Review
+                    </button>
+
                     <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm mb-3 me-2" title="View output directory">
                         <i class="bi bi-folder"></i> Files
                     </a>

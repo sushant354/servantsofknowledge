@@ -648,7 +648,7 @@ def stop_single_job(job):
     Raises:
         Exception: If there's an error during stop
     """
-    if job.status not in ['pending', 'processing', 'finalizing', 'derive_pending', 'deriving']:
+    if job.status not in ['pending', 'processing', 'finalizing', 'preparing_review', 'derive_pending', 'deriving']:
         return False
 
     original_status = job.status
