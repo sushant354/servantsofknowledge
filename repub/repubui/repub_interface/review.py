@@ -1,8 +1,10 @@
 import os
 import cv2
+import json
 import time
 import logging
 import shutil
+import zipfile
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.conf import settings
@@ -11,7 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse
 
 from .models import ProcessingJob
 from repub import process_raw
@@ -278,4 +280,183 @@ def save_snip(request, job_id, page_number):
     })
 
 
+@login_required
+@require_http_methods(["POST"])
+def submit_for_correction(request, job_id):
+    """Mark pages needing correction, copy them to corrections folder with scandata.json, set status to under_correction"""
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
 
+    # Parse marked pages and their messages from POST data
+    correction_notes = {}
+    for key, value in request.POST.items():
+        if key.startswith('correction_message_'):
+            page_num = key.replace('correction_message_', '')
+            if f'correction_page_{page_num}' in request.POST:
+                correction_notes[page_num] = value.strip() or 'Needs correction'
+
+    if not correction_notes:
+        messages.warning(request, 'No pages were marked for correction.')
+        return redirect('job_review', job_id=job_id)
+
+    # Create corrections directory
+    corrections_dir = job.get_corrections_dir()
+    os.makedirs(corrections_dir, exist_ok=True)
+
+    # Copy marked images to corrections folder
+    review_imgdir = os.path.join(job.get_review_dir(), 'images')
+    for page_num_str in correction_notes:
+        page_num = int(page_num_str)
+        filename = f"{page_num:04d}.jpg"
+        src = os.path.join(review_imgdir, filename)
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(corrections_dir, filename))
+
+    # Write scandata.json with correction notes
+    scandata = {
+        'corrections': {
+            page_num: {'message': msg} for page_num, msg in correction_notes.items()
+        }
+    }
+
+    # Also include original scandata if it exists
+    input_dir = job.get_input_dir()
+    original_scandata_path = os.path.join(input_dir, 'scandata.json')
+    if os.path.exists(original_scandata_path):
+        with open(original_scandata_path, 'r', encoding='utf8') as f:
+            original_scandata = json.loads(f.read())
+        scandata['original'] = original_scandata
+
+    scandata_path = os.path.join(corrections_dir, 'scandata.json')
+    with open(scandata_path, 'w', encoding='utf8') as f:
+        json.dump(scandata, f, indent=2)
+
+    # Save correction notes to model and set status
+    job.correction_notes = correction_notes
+    job.status = 'under_correction'
+    job.save()
+
+    logger.info(f"Job {job.id} submitted for correction. Pages: {list(correction_notes.keys())}")
+    messages.success(request, f'Job submitted for correction. {len(correction_notes)} page(s) marked.')
+    return redirect('job_detail', job_id=job_id)
+
+
+@login_required
+@require_http_methods(["GET"])
+def download_corrections(request, job_id):
+    """Download the corrections folder as a zip file"""
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+
+    corrections_dir = job.get_corrections_dir()
+    if not os.path.exists(corrections_dir):
+        messages.error(request, 'No corrections folder found.')
+        return redirect('job_detail', job_id=job_id)
+
+    import tempfile
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    tmp_path = tmp.name
+    tmp.close()
+
+    with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for filename in os.listdir(corrections_dir):
+            filepath = os.path.join(corrections_dir, filename)
+            if os.path.isfile(filepath):
+                zf.write(filepath, filename)
+
+    title_slug = (job.title or 'corrections').replace(' ', '_')[:50]
+    response = FileResponse(open(tmp_path, 'rb'), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{title_slug}_corrections.zip"'
+    # Clean up temp file after response is sent
+    response.file_to_stream_with_cleanup = tmp_path
+    return response
+
+
+@login_required
+@require_http_methods(["POST"])
+def submit_correction_zip(request, job_id):
+    """Accept a zip file of corrected images, copy to input directory, and resubmit for processing"""
+    if request.user.is_staff:
+        job = get_object_or_404(ProcessingJob, id=job_id)
+    else:
+        job = get_object_or_404(ProcessingJob, id=job_id, user=request.user)
+
+    if job.status != 'under_correction':
+        messages.error(request, 'Job is not under correction.')
+        return redirect('job_detail', job_id=job_id)
+
+    correction_file = request.FILES.get('correction_zip')
+    if not correction_file:
+        messages.error(request, 'No correction file uploaded.')
+        return redirect('job_detail', job_id=job_id)
+
+    if not correction_file.name.endswith('.zip'):
+        messages.error(request, 'Please upload a ZIP file.')
+        return redirect('job_detail', job_id=job_id)
+
+    input_dir = job.get_input_dir()
+    if not os.path.exists(input_dir):
+        os.makedirs(input_dir, exist_ok=True)
+
+    # Save the uploaded zip temporarily
+    import tempfile
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp:
+        for chunk in correction_file.chunks():
+            tmp.write(chunk)
+        tmp_path = tmp.name
+
+    try:
+        with zipfile.ZipFile(tmp_path, 'r') as zf:
+            for member in zf.namelist():
+                # Skip directories and hidden files
+                if member.endswith('/') or os.path.basename(member).startswith('.'):
+                    continue
+                # Only process image files
+                basename = os.path.basename(member)
+                if not basename.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
+                    continue
+                # Extract image data and write to input directory
+                with zf.open(member) as src:
+                    dest_path = os.path.join(input_dir, basename)
+                    with open(dest_path, 'wb') as dst:
+                        shutil.copyfileobj(src, dst)
+                logger.info(f"Copied corrected image {basename} to input dir for job {job.id}")
+    except zipfile.BadZipFile:
+        messages.error(request, 'The uploaded file is not a valid ZIP file.')
+        os.unlink(tmp_path)
+        return redirect('job_detail', job_id=job_id)
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+    # Clean up review and corrections directories
+    review_dir = job.get_review_dir()
+    if os.path.exists(review_dir):
+        shutil.rmtree(review_dir)
+
+    # Clean up output directory for reprocessing
+    output_dir = job.get_output_dir()
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+
+    img_dir = os.path.join(output_dir, 'output')
+    os.makedirs(img_dir, exist_ok=True)
+    thumbnaildir = os.path.join(output_dir, 'thumbnails')
+    os.makedirs(thumbnaildir, exist_ok=True)
+
+    # Clear correction notes and resubmit for processing
+    job.correction_notes = {}
+    job.status = 'pending'
+    job.error_message = ''
+    job.save()
+
+    from .tasks import run_job_task
+    run_job_task.delay(str(job.id))
+
+    logger.info(f"Job {job.id} correction submitted, requeued for processing")
+    messages.success(request, f'Corrections uploaded. Job "{job.title or "Untitled"}" has been resubmitted for processing.')
+    return redirect('job_detail', job_id=job_id)

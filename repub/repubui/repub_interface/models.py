@@ -42,7 +42,8 @@ class ProcessingJob(models.Model):
                                   ('finalizing', 'Finalizing'),
                                   ('deriving', 'Deriving'),
                                   ('derive_completed', 'Derive Completed'),
-                                  ('derive_failed', 'Derive Failed')
+                                  ('derive_failed', 'Derive Failed'),
+                                  ('under_correction', 'Under Correction')
                               ])
 
     # Input options
@@ -80,6 +81,7 @@ class ProcessingJob(models.Model):
     # Review
     needs_review = models.BooleanField(default=False)
     reviewed = models.BooleanField(default=False)
+    correction_notes = models.JSONField(default=dict, blank=True)
 
     # Processing tracking
     processing_started_at = models.DateTimeField(blank=True, null=True)
@@ -108,6 +110,9 @@ class ProcessingJob(models.Model):
         
     def get_thumbnail_dir(self):
         return os.path.join(settings.MEDIA_ROOT, 'processed',  str(self.id), 'thumbnails')
+
+    def get_corrections_dir(self):
+        return os.path.join(settings.MEDIA_ROOT, 'review', str(self.id), 'corrections')
 
     def get_thumbnail_url(self):
         """Get URL for the job's main thumbnail (__ia_thumb.jpg) if it exists"""

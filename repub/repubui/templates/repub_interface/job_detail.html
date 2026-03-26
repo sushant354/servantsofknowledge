@@ -14,6 +14,7 @@
                         {% elif job.status == 'processing' or job.status == 'preparing_review' %}bg-warning
                         {% elif job.status == 'failed' %}bg-danger
                         {% elif job.status == 'reviewing' or job.status == 'finalizing' %}bg-info
+                        {% elif job.status == 'under_correction' %}bg-warning
                         {% else %}bg-secondary{% endif %}">
                         {{ job.status }}
                     </span>
@@ -191,6 +192,67 @@
                     </a>
 
                     <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-lg mb-4" title="View input directory">
+                        <i class="bi bi-folder-plus"></i> Input
+                    </a>
+                {% elif job.status == 'under_correction' %}
+                    <div class="alert alert-warning">
+                        <h4 class="alert-heading">Under Correction</h4>
+                        <p>This job has pages marked for correction by the reviewer. Please upload corrected scans.</p>
+                    </div>
+
+                    {% if job.correction_notes %}
+                    <div class="card mb-3">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0">Pages Needing Correction</h5>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Page</th>
+                                        <th>Message</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for page_num, message in job.correction_notes.items %}
+                                    <tr>
+                                        <td>{{ page_num }}</td>
+                                        <td>{{ message }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            <a href="{% url 'download_corrections' job.id %}" class="btn btn-outline-warning btn-sm mt-2">
+                                <i class="bi bi-download"></i> Download Corrections Folder
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="card mb-3">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">Upload Corrected Scans</h5>
+                        </div>
+                        <div class="card-body">
+                            <p>Upload a ZIP file containing the corrected page images. The filenames should match the original page numbers (e.g., 0001.jpg, 0002.jpg).</p>
+                            <form method="post" action="{% url 'submit_correction_zip' job.id %}" enctype="multipart/form-data" id="correctionZipForm">
+                                {% csrf_token %}
+                                <div class="mb-3">
+                                    <label for="correction_zip" class="form-label">Correction ZIP File</label>
+                                    <input type="file" class="form-control" id="correction_zip" name="correction_zip" accept=".zip" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary" id="uploadCorrectionButton">
+                                    <i class="bi bi-upload"></i> Upload and Reprocess
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <a href="{% url 'job_output_directory' job.id %}" class="btn btn-outline-secondary btn-sm mb-3 me-2" title="View output directory">
+                        <i class="bi bi-folder"></i> Files
+                    </a>
+
+                    <a href="{% url 'job_input_directory' job.id %}" class="btn btn-outline-info btn-sm mb-3" title="View input directory">
                         <i class="bi bi-folder-plus"></i> Input
                     </a>
                 {% elif job.status == 'completed' %}
@@ -844,6 +906,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const jobId = '{{ job.id }}';
     let currentStatus = '{{ job.status }}';
     const reviewUrl = '{% url "job_review" job.id %}';
+
+    // Prevent multiple clicks on correction zip upload
+    const correctionZipForm = document.getElementById('correctionZipForm');
+    const uploadCorrectionButton = document.getElementById('uploadCorrectionButton');
+    if (correctionZipForm && uploadCorrectionButton) {
+        correctionZipForm.addEventListener('submit', function() {
+            uploadCorrectionButton.disabled = true;
+            uploadCorrectionButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Uploading...';
+        });
+    }
 
     // Prevent multiple clicks on "Continue to Review Pages" button
     const continueReviewButton = document.getElementById('continueReviewButton');

@@ -102,6 +102,11 @@
     .criteria-explanation ul {
         margin-bottom: 0;
     }
+
+    .thumbnail-card.marked-correction {
+        border: 3px solid #dc3545;
+        box-shadow: 0 0 8px rgba(220, 53, 69, 0.4);
+    }
 </style>
 {% endblock %}
 
@@ -127,73 +132,99 @@
                 <h4 class="alert-heading">Review Cropped Images</h4>
                 <p>Please review each page and adjust the cropping if needed. Click on any thumbnail to view a larger version, or use the "Edit" button to adjust the crop.</p>
                 <p>Pages marked with a <span class="badge bg-warning">Review Needed</span> badge may need your attention.</p>
+                <p>If a page was not scanned properly, check the "Needs Correction" box and add a message for the scan operator.</p>
             </div>
             
             
             <h4 class="mb-3">Pages ({{ pages|length }})</h4>
-            
-            <div class="thumbnail-container">
-                {% for page in pages %}
-                    <div class="card thumbnail-card">
-                        {% if page.needs_review %}
-                            <span class="badge bg-warning needs-review-badge">Review Needed</span>
-                        {% elif page.reviewed %}
-                            <span class="badge bg-success needs-review-badge">Reviewed</span>
-                        {% endif %}
-                        
-                        <div class="card-header">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">Page {{ page.page_number }}</h5>
-                                <a href="{% url 'page_editor' job.id page.page_number %}" class="btn btn-sm btn-primary">Edit</a>
-                            </div>
-                        </div>
-                        
-                        <div class="card-body p-2">
-                            <div class="comparison-container">
-                                <div class="col">
-                                    <div class="comparison-label">Original</div>
-                                    {% if page.original_thumbnail %}
-                                        <img src="{{page.original_thumbnail}}"
-                                            class="img-thumbnail original-thumb"
-                                            alt="Original Page {{ page.page_number }}"
-                                            data-full="{{ page.original_image }}"
-                                            data-page="{{ page.page_number }}"
-                                            data-type="original"
-                                            data-can-crop="true"
-                                            onclick="openImageModal(this)">
-                                    {% else %}
-                                        <div class="text-center text-muted">No thumbnail</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col">
-                                    <div class="comparison-label">Processed</div>
-                                    {% if page.cropped_thumbnail %}
-                                        <img src="{{page.cropped_thumbnail}}?t={{ now.timestamp }}"
-                                            class="img-thumbnail cropped-thumb"
-                                            alt="Cropped Page {{ page.page_number }}"
-                                            data-full="{{ page.cropped_image }}"
-                                            data-page="{{ page.page_number }}"
-                                            data-type="cropped"
-                                            data-can-crop="false"
-                                            onclick="openImageModal(this)">
-                                    {% else %}
-                                        <div class="text-center text-muted">No thumbnail</div>
-                                    {% endif %}
+
+            <form method="post" action="{% url 'submit_for_correction' job.id %}" id="correctionForm">
+                {% csrf_token %}
+                <div class="thumbnail-container">
+                    {% for page in pages %}
+                        <div class="card thumbnail-card" id="page-card-{{ page.page_number }}">
+                            {% if page.needs_review %}
+                                <span class="badge bg-warning needs-review-badge">Review Needed</span>
+                            {% elif page.reviewed %}
+                                <span class="badge bg-success needs-review-badge">Reviewed</span>
+                            {% endif %}
+
+                            <div class="card-header">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0">Page {{ page.page_number }}</h5>
+                                    <a href="{% url 'page_editor' job.id page.page_number %}" class="btn btn-sm btn-primary">Edit</a>
                                 </div>
                             </div>
+
+                            <div class="card-body p-2">
+                                <div class="comparison-container">
+                                    <div class="col">
+                                        <div class="comparison-label">Original</div>
+                                        {% if page.original_thumbnail %}
+                                            <img src="{{page.original_thumbnail}}"
+                                                class="img-thumbnail original-thumb"
+                                                alt="Original Page {{ page.page_number }}"
+                                                data-full="{{ page.original_image }}"
+                                                data-page="{{ page.page_number }}"
+                                                data-type="original"
+                                                data-can-crop="true"
+                                                onclick="openImageModal(this)">
+                                        {% else %}
+                                            <div class="text-center text-muted">No thumbnail</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col">
+                                        <div class="comparison-label">Processed</div>
+                                        {% if page.cropped_thumbnail %}
+                                            <img src="{{page.cropped_thumbnail}}?t={{ now.timestamp }}"
+                                                class="img-thumbnail cropped-thumb"
+                                                alt="Cropped Page {{ page.page_number }}"
+                                                data-full="{{ page.cropped_image }}"
+                                                data-page="{{ page.page_number }}"
+                                                data-type="cropped"
+                                                data-can-crop="false"
+                                                onclick="openImageModal(this)">
+                                        {% else %}
+                                            <div class="text-center text-muted">No thumbnail</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <div class="correction-section mt-2 border-top pt-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input correction-checkbox" type="checkbox"
+                                               name="correction_page_{{ page.page_number }}"
+                                               id="correction-{{ page.page_number }}"
+                                               data-page="{{ page.page_number }}">
+                                        <label class="form-check-label text-danger" for="correction-{{ page.page_number }}">
+                                            Needs Correction
+                                        </label>
+                                    </div>
+                                    <div class="correction-message mt-1" id="correction-msg-{{ page.page_number }}" style="display: none;">
+                                        <input type="text" class="form-control form-control-sm"
+                                               name="correction_message_{{ page.page_number }}"
+                                               placeholder="Message for scan operator...">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                {% empty %}
-                    <div class="alert alert-warning w-100">No pages found for this job.</div>
-                {% endfor %}
-            </div>
-            
+                    {% empty %}
+                        <div class="alert alert-warning w-100">No pages found for this job.</div>
+                    {% endfor %}
+                </div>
+            </form>
+
             <div class="mt-4">
                 <div class="d-flex justify-content-between">
-                    <form method="post" action="{% url 'reject_review' job.id %}" style="display: inline;" id="rejectForm">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-secondary" id="rejectButton">Reject the review</button>
-                    </form>
+                    <div>
+                        <form method="post" action="{% url 'reject_review' job.id %}" style="display: inline;" id="rejectForm">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-secondary" id="rejectButton">Reject the review</button>
+                        </form>
+                        <button type="submit" form="correctionForm" class="btn btn-warning ms-2" id="correctionButton" disabled>
+                            <i class="bi bi-exclamation-triangle"></i> Submit for Corrections (<span id="correctionCount">0</span>)
+                        </button>
+                    </div>
                     <form method="post" action="{% url 'finalize_job' job.id %}" style="display: inline;" id="finalizeForm">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-primary" id="finalizeButton">Finalize and Rerun</button>
@@ -306,6 +337,45 @@
                 // Disable button to prevent multiple clicks
                 rejectButton.disabled = true;
                 rejectButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Rejecting...';
+            });
+        }
+
+        // Correction checkbox handling
+        const correctionCheckboxes = document.querySelectorAll('.correction-checkbox');
+        const correctionButton = document.getElementById('correctionButton');
+        const correctionCount = document.getElementById('correctionCount');
+        const correctionForm = document.getElementById('correctionForm');
+
+        function updateCorrectionCount() {
+            const checked = document.querySelectorAll('.correction-checkbox:checked').length;
+            correctionCount.textContent = checked;
+            correctionButton.disabled = checked === 0;
+        }
+
+        correctionCheckboxes.forEach(function(checkbox) {
+            checkbox.addEventListener('change', function() {
+                const pageNum = this.dataset.page;
+                const msgDiv = document.getElementById('correction-msg-' + pageNum);
+                const card = document.getElementById('page-card-' + pageNum);
+                msgDiv.style.display = this.checked ? 'block' : 'none';
+                if (this.checked) {
+                    card.classList.add('marked-correction');
+                } else {
+                    card.classList.remove('marked-correction');
+                }
+                updateCorrectionCount();
+            });
+        });
+
+        if (correctionForm) {
+            correctionForm.addEventListener('submit', function(e) {
+                const checked = document.querySelectorAll('.correction-checkbox:checked').length;
+                if (checked === 0) {
+                    e.preventDefault();
+                    return;
+                }
+                correctionButton.disabled = true;
+                correctionButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Submitting...';
             });
         }
     });
