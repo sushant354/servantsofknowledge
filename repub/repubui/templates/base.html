@@ -67,12 +67,14 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link{% if request.resolver_match.url_name == 'home' %} active{% endif %}" href="{% url 'home' %}">Home</a>
+                        <a class="nav-link{% if request.resolver_match.url_name == 'home' %} active{% endif %}" href="{% url 'home' %}">
+                            <i class="bi bi-list-task"></i> All Jobs
+                        </a>
                     </li>
                     {% if user.is_authenticated %}
                     <li class="nav-item">
-                        <a class="nav-link{% if request.resolver_match.url_name == 'all_jobs' %} active{% endif %}" href="{% url 'all_jobs' %}">
-                            <i class="bi bi-list-task"></i> All Jobs
+                        <a class="nav-link{% if request.resolver_match.url_name == 'submit_job' %} active{% endif %}" href="{% url 'submit_job' %}">
+                            <i class="bi bi-plus-circle"></i> Submit Job
                         </a>
                     </li>
                     <li class="nav-item">

@@ -139,18 +139,26 @@ def derive_job_task(job_id):
 
     logger.info(f"Started deriving job {job.id}")
     try:
-        # Get metadata to extract the Identifier
-        input_dir = job.get_input_dir()
-        scandir = Scandir(input_dir, None, None, logger)
-        metadata = scandir.metadata
-
-        identifier = metadata.get('/Identifier')
+        # Use the identifier already stored on the job (set during processing).
+        # Avoid re-reading from the input dir, which may have been cleaned up
+        # by a previous derive run.
+        identifier = job.identifier
         if not identifier:
             job.status = 'derive_failed'
             job.error_message = 'No identifier found in job metadata.'
             job.save()
             logger.error(f"No identifier found for job {job.id}")
             return
+
+        # Read metadata from input dir only if it still exists. metadata is
+        # only needed when regenerating the PDF (derive_pdf) or copying
+        # metadata.xml / scandata.json from the resolved input dir.
+        input_dir = job.get_input_dir()
+        scandir = None
+        metadata = {}
+        if os.path.exists(input_dir):
+            scandir = Scandir(input_dir, None, None, logger)
+            metadata = scandir.metadata or {}
 
         # Check if another job already has this identifier derived
         existing = ProcessingJob.objects.filter(
@@ -212,20 +220,22 @@ def derive_job_task(job_id):
             logger.info(f"Copied thumbnail to: {thumb_dest}")
 
         # Copy metadata.xml and scandata.json from the resolved input dir
-        # (Scandir.find_input_dir may traverse into subdirectories)
-        resolved_input_dir = scandir.indir
+        # (Scandir.find_input_dir may traverse into subdirectories).
+        # Skip if input dir is no longer available.
+        if scandir is not None:
+            resolved_input_dir = scandir.indir
 
-        metadata_path = os.path.join(resolved_input_dir, 'metadata.xml')
-        if os.path.exists(metadata_path):
-            metadata_dest = os.path.join(derive_dir, 'metadata.xml')
-            shutil.copy2(metadata_path, metadata_dest)
-            logger.info(f"Copied metadata.xml to: {metadata_dest}")
+            metadata_path = os.path.join(resolved_input_dir, 'metadata.xml')
+            if os.path.exists(metadata_path):
+                metadata_dest = os.path.join(derive_dir, 'metadata.xml')
+                shutil.copy2(metadata_path, metadata_dest)
+                logger.info(f"Copied metadata.xml to: {metadata_dest}")
 
-        scandata_path = os.path.join(resolved_input_dir, 'scandata.json')
-        if os.path.exists(scandata_path):
-            scandata_dest = os.path.join(derive_dir, 'scandata.json')
-            shutil.copy2(scandata_path, scandata_dest)
-            logger.info(f"Copied scandata.json to: {scandata_dest}")
+            scandata_path = os.path.join(resolved_input_dir, 'scandata.json')
+            if os.path.exists(scandata_path):
+                scandata_dest = os.path.join(derive_dir, 'scandata.json')
+                shutil.copy2(scandata_path, scandata_dest)
+                logger.info(f"Copied scandata.json to: {scandata_dest}")
 
         # Check if HOCR file exists, if not regenerate PDF with OCR
         hocr_path = os.path.join(output_dir, 'x_hocr.html.gz')

@@ -6,9 +6,14 @@ A Python client for submitting correction zip files to REPUB UI
 for jobs that are in 'under_correction' status.
 
 Usage:
+    # By job ID
     python repub_correction.py --token <token> --job-id <job-id> --zip corrections.zip
-    python repub_correction.py --token <token> --job-id <job-id> --zip corrections.zip --url http://repub.example.com
-    python repub_correction.py --token <token> --job-id <job-id> --zip corrections.zip --wait --download --output result.pdf
+
+    # By identifier
+    python repub_correction.py --token <token> --identifier <identifier> --zip corrections.zip
+
+    # With wait and download
+    python repub_correction.py --token <token> --identifier <identifier> --zip corrections.zip --wait --download --output result.pdf
 """
 
 import requests
@@ -61,9 +66,9 @@ class REPUBCorrectionClient:
                 'message': f'Failed to get job status: {str(e)}'
             }
 
-    def submit_correction(self, job_id: str, zip_path: Union[str, Path]) -> Dict[str, Any]:
+    def submit_correction_by_job_id(self, job_id: str, zip_path: Union[str, Path]) -> Dict[str, Any]:
         """
-        Submit a corrections zip file for a job under correction.
+        Submit a corrections zip file for a job identified by job ID.
 
         Args:
             job_id: UUID of the job
@@ -82,14 +87,40 @@ class REPUBCorrectionClient:
 
         self.logger.info(f"Submitting correction zip '{zip_path}' for job {job_id}")
 
+        url = f"{self.base_url}/api/job/{job_id}/submit-correction-zip/"
+        return self._upload_zip(url, zip_path)
+
+    def submit_correction_by_identifier(self, identifier: str, zip_path: Union[str, Path]) -> Dict[str, Any]:
+        """
+        Submit a corrections zip file for a job identified by its identifier.
+
+        Args:
+            identifier: The job identifier
+            zip_path: Path to the corrections zip file
+
+        Returns:
+            Dict containing the API response
+        """
+        zip_path = Path(zip_path)
+
+        if not zip_path.exists():
+            raise FileNotFoundError(f"File not found: {zip_path}")
+
+        if not zip_path.name.endswith('.zip'):
+            raise ValueError(f"File must be a .zip file: {zip_path}")
+
+        self.logger.info(f"Submitting correction zip '{zip_path}' for identifier '{identifier}'")
+
+        url = f"{self.base_url}/api/job/identifier/{identifier}/submit-correction-zip/"
+        return self._upload_zip(url, zip_path)
+
+    def _upload_zip(self, url: str, zip_path: Path) -> Dict[str, Any]:
+        """Upload a zip file to the given URL."""
         with open(zip_path, 'rb') as f:
             files = {'correction_zip': (zip_path.name, f, 'application/zip')}
 
             try:
-                response = self.session.post(
-                    f"{self.base_url}/api/job/{job_id}/submit-correction-zip/",
-                    files=files
-                )
+                response = self.session.post(url, files=files)
                 response.raise_for_status()
                 return response.json()
             except requests.exceptions.HTTPError as e:
@@ -187,8 +218,14 @@ def main():
                         help='REPUB server URL (default: http://localhost:8000)')
     parser.add_argument('--token', required=True,
                         help='REST framework authentication token')
-    parser.add_argument('--job-id', required=True,
-                        help='UUID of the job under correction')
+
+    # Job lookup: by ID or by identifier (mutually exclusive, one required)
+    lookup_group = parser.add_mutually_exclusive_group(required=True)
+    lookup_group.add_argument('--job-id',
+                              help='UUID of the job under correction')
+    lookup_group.add_argument('--identifier',
+                              help='Identifier of the job under correction')
+
     parser.add_argument('--zip', required=True, dest='zip_path',
                         help='Path to the corrections zip file')
     parser.add_argument('--wait', action='store_true',
@@ -228,30 +265,42 @@ def main():
 
     client = REPUBCorrectionClient(args.url, args.token, logger=logger)
 
-    # Check job status first
-    status = client.get_job_status(args.job_id)
-    if not status.get('success', True):
-        print(f"Error checking job status: {status.get('message', 'Unknown error')}")
-        exit(1)
+    # Submit corrections by job ID or identifier
+    if args.job_id:
+        # Check job status first
+        status = client.get_job_status(args.job_id)
+        if not status.get('success', True):
+            print(f"Error checking job status: {status.get('message', 'Unknown error')}")
+            exit(1)
 
-    job_status = status.get('status')
-    if job_status != 'under_correction':
-        print(f"Job {args.job_id} is not under correction. Current status: {job_status}")
-        exit(1)
+        job_status = status.get('status')
+        if job_status != 'under_correction':
+            print(f"Job {args.job_id} is not under correction. Current status: {job_status}")
+            exit(1)
 
-    # Submit corrections
-    result = client.submit_correction(args.job_id, args.zip_path)
+        result = client.submit_correction_by_job_id(args.job_id, args.zip_path)
+    else:
+        # Submit by identifier — the API validates status server-side
+        result = client.submit_correction_by_identifier(args.identifier, args.zip_path)
+
     print(f"Submission result: {json.dumps(result, indent=2)}")
 
     if not result.get('success'):
         exit(1)
 
+    # Resolve job_id for wait/download (returned by both API endpoints)
+    job_id = result.get('job_id', args.job_id)
+
     # Wait for completion if requested
     wait = args.wait or args.download
     if wait:
+        if not job_id:
+            print("Cannot wait: job_id not available in response")
+            exit(1)
+
         logger.info("Waiting for reprocessing to complete...")
         final_status = client.wait_for_completion(
-            args.job_id,
+            job_id,
             timeout=args.timeout,
             poll_interval=args.poll_interval
         )
@@ -259,7 +308,7 @@ def main():
         print(f"Final status: {json.dumps(final_status, indent=2)}")
 
         if final_status.get('status') == 'completed' and args.download:
-            if client.download_result(args.job_id, args.output):
+            if client.download_result(job_id, args.output):
                 print(f"Result downloaded to: {args.output or 'current directory'}")
             else:
                 print("Failed to download result")

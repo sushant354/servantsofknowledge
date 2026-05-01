@@ -521,7 +521,7 @@
                 {% endif %}
 
                 <div class="d-flex mt-4">
-                    <a href="{% url 'home' %}" class="btn btn-secondary me-2">Back to Home</a>
+                    <a href="{% url 'home' %}" class="btn btn-secondary me-2">Back to All Jobs</a>
 
                     {% if job.status == 'completed' or job.status == 'failed' %}
                         <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#retryJobModal">

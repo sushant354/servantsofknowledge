@@ -4,6 +4,7 @@ import json
 import time
 import logging
 import shutil
+import tempfile
 import zipfile
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -358,7 +359,6 @@ def download_corrections(request, job_id):
         messages.error(request, 'No corrections folder found.')
         return redirect('job_detail', job_id=job_id)
 
-    import tempfile
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
     tmp_path = tmp.name
     tmp.close()
@@ -384,7 +384,6 @@ def _process_correction_zip(job, correction_file):
 
     Returns (success: bool, error_message: str or None, files_copied: int)
     """
-    import tempfile
 
     if not correction_file.name.endswith('.zip'):
         return False, 'Please upload a ZIP file.', 0
@@ -520,3 +519,169 @@ def api_submit_correction_zip(request, job_id):
         'job_id': str(job.id),
         'status': job.status
     })
+
+
+@csrf_exempt
+@login_or_token_required
+@require_http_methods(["POST"])
+def api_submit_correction_by_identifier(request, identifier):
+    """API endpoint: submit a corrections zip file for a job looked up by identifier.
+
+    Expects a multipart/form-data POST with a 'correction_zip' file field.
+    Authenticated via session or Authorization: Token <token> header.
+    """
+    if request.user.is_staff:
+        job = ProcessingJob.objects.filter(identifier=identifier).first()
+    else:
+        job = ProcessingJob.objects.filter(identifier=identifier, user=request.user).first()
+
+    if not job:
+        return JsonResponse({'success': False, 'error': f'No job found with identifier: {identifier}'}, status=404)
+
+    if job.status != 'under_correction':
+        return JsonResponse({
+            'success': False,
+            'error': f'Job is not under correction. Current status: {job.status}'
+        }, status=400)
+
+    correction_file = request.FILES.get('correction_zip')
+    if not correction_file:
+        return JsonResponse({'success': False, 'error': 'No correction_zip file provided'}, status=400)
+
+    success, error, files_copied = _process_correction_zip(job, correction_file)
+    if not success:
+        return JsonResponse({'success': False, 'error': error}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Corrections uploaded. {files_copied} file(s) copied. Job resubmitted for processing.',
+        'job_id': str(job.id),
+        'identifier': identifier,
+        'status': job.status
+    })
+
+
+def _build_corrections_zip(job):
+    """Build a zip file from the corrections directory. Returns (tmp_path, filename) or (None, error_msg)."""
+    corrections_dir = job.get_corrections_dir()
+    if not os.path.exists(corrections_dir):
+        return None, 'No corrections folder found'
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    tmp_path = tmp.name
+    tmp.close()
+
+    with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for filename in os.listdir(corrections_dir):
+            filepath = os.path.join(corrections_dir, filename)
+            if os.path.isfile(filepath):
+                zf.write(filepath, filename)
+
+    folder_name = job.identifier or str(job.id)
+    safe_name = folder_name.replace(' ', '_').replace('/', '_')[:80]
+    zip_filename = f"{safe_name}_corrections.zip"
+    return tmp_path, zip_filename
+
+
+@csrf_exempt
+@login_or_token_required
+@require_http_methods(["GET"])
+def api_list_corrections(request):
+    """API endpoint: list jobs that are under_correction with corrections folders.
+
+    Optional query params:
+        - job_id: filter by specific job UUID
+        - identifier: filter by job identifier
+        - from_date: filter jobs created on or after this date (YYYY-MM-DD)
+        - to_date: filter jobs created on or before this date (YYYY-MM-DD)
+
+    If no filters are given, returns all jobs under correction.
+    """
+    from datetime import datetime
+
+    queryset = ProcessingJob.objects.filter(status='under_correction')
+
+    if not request.user.is_staff:
+        queryset = queryset.filter(user=request.user)
+
+    job_id = request.GET.get('job_id')
+    if job_id:
+        queryset = queryset.filter(id=job_id)
+
+    identifier = request.GET.get('identifier')
+    if identifier:
+        queryset = queryset.filter(identifier=identifier)
+
+    from_date = request.GET.get('from_date')
+    if from_date:
+        try:
+            dt = datetime.strptime(from_date, '%Y-%m-%d')
+            queryset = queryset.filter(created_at__date__gte=dt.date())
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Invalid from_date format. Use YYYY-MM-DD.'}, status=400)
+
+    to_date = request.GET.get('to_date')
+    if to_date:
+        try:
+            dt = datetime.strptime(to_date, '%Y-%m-%d')
+            queryset = queryset.filter(created_at__date__lte=dt.date())
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Invalid to_date format. Use YYYY-MM-DD.'}, status=400)
+
+    jobs = []
+    for job in queryset.order_by('-created_at'):
+        has_corrections = os.path.exists(job.get_corrections_dir())
+        jobs.append({
+            'job_id': str(job.id),
+            'identifier': job.identifier or '',
+            'title': job.title or '',
+            'created_at': job.created_at.isoformat(),
+            'correction_notes': job.correction_notes,
+            'has_corrections_folder': has_corrections,
+        })
+
+    return JsonResponse({'success': True, 'count': len(jobs), 'jobs': jobs})
+
+
+@csrf_exempt
+@login_or_token_required
+@require_http_methods(["GET"])
+def api_download_corrections_by_job(request, job_id):
+    """API endpoint: download corrections zip for a job by job ID."""
+    if request.user.is_staff:
+        job = ProcessingJob.objects.filter(id=job_id).first()
+    else:
+        job = ProcessingJob.objects.filter(id=job_id, user=request.user).first()
+
+    if not job:
+        return JsonResponse({'success': False, 'error': 'Job not found'}, status=404)
+
+    tmp_path, result = _build_corrections_zip(job)
+    if tmp_path is None:
+        return JsonResponse({'success': False, 'error': result}, status=404)
+
+    response = FileResponse(open(tmp_path, 'rb'), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{result}"'
+    return response
+
+
+@csrf_exempt
+@login_or_token_required
+@require_http_methods(["GET"])
+def api_download_corrections_by_identifier(request, identifier):
+    """API endpoint: download corrections zip for a job by identifier."""
+    if request.user.is_staff:
+        job = ProcessingJob.objects.filter(identifier=identifier).first()
+    else:
+        job = ProcessingJob.objects.filter(identifier=identifier, user=request.user).first()
+
+    if not job:
+        return JsonResponse({'success': False, 'error': f'No job found with identifier: {identifier}'}, status=404)
+
+    tmp_path, result = _build_corrections_zip(job)
+    if tmp_path is None:
+        return JsonResponse({'success': False, 'error': result}, status=404)
+
+    response = FileResponse(open(tmp_path, 'rb'), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{result}"'
+    return response

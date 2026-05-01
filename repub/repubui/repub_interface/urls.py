@@ -2,8 +2,8 @@ from django.urls import path
 from . import jobs, review, items, directory, users
 
 urlpatterns = [
-    path('', jobs.home, name='home'),
-    path('jobs/', jobs.all_jobs, name='all_jobs'),
+    path('', jobs.all_jobs, name='home'),
+    path('submit/', jobs.submit_job, name='submit_job'),
     path('jobs/export-csv/', jobs.export_jobs_csv, name='export_jobs_csv'),
     path('job/<uuid:job_id>/', jobs.job_detail, name='job_detail'),
     path('job/<uuid:job_id>/download/', jobs.job_download, name='job_download'),
@@ -39,6 +39,10 @@ urlpatterns = [
     path('job/<uuid:job_id>/input-directory/<path:subpath>/', directory.job_input_directory, name='job_input_directory_subpath'),
     path('api/check-identifier/', jobs.check_identifier, name='check_identifier'),
     path('api/job/<uuid:job_id>/submit-correction-zip/', review.api_submit_correction_zip, name='api_submit_correction_zip'),
+    path('api/job/identifier/<str:identifier>/submit-correction-zip/', review.api_submit_correction_by_identifier, name='api_submit_correction_by_identifier'),
+    path('api/corrections/', review.api_list_corrections, name='api_list_corrections'),
+    path('api/job/<uuid:job_id>/download-corrections/', review.api_download_corrections_by_job, name='api_download_corrections_by_job'),
+    path('api/job/identifier/<str:identifier>/download-corrections/', review.api_download_corrections_by_identifier, name='api_download_corrections_by_identifier'),
     path('register/', users.register, name='register'),
     path('api-token/', users.api_token_management, name='api_token'),
     path('activate/<str:uidb64>/<str:token>/', users.activate_account, name='activate_account'),

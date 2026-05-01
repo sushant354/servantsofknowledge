@@ -221,7 +221,7 @@ def export_jobs_csv(request):
 
 @csrf_exempt
 @login_or_token_required
-def home(request):
+def submit_job(request):
     jobs = ProcessingJob.objects.filter(user=request.user).order_by('-created_at')[:10]
     form = ProcessingJobForm()
 
@@ -726,7 +726,7 @@ def bulk_retry_jobs(request):
 
     if not job_ids:
         messages.warning(request, 'No jobs selected for retry.')
-        return redirect('all_jobs')
+        return redirect('home')
 
     # Filter jobs based on user permissions
     if request.user.is_staff:
@@ -756,7 +756,7 @@ def bulk_retry_jobs(request):
     if retry_count == 0 and failed_count == 0:
         messages.warning(request, 'No jobs were retried. Please ensure selected jobs are in failed or pending status.')
 
-    return redirect('all_jobs')
+    return redirect('home')
 
 
 @login_required
@@ -768,7 +768,7 @@ def bulk_stop_jobs(request):
 
     if not job_ids:
         messages.warning(request, 'No jobs selected to stop.')
-        return redirect('all_jobs')
+        return redirect('home')
 
     # Filter jobs based on user permissions
     if request.user.is_staff:
@@ -800,7 +800,7 @@ def bulk_stop_jobs(request):
     if stop_count == 0 and failed_count == 0:
         messages.warning(request, 'No jobs were stopped. Please ensure selected jobs are in processing, pending, finalizing, derive_pending, or deriving status.')
 
-    return redirect('all_jobs')
+    return redirect('home')
 
 
 @login_required
@@ -812,7 +812,7 @@ def bulk_set_derive_failed(request):
 
     if not job_ids:
         messages.warning(request, 'No jobs selected.')
-        return redirect('all_jobs')
+        return redirect('home')
 
     # Filter jobs based on user permissions
     if request.user.is_staff:
@@ -844,7 +844,7 @@ def bulk_set_derive_failed(request):
     if updated_count == 0 and failed_count == 0:
         messages.warning(request, 'No jobs were updated. Please ensure selected jobs are in deriving status.')
 
-    return redirect('all_jobs')
+    return redirect('home')
 
 
 @login_required
@@ -856,7 +856,7 @@ def bulk_derive_jobs(request):
 
     if not job_ids:
         messages.warning(request, 'No jobs selected for derivation.')
-        return redirect('all_jobs')
+        return redirect('home')
 
     # Filter jobs based on user permissions
     if request.user.is_staff:
@@ -931,7 +931,7 @@ def bulk_derive_jobs(request):
     if derive_count == 0 and failed_count == 0 and not skipped_duplicates:
         messages.warning(request, 'No jobs were derived. Please ensure selected jobs are in completed, derive_failed, or deriving status.')
 
-    return redirect('all_jobs')
+    return redirect('home')
 
 
 @login_required
@@ -1265,4 +1265,4 @@ def delete_job(request, job_id):
         error_list = '<br>'.join([f'- {e}' for e in errors])
         messages.warning(request, mark_safe(f'Job deleted, but some errors occurred during file cleanup:<br>{error_list}'))
 
-    return redirect('all_jobs')
+    return redirect('home')
