@@ -159,7 +159,7 @@ class REPUBClient:
             
             try:
                 response = self.session.post(
-                    f"{self.base_url}/",
+                    f"{self.base_url}/submit/",
                     data=data,
                     files=files,
                     allow_redirects=False  # Don't follow redirects to capture job ID
